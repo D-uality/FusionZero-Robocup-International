@@ -29,7 +29,7 @@ try:
 
     if mode == 1:
         for servoPin in servoPins:
-            for angle in range(20, 80, 10):
+            for angle in range(40, 81, 10):
                 print(f"Servo: {servoPin} running at {angle}")
 
                 elapsedTime = controlLoop(servoPin, angle)
@@ -37,7 +37,7 @@ try:
 
                 input()
 
-            for angle in range(100, 160, 10):
+            for angle in range(100, 150, 10):
                 print(f"Servo: {servoPin} running at {angle}")
 
                 elapsedTime = controlLoop(servoPin, angle)

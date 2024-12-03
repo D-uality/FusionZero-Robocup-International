@@ -1,10 +1,16 @@
+import numpy as np
+
 calibration_values = open("calibration_values.txt", "r")
 
-values = calibration_values.read()
+allTimes = calibration_values.read().split("\n")
 
-servos = values.split("\n")
+frequencies = np.array([-50, -40, -30, -20, -10, 10, 20, 30, 40, 50])
 
-for servo in servos:
-    servo = servo.split(',').
+for time in allTimes:
+    time = time.split(",")
+    time.pop()
+    time = list(map(float, time))
 
-    print(servo)
+    time = 
+    
+    print(time)
