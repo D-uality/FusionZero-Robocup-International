@@ -1,17 +1,18 @@
 import RPi.GPIO as GPIO
+import time
 
-touchPin = 15
+buttonPin = 22
 
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(touchPin, GPIO.IN)
-GPIO.setup(touchPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(buttonPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 try:
     while True:
-        if GPIO.input(touchPin) == GPIO.HIGH:
+        if GPIO.input(buttonPin) == GPIO.LOW:
             print("1")
         else:
             print("0")
+        time.sleep(0.01)
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
