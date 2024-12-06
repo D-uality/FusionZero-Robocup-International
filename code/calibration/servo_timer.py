@@ -3,8 +3,11 @@ from adafruit_servokit import ServoKit
 
 servos = ServoKit(channels=16)
 
-servoPins = [14, 13, 12, 10]
+# servoPins = [14, 13, 12, 10]    # Frederick
+servoPins = [15, 14, 13, 12]      # Aidan
 calibration_values = open("calibration_values.txt", "w")
+
+stop_angles = 97, 84, 95, 83
 
 def controlLoop(servoPin, angle):
     servos.servo[servoPin].angle = angle
@@ -19,7 +22,7 @@ def controlLoop(servoPin, angle):
     endTime = time.time()
 
     elapsedTime = endTime - startTime
-    servos.servo[servoPin].angle = 90
+    servos.servo[servoPin].angle = stop_angle
 
     print(f"\t{elapsedTime}")
     return elapsedTime
@@ -29,7 +32,7 @@ try:
 
     if mode == 1:
         for servoPin in servoPins:
-            for angle in range(40, 81, 10):
+            for angle in range(stop_angle-50, stop_angle-9, 10):
                 print(f"Servo: {servoPin} running at {angle}")
 
                 elapsedTime = controlLoop(servoPin, angle)
@@ -37,7 +40,7 @@ try:
 
                 input()
 
-            for angle in range(100, 150, 10):
+            for angle in range(stop_angle+10, stop_angle+41, 10):
                 print(f"Servo: {servoPin} running at {angle}")
 
                 elapsedTime = controlLoop(servoPin, angle)
@@ -58,6 +61,6 @@ except KeyboardInterrupt:
 
 finally:
     for servoPin in servoPins:
-        servos.servo[servoPin].angle = 90
+        servos.servo[servoPin].angle = stop_angle
 
     calibration_values.close()
