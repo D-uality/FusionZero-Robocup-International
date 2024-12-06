@@ -5,7 +5,7 @@ kit = ServoKit(channels=16)  # Update to 16 servos
 
 # Midpoint value for stopping all servos
 stopValue = 90
-# FL = 97, FR = 84, BL = 95, BR = 83
+# FL = 97, FR = 180-84, BL = 95, BR = 180-83
 
 # Function to set servo direction for left and right side servos
 def set_servo_direction(num):

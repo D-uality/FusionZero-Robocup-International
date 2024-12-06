@@ -7,7 +7,7 @@ servos = ServoKit(channels=16)
 servoPins = [15, 14, 13, 12]      # Aidan
 calibration_values = open("calibration_values.txt", "w")
 
-stop_angles = 97, 84, 95, 83
+stop_angles = [97, 95, 180-84, 180-83]
 
 def controlLoop(servoPin, angle):
     servos.servo[servoPin].angle = angle
@@ -22,17 +22,19 @@ def controlLoop(servoPin, angle):
     endTime = time.time()
 
     elapsedTime = endTime - startTime
-    servos.servo[servoPin].angle = stop_angle
+    servos.servo[servoPin].angle = stop_angles[15-servoPin]
 
     print(f"\t{elapsedTime}")
     return elapsedTime
 
 try:
+    for servoPin in servoPins:
+        servos.servo[servoPin].angle = stop_angles[15-servoPin]
     mode = int(input("1 - All\n2 - Manual\nMode: "))
 
     if mode == 1:
         for servoPin in servoPins:
-            for angle in range(stop_angle-50, stop_angle-9, 10):
+            for angle in range(stop_angles[15-servoPin]-50, stop_angles[15-servoPin]-9, 10):
                 print(f"Servo: {servoPin} running at {angle}")
 
                 elapsedTime = controlLoop(servoPin, angle)
@@ -40,7 +42,7 @@ try:
 
                 input()
 
-            for angle in range(stop_angle+10, stop_angle+41, 10):
+            for angle in range(stop_angles[15-servoPin]+10, stop_angles[15-servoPin]+41, 10):
                 print(f"Servo: {servoPin} running at {angle}")
 
                 elapsedTime = controlLoop(servoPin, angle)
@@ -61,6 +63,6 @@ except KeyboardInterrupt:
 
 finally:
     for servoPin in servoPins:
-        servos.servo[servoPin].angle = stop_angle
+        servos.servo[servoPin].angle = stop_angles[15-servoPin]
 
     calibration_values.close()
