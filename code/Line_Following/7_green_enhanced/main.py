@@ -11,7 +11,7 @@ from green import *
 from motor import *
 
 motor_speed = (20, 15)
-error_multi = 0.8
+error_multi = 0.7
 
 angle, error, turn = 90, 0, 0
 servo_write(0, 0)
@@ -21,9 +21,11 @@ while True and X11 is True:
     image = camera.capture_array()
     cv2.imshow("Image", image)
     key = cv2.waitKey(1)
+
     if key == 13:
         cv2.destroyWindow("Image")
         break
+
 print("Starting the try loop...")
 
 try:
@@ -69,7 +71,7 @@ try:
             error = angle - 90
             turn = int(error * error_multi)
 
-            servo_write(motor_speed[0] + turn , motor_speed[1] - turn)
+            servo_write(20 + turn , 20 - turn)
 
         fps = int(1 / (time.time() - time_start))
 

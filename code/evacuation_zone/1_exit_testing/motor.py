@@ -1,13 +1,6 @@
-import time
-from adafruit_servokit import ServoKit
+from adafruit_servokit import ServoKit 
 
-pca = ServoKit(channels=16)
-
-stop_speed = 90
-servoPins = [14, 13, 12, 10]
-
-
-def servo_write(v1, v2, delay=0):
+def run(v1, v2, delay=0):
 
     calculatedAngles = [0, 0, 0, 0]
 
@@ -32,9 +25,7 @@ def servo_write(v1, v2, delay=0):
 
         calculatedAngles[i] = max(min(calculatedAngles[i], 90), -90)
 
-    pca.servo[servoPins[0]].angle = stop_speed + calculatedAngles[0]
-    pca.servo[servoPins[1]].angle = stop_speed + calculatedAngles[1]
-    pca.servo[servoPins[2]].angle = stop_speed + calculatedAngles[2]
-    pca.servo[servoPins[3]].angle = stop_speed + calculatedAngles[3]
-
-    time.sleep(delay)
+    servos.servo[servoPins[0]].angle = 90 + calculatedAngles[0]
+    servos.servo[servoPins[1]].angle = 90 + calculatedAngles[1]
+    servos.servo[servoPins[2]].angle = 90 + calculatedAngles[2]
+    servos.servo[servoPins[3]].angle = 90 + calculatedAngles[3]
