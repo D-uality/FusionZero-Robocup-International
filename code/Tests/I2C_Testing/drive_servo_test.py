@@ -4,7 +4,8 @@ from adafruit_servokit import ServoKit
 kit = ServoKit(channels=16)  # Update to 16 servos
 
 # Midpoint value for stopping all servos
-stopValue = 95
+stopValue = 90
+# FL = 97, FR = 180-84, BL = 95, BR = 180-83
 
 # Function to set servo direction for left and right side servos
 def set_servo_direction(num):
@@ -21,8 +22,8 @@ def set_servo_direction(num):
             kit.servo[13].angle = stopValue
         else:
             # For all other inputs, use 197 - num for right side servos
-            kit.servo[12].angle = max(0, min(180, 197 - num))  # Right side inverse
-            kit.servo[13].angle = max(0, min(180, 197 - num))  # Right side inverse
+            kit.servo[12].angle = max(0, min(180, 180 - num))  # Right side inverse
+            kit.servo[13].angle = max(0, min(180, 180 - num))  # Right side inverse
     else:
         print("Invalid input! Angle must be between 0 and 180.")
 
