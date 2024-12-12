@@ -6,14 +6,13 @@ from config import *
 from camera import *
 from perspective_transform import *
 from exit_sequence import *
-from laser_sensors import *
-from touch_sensors import *
 import oled_display
+import motors
 
 GPIO.setmode(GPIO.BCM)
 
-initalise_ToF()
-initalise_touch()
+laser_sensors.initalise()
+touch_sensors.initalise()
 
 try:
     while True:
@@ -21,11 +20,12 @@ try:
 
         image = camera.capture_array()
         transformed_image = perspective_transform(image)
+        
+        exit_sequence()
 
         FPS = (1) / (time.time() - start)
         print(f"{FPS=:.2f}")
 
-        exit_sequence()
 
         if X11:
             cv2.imshow("transformed_image", transformed_image)
@@ -35,8 +35,10 @@ except KeyboardInterrupt:
     print("Exiting Gracefully")
 
 finally:
+    motors.run(0, 0)
+    oled_display.reset()
+
     cv2.destroyAllWindows()
     camera.stop()
+    
     GPIO.cleanup()
-    run_motors(0, 0)
-    oled_display.reset()

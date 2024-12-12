@@ -4,7 +4,7 @@ from adafruit_servokit import ServoKit
 
 pca = ServoKit(channels=16)
 
-def run_motors(v1, v2, delay=0):
+def run(v1, v2, delay=0):
 
     calculatedAngles = [0, 0, 0, 0]
 

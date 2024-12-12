@@ -2,27 +2,30 @@ from config import *
 import RPi.GPIO as GPIO
 import adafruit_vl53l1x
 import board
+import time
 
 i2c = board.I2C()
 x_shut_pins = [24, 25, 12]
 tof_sensors = []
 
-def change_address(pin_number, x_shut_pin):
-    try:
-        print(f"\tSetting GPIO output for x_shut_pin {x_shut_pin} to HIGH")
-        GPIO.output(x_shut_pin, GPIO.HIGH)
-        print(f"\tInitializing VL53L1X sensor on I2C bus for pin {x_shut_pin}")
-        sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
+def initalise():
+    def change_address(pin_number, x_shut_pin):
+        try:
+            print(f"\tSetting GPIO output for x_shut_pin {x_shut_pin} to HIGH")
+            GPIO.output(x_shut_pin, GPIO.HIGH)
+            print(f"\tInitializing VL53L1X sensor on I2C bus for pin {x_shut_pin}")
+            sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
 
-        tof_sensors.append(sensor_i2c)
+            tof_sensors.append(sensor_i2c)
 
-        if pin_number < len(x_shut_pins) - 1:
-            print(f"\tSetting new I2C address for sensor: 0x{pin_number + 0x30:02X}")
-            sensor_i2c.set_address(pin_number + 0x30)
-    except:
-        print(f"\tToF[{pin_number}] failed to initalise, on pin {x_shut_pin}")
+            if pin_number < len(x_shut_pins) - 1:
+                print(f"\tSetting new I2C address for sensor: 0x{pin_number + 0x30:02X}")
+                sensor_i2c.set_address(pin_number + 0x30)
 
-def initalise_ToF():
+            print(f"\t\tSuccess!")
+        except:
+            print(f"\tToF[{pin_number}] failed to initalise, on pin {x_shut_pin}")
+
     for x_shut_pin in x_shut_pins:
         print(f"Setip OUTPUT and LOW for {x_shut_pin}")
         GPIO.setup(x_shut_pin, GPIO.OUT)
@@ -38,4 +41,16 @@ def initalise_ToF():
 
     for sensor in tof_sensors:
         sensor.start_ranging()
-    
+
+def read():
+    values = []
+
+    for sensor_number, sensor in enumerate(tof_sensors):
+        while not sensor.data_ready:
+            time.sleep(0.00001)
+
+        values.append(sensor.distance)
+        sensor.clear_interrupt()
+
+    print("Lasers:", values, end="    ")
+    return values
