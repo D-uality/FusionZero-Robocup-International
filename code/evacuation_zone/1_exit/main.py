@@ -1,21 +1,19 @@
 import cv2
 import numpy as np
 import time
-import RPi.GPIO as GPIO
-import VL53L1X
 
 from config import *
 from camera import *
 from perspective_transform import *
 from exit_sequence import *
+from laser_sensors import *
+from touch_sensors import *
+import oled_display
 
 GPIO.setmode(GPIO.BCM)
 
-for pin in front_touch_pins:
-    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-for pin in back_touch_pins:
-    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+initalise_ToF()
+initalise_touch()
 
 try:
     while True:
@@ -40,3 +38,5 @@ finally:
     cv2.destroyAllWindows()
     camera.stop()
     GPIO.cleanup()
+    run_motors(0, 0)
+    oled_display.reset()

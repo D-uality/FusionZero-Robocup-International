@@ -39,7 +39,7 @@ def run(v1, v2, delay=0):
 
 try:
     while True:
-        run(10, 10)
+        run(50, 50)
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
