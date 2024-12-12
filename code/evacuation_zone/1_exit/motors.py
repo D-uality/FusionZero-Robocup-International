@@ -1,6 +1,7 @@
 from config import *
 import time
 from adafruit_servokit import ServoKit
+import operator
 
 pca = ServoKit(channels=16)
 
@@ -33,3 +34,15 @@ def run(v1, v2, delay=0):
     pca.servo[servo_pins[1]].angle = 90 + calculatedAngles[1]
     pca.servo[servo_pins[2]].angle = 90 + calculatedAngles[2]
     pca.servo[servo_pins[3]].angle = 90 + calculatedAngles[3]
+
+    time.sleep(delay)
+
+def run_until(v1, v2, trigger_function, index, comparison, target_value):
+    if   comparison == "==": comparison_function = operator.eq
+    elif comparison == "<=": comparison_function = operator.le
+    elif comparison == ">=": comparison_function = operator.ge
+    elif comparison == "!=": comparison_function = operator.ne
+
+    while not comparison_function(trigger_function()[index], target_value):
+        run(v1, v2)
+        print()

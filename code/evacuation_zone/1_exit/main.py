@@ -40,5 +40,5 @@ finally:
 
     cv2.destroyAllWindows()
     camera.stop()
-    
+
     GPIO.cleanup()
