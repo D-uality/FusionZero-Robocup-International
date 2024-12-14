@@ -5,7 +5,6 @@ import board
 import time
 
 i2c = board.I2C()
-x_shut_pins = [24, 25, 12]
 tof_sensors = []
 
 def initalise():
@@ -42,15 +41,21 @@ def initalise():
     for sensor in tof_sensors:
         sensor.start_ranging()
 
-def read():
+def read(pins=x_shut_pins):
+    indices = [i for i, pin in enumerate(x_shut_pins) if pin in pins]
+    sensors = [tof_sensors[i] for i in indices]
+
     values = []
 
-    for sensor_number, sensor in enumerate(tof_sensors):
-        while not sensor.data_ready:
-            time.sleep(0.00001)
+    for sensor_number, sensor in enumerate(sensors):
+        try:
+            while not sensor.data_ready:
+                time.sleep(0.00001)
 
-        values.append(sensor.distance)
-        sensor.clear_interrupt()
+            values.append(sensor.distance)
+            sensor.clear_interrupt()
+        except:
+            print(f"Failed reading {sensor_number}")
 
     print("Lasers:", values, end="    ")
     return values

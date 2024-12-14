@@ -11,10 +11,10 @@ def run(v1, v2, delay=0):
 
     calculatedAngles = [0, 0, 0, 0]
 
-    negativeGradients  = [0.64428, 0.63716, 0.67055, 0.65467]
-    negativeIntercepts = [-7.2922, -6.9004, -6.9216, -7.7659]
-    positiveGradients  = [0.65340, 0.66061, 0.69259, 0.69624]
-    positiveIntercepts = [1.9929, 1.7728, 2.9945, 2.0946]
+    negativeGradients  = [0.64106, 0.68440, 0.68426, 0.67425]
+    negativeIntercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
+    positiveGradients  = [0.64924, 0.61035, 0.69858, 0.67916]
+    positiveIntercepts = [4.1509, 6.5548, 3.5948, 4.2287]
     
     for i in range(0, 2):
         if   (v1 < negativeIntercepts[i]): calculatedAngles[i] = negativeGradients[i] * v1 + negativeIntercepts[i];
@@ -39,7 +39,7 @@ def run(v1, v2, delay=0):
 
 try:
     while True:
-        run(50, 50)
+        run(20, 20)
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
