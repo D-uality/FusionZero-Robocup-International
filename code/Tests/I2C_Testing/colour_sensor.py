@@ -1,21 +1,28 @@
-import smbus2
+# SPDX-FileCopyrightText: 2023 Liz Clark for Adafruit Industries
+# SPDX-License-Identifier: MIT
+
+# Simple demo to read analog input on all channels
+
 import time
+import board
+import adafruit_ads7830.ads7830 as ADC
+from adafruit_ads7830.analog_in import AnalogIn
 
-bus = smbus2.SMBus(1)
-ADC_ADDRESS = 0x4a
+# Initialize I2C and ADS7830
+i2c = board.I2C()
+adc = ADC.ADS7830(i2c)
 
-def read_adc(channel):
-    command = 0x40 | (channel << 4)
-    bus.write_byte(ADC_ADDRESS, command)
-    time.sleep(0.001)
-    return bus.read_byte(ADC_ADDRESS)
+# Function to read all channels
+def read_all_channels():
+    return [int(AnalogIn(adc, channel).value / 256) for channel in range(8)]
 
-try:
-    while True:
-        adc_values = []
-        for ch in range(8):
-            adc_values.append(read_adc(ch))
-            time.sleep(0.01)
-        print(", ".join([f"adc{idx} = {val}" for idx, val in enumerate(adc_values)]))
-except KeyboardInterrupt:
-    print("\nExiting...")
+while True:
+    # Read all channels
+    adc_values = read_all_channels()
+    
+    # Format and print all values on one line
+    formatted_output = " | ".join([f"ADC{channel}: {value}" for channel, value in enumerate(adc_values)])
+    print(formatted_output)
+    
+    # Add delay
+    time.sleep(0.1)
