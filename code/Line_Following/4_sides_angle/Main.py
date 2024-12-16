@@ -10,7 +10,7 @@ from line import *
 from motor import *
 
 motor_speed = (20, 15)
-angle_multi = 0.7
+angle_multi = 0.5
 
 servo_write(0, 0)
 
