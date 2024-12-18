@@ -13,6 +13,8 @@ def initalise():
     try:
         oled.fill(0)
         oled.show()
+
+        print("OLED Initalised!")
     except Exception as E:
         print(f"OLED failed to initalise as {e}")
 

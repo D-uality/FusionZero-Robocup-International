@@ -12,7 +12,8 @@ def initalise():
         camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=FLIP, hflip=FLIP))
         camera.configure(camera_config)
         camera.start()
-
+        
+        print("Camera Initalised!")
         oled_display.text("Camera: ✓", 0, 40)
 
         if X11: 

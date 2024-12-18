@@ -6,16 +6,17 @@ import touch_sensors
 import oled_display
 import camera
 
-gpio.initalise()
-oled_display.initalise()
-laser_sensors.initalise()
-touch_sensors.initalise()
-camera.initalise()
-
-input("Press enter to begin program! ")
-oled_display.reset()
-
 try:
+    start_time = time.time()
+    gpio.initalise()
+    oled_display.initalise()
+    laser_sensors.initalise()
+    touch_sensors.initalise()
+    camera.initalise()
+
+    input(f"({time.time() - start_time:.2f}) Press enter to begin program! ")
+    oled_display.reset()
+    
     while True:
         oled_display.text("Hello World", 0, 0)
 

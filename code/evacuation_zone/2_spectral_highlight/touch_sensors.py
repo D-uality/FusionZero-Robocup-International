@@ -8,7 +8,9 @@ def initalise():
         for touch_pin in touch_pins:
             GPIO.setup(touch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+        print("Touch Initalised!")
         oled_display.text("Touch: ✓", 0, 30)
+        
     except Exception as e:
         print(f"Error initalisng touch: {e}")
         oled_display.text("Touch: x", 0, 30)
