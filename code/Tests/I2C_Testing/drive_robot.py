@@ -3,9 +3,6 @@ import time
 from adafruit_servokit import ServoKit
 from picamera2 import Picamera2
 from libcamera import Transform
-import sys
-import termios
-import tty
 import cv2
 
 # GPIO Setup
@@ -17,7 +14,7 @@ led_state = False  # Track LED state
 def toggle_led():
     global led_state
     led_state = not led_state
-    GPIO.output(13, GPIO.Low if led_state else GPIO.HIGH)
+    GPIO.output(13, GPIO.LOW if led_state else GPIO.HIGH)
 
 def led_close():
     GPIO.cleanup()
@@ -36,7 +33,7 @@ def servo_write(left_speed, right_speed):
     pca.servo[13].angle = right_speed
 
 # Camera Setup
-WIDTH, HEIGHT = 640, 480
+WIDTH, HEIGHT = 160, 120
 FLIP = False
 X11 = True
 
@@ -53,43 +50,35 @@ speed = [90, 48]  # Adjust speeds
 move_delay = 0.2  # Time for turning
 current_direction = None  # Track current movement: 'forward', 'backward', or None
 
-# Function to read a single character from the terminal
-def get_key():
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return ch
-    
 try:
     print("Use WASD to control the robot, SPACE to stop, 'l' to toggle LED, and 'q' to quit.")
+    
     while True:
         # Camera preview
-        if X11:
-            image = camera.capture_array()
-            cv2.imshow("Image", image)
-            cv2.waitKey(1)
+        image = camera.capture_array()
+        cv2.imshow("Image", image)
+        
+        # Get key input using cv2.waitKey
+        key = cv2.waitKey(1) & 0xFF
+        
+        if key == ord('q'):  # Quit
+            print("Exiting control.")
+            break
 
-        # Get key input
-        key = get_key()
-
-        if key == 'w':  # Forward
+        elif key == ord('w'):  # Forward
             servo_write(speed[0], speed[1])
             current_direction = 'forward'
 
-        elif key == 's':  # Backward
+        elif key == ord('s'):  # Backward
             servo_write(-speed[0], -speed[1])
             current_direction = 'backward'
 
-        elif key == ' ':  # Stop
+        elif key == ord(' '):  # Stop
             servo_write(0, 0)
             current_direction = None
 
-        elif key == 'a':  # Turn Left
-            servo_write(int(-speed[0]/2),int(speed[1]/2))
+        elif key == ord('a'):  # Turn Left
+            servo_write(int(-speed[0]/2), int(speed[1]/2))
             time.sleep(move_delay)
             if current_direction == 'forward':
                 servo_write(speed[0], speed[1])
@@ -98,7 +87,7 @@ try:
             else:
                 servo_write(0, 0)
 
-        elif key == 'd':  # Turn Right
+        elif key == ord('d'):  # Turn Right
             servo_write(int(speed[0]/2), int(-speed[1]/2))
             time.sleep(move_delay)
             if current_direction == 'forward':
@@ -108,12 +97,8 @@ try:
             else:
                 servo_write(0, 0)
 
-        elif key == 'l':  # Toggle LED
+        elif key == ord('l'):  # Toggle LED
             toggle_led()
-
-        elif key == 'q':  # Quit
-            print("Exiting control.")
-            break
 
 except KeyboardInterrupt:
     print("Exiting program...")
