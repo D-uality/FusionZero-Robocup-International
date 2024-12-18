@@ -8,15 +8,15 @@ import camera
 
 try:
     start_time = time.time()
-    gpio.initalise()
-    oled_display.initalise()
-    laser_sensors.initalise()
-    touch_sensors.initalise()
-    camera.initalise()
+    gpio.initialise()
+    oled_display.initialise()
+    laser_sensors.initialise()
+    touch_sensors.initialise()
+    camera.initialise()
 
     input(f"({time.time() - start_time:.2f}) Press enter to begin program! ")
     oled_display.reset()
-    
+
     while True:
         oled_display.text("Hello World", 0, 0)
 

@@ -9,7 +9,7 @@ import oled_display
 i2c = board.I2C()
 tof_sensors = []
 
-def initalise():
+def initialise():
     def change_address(pin_number, x_shut_pin):
         try:
             print(f"\tSetting GPIO output for x_shut_pin {x_shut_pin} to HIGH")
@@ -25,8 +25,8 @@ def initalise():
 
             print(f"\t\tSuccess!")
             oled_display.text(f"ToF[{pin_number}]: ✓", 0, 0 + 10 * pin_number)
-        except:
-            print(f"\tToF[{pin_number}] failed to initalise, on pin {x_shut_pin}")
+        except Exception as e:
+            print(f"\tToF[{pin_number}] failed to initialise, on pin {x_shut_pin}: {e}")
             oled_display.text(f"ToF[{pin_number}]: x", 0, 0 + 10 * pin_number)
 
     for x_shut_pin in x_shut_pins:

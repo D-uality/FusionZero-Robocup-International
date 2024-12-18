@@ -9,14 +9,14 @@ i2c = board.I2C()
 oled = adafruit_ssd1306.SSD1306_I2C(SCREEN_WIDTH, SCREEN_HEIGHT, i2c, addr=0x3c)
 image = Image.new("1", (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-def initalise():
+def initialise():
     try:
         oled.fill(0)
         oled.show()
 
-        print("OLED Initalised!")
+        print("OLED initialised!")
     except Exception as E:
-        print(f"OLED failed to initalise as {e}")
+        print(f"OLED failed to initialise: {e}")
 
 def reset():
     global image

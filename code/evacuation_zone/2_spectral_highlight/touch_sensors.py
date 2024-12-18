@@ -3,16 +3,16 @@ from config import *
 import RPi.GPIO as GPIO
 import oled_display
 
-def initalise():
+def initialise():
     try:
         for touch_pin in touch_pins:
             GPIO.setup(touch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        print("Touch Initalised!")
+        print("Touch initialised!")
         oled_display.text("Touch: ✓", 0, 30)
         
     except Exception as e:
-        print(f"Error initalisng touch: {e}")
+        print(f"Touch failed to initialise: {e}")
         oled_display.text("Touch: x", 0, 30)
 
 def read(pins=touch_pins):
