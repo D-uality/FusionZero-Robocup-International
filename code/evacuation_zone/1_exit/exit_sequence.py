@@ -17,7 +17,7 @@ def exit_sequence():
         if touch_values[0] == 0 or touch_values[1] == 0:
             motors.run(-30, -30, 0.4)
             motors.run(30, -30, 0.3)
-        elif laser_values[0] > 15:
+        elif laser_values[0] > 30:
             motors.run(30, 30, 1.5)
             motors.run(-30, 30, 1.5)
             motors.run(0, 0, 1.5)
@@ -30,21 +30,21 @@ def exit_sequence():
 
 def validate_exit():
     print("Moving backwards, removing black")
-    motors.run(-10, -10)
+    motors.run(-15, -15, 1.3)
+
+    motors.run(15, 15)
 
     while True:
-        image = camera.capture_array()
-        image = perspective_transform(image)
+        laser_values = laser_sensors.read([x_shut_pins[0], x_shut_pins[2]])
 
-        black_mask = cv2.inRange(image, np.array([0, 0, 0]), np.array([50, 50, 50]))
-        contours, hierarchy = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                
-        if not contours: break
+        if laser_values[0] < 20 and laser_values[1] < 20:
+            motors.run(0, 0)
+            break
+        else:
+            if laser_values[0] < 20: motors.run(5, 15)
+            if laser_values[1] < 20: motors.run(15, 5)
 
-        if X11:
-            cv2.imshow("image", image)
-            cv2.imshow("black_mask", black_mask)
-            cv2.waitKey(1)
+        print()
 
-
-    motors.run()
+    motors.run(-15, -15, 0.4)
+    input()

@@ -2,10 +2,8 @@ import time
 from adafruit_servokit import ServoKit
 
 servos = ServoKit(channels=16)
-servoPins = [14, 13, 12, 10]
-
-def mapValue(x, inMin, inMax, outMin, outMax):
-    return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
+servo_pins = [14, 13, 12, 10]
+stop_angles = [89, 88, 89, 88]
 
 def run(v1, v2, delay=0):
 
@@ -32,14 +30,15 @@ def run(v1, v2, delay=0):
 
         calculatedAngles[i] = max(min(calculatedAngles[i], 90), -90)
 
-    servos.servo[servoPins[0]].angle = 90 + calculatedAngles[0]
-    servos.servo[servoPins[1]].angle = 90 + calculatedAngles[1]
-    servos.servo[servoPins[2]].angle = 90 + calculatedAngles[2]
-    servos.servo[servoPins[3]].angle = 90 + calculatedAngles[3]
+    servos.servo[servo_pins[1]].angle = stop_angles[1] + calculatedAngles[1]
+    servos.servo[servo_pins[0]].angle = stop_angles[0] + calculatedAngles[0]
+    servos.servo[servo_pins[2]].angle = stop_angles[2] + calculatedAngles[2]
+    servos.servo[servo_pins[3]].angle = stop_angles[3] + calculatedAngles[3]
 
 try:
     while True:
-        run(20, 20)
+        v1, v2 = list(map(int, input("Angle (v1, v2): ").split(" ")))
+        run(v1, v2)
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")

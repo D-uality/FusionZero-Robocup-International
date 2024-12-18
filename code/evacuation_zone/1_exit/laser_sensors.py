@@ -54,8 +54,12 @@ def read(pins=x_shut_pins):
 
             values.append(sensor.distance)
             sensor.clear_interrupt()
-        except:
-            print(f"Failed reading {sensor_number}")
+        except KeyboardInterrupt:
+            # Re-raise KeyboardInterrupt to allow program termination
+            raise
+        except Exception as e:
+            print(f"Failed reading ToF {sensor_number}: {str(e)}")
+            values.append(0)
 
     print("Lasers:", values, end="    ")
     return values
