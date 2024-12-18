@@ -9,8 +9,8 @@ i2c = board.I2C()  # uses board.SCL and board.SDA
 
 xshut = [
     # Update the D6 and D5 pins to match the pins to which you wired your sensor XSHUT pins.
-    digitalio.DigitalInOut(board.D23),
     digitalio.DigitalInOut(board.D24),
+    digitalio.DigitalInOut(board.D25),
     digitalio.DigitalInOut(board.D12),
     # Add more VL53L1X sensors by defining their XSHUT pins here.
 ]

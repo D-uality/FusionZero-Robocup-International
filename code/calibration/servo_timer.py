@@ -1,68 +1,67 @@
 import time
 from adafruit_servokit import ServoKit
 
-servos = ServoKit(channels=16)
+pca = ServoKit(channels=16)
+servo_pins = [14, 13, 12, 10]
+stop_angles = [89, 88, 89, 88]
 
-# servoPins = [14, 13, 12, 10]    # Frederick
-servoPins = [15, 14, 13, 12]      # Aidan
-calibration_values = open("calibration_values.txt", "w")
-
-stop_angles = [97, 95, 180-84, 180-83]
-
-def controlLoop(servoPin, angle):
-    servos.servo[servoPin].angle = angle
+def control_loop(pin_number, servo_pin, angle):
+    pca.servo[servo_pin].angle = angle
 
     print(f"\tPress enter to begin. Press enter again to stop.")
     input()
 
-    startTime = time.time()
+    start_time = time.time()
 
+    print(f"\t\tBegan recording time")
     input()
 
-    endTime = time.time()
+    elapsed_time = time.time() - start_time
+    print(f"\t\tFinished recording time")
 
-    elapsedTime = endTime - startTime
-    servos.servo[servoPin].angle = stop_angles[15-servoPin]
+    pca.servo[servo_pin].angle = stop_angles[pin_number]
 
-    print(f"\t{elapsedTime}")
-    return elapsedTime
+    return elapsed_time
 
 try:
-    for servoPin in servoPins:
-        servos.servo[servoPin].angle = stop_angles[15-servoPin]
-    mode = int(input("1 - All\n2 - Manual\nMode: "))
+    while True:
+        for servo_number, servo_pin in enumerate(servo_pins):
+            pca.servo[servo_pin].angle = stop_angles[servo_number]
 
-    if mode == 1:
-        for servoPin in servoPins:
-            for angle in range(stop_angles[15-servoPin]-50, stop_angles[15-servoPin]-9, 10):
-                print(f"Servo: {servoPin} running at {angle}")
+        print("1: Record for ALL servos\n2: Record for SPECIFIC servo\nMode: ")
+        mode = int(input())
 
-                elapsedTime = controlLoop(servoPin, angle)
-                calibration_values.write(str(elapsedTime) + ", ")
+        if mode == 1:
+            calibration_values = open("calibration_values.txt", "w")
 
-                input()
+            for pin_number, servo_pin in enumerate(servo_pins):
+                stop_angle = stop_angles[pin_number]
 
-            for angle in range(stop_angles[15-servoPin]+10, stop_angles[15-servoPin]+41, 10):
-                print(f"Servo: {servoPin} running at {angle}")
+                for angle in range(stop_angle-50, stop_angle+51, 10):
+                    if angle == stop_angle: continue
 
-                elapsedTime = controlLoop(servoPin, angle)
-                calibration_values.write(str(elapsedTime) + ", ")
+                    print(f"Servo {servo_number} @ {angle}")
 
-                input()
+                    elapsed_time = control_loop(pin_number, servo_pin, angle)
+                    calibration_values.write(f"{elapsed_time:.2f} ")
 
-            calibration_values.write("\n")
+                    input("Waiting for next angle")
 
-    else:
-        servoPin = servoPins[int(input("Servo Pin: "))]
-        angle = int(input("Angle: "))
+                calibration_values.write(f"\n")
+                input("Waiting for next servo")
 
-        elapsedTime = controlLoop(servoPin, angle)
+            calibration_values.close()
+
+        if mode == 2:
+            pin_number = int(input("Pin Number: "))
+            angle = int(input("Step: ")) * 10 + stop_angles[pin_number]
+
+            elapsed_time = control_loop(pin_number, servo_pins[pin_number], angle)
+            print(f"{elapsed_time:.2f}")
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
 
 finally:
-    for servoPin in servoPins:
-        servos.servo[servoPin].angle = stop_angles[15-servoPin]
-
-    calibration_values.close()
+    for pin_number, servo_pin in enumerate(servo_pins):
+        pca.servo[servo_pin].angle = stop_angles[pin_number]
