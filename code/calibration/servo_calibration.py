@@ -11,16 +11,17 @@ positiveIntercepts = []
 
 # For each servoTime
 for time in allTimes:
+    if len(time) == 0: continue
+    
     index = allTimes.index(time)
     # define the frequiencies used
     frequencies = np.array([-50, -40, -30, -20, -10, 10, 20, 30, 40, 50])
 
     # Read the calibration_values.txt
-    times = time.strip().split(',')[:-1]
+    times = time.strip().split(' ')
     times = list(map(float, times))
 
     times = np.array(times)
-
     omega = 10 * np.pi / times
     frequencies, omega = omega, frequencies
 
