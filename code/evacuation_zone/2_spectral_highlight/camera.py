@@ -5,7 +5,10 @@ from picamera2 import Picamera2
 from libcamera import Transform
 import oled_display
 
+camera = None
+
 def initialise():
+    global camera
     try:
         camera = Picamera2()
 
@@ -25,4 +28,9 @@ def initialise():
         oled_display.text("Camera: X", 0, 40)
 
 def close():
+    global camera
     camera.close()
+
+def capture_array():
+    global camera
+    return camera.capture_array()
