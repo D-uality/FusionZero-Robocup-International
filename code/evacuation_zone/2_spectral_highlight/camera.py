@@ -4,7 +4,7 @@ import cv2
 from picamera2 import Picamera2
 from libcamera import Transform
 import oled_display
-
+    
 camera = None
 
 def initialise():
@@ -18,14 +18,21 @@ def initialise():
         
         print("Camera initialised!")
         oled_display.text("Camera: ✓", 0, 40)
-
-        if X11: 
-            cv2.startWindowThread()
-            oled_display.text("X11: ✓", 60, 40)
+            
 
     except Exception as e:
         print(f"Camera failed to initialise: {e}")
         oled_display.text("Camera: X", 0, 40)
+
+    if X11:
+        try:
+            cv2.startWindowThread()
+            print("X11 initalised!")
+            oled_display.text("X11: ✓", 60, 40)
+
+        except Exception as e:
+            print(f"X11 failed to intialise: {e}")
+            oled_display.text("X11: X", 60, 40)
 
 def close():
     global camera
