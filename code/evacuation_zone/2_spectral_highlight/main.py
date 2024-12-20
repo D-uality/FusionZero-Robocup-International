@@ -20,23 +20,26 @@ try:
     laser_sensors.initialise()
     touch_sensors.initialise()
     camera.initialise()
+    motors.initialise()
 
     input(f"({time.time() - start_time:.2f}) Press enter to begin program! ")
     oled_display.reset()
 
     display_found = False
     display_reset = False
+    base_speed = 30
 
     while True:
         start_time = time.time()
         image = camera.capture_array()
 
-        motors.run(25, 25)
+        motors.run(base_speed, base_speed)
 
         touch_values = touch_sensors.read([touch_pins[0], touch_pins[1]])
         if touch_values[0] == 0 or touch_values[1] == 0:
+            motors.run(-base_speed, -base_speed, 0.6)
             direction = 2 * randint(0, 1) - 1
-            motors.run(25 * direction, -25 * direction, randint(800, 1600) / 1000)
+            motors.run(base_speed * direction, -base_speed * direction, randint(800, 1600) / 1000)
         
         live_x, live_y = live_victims.find(image, 7)
 
@@ -46,11 +49,12 @@ try:
                 display_found = True
                 display_reset = False
 
-            distance = laser_sensors.read([x_shut_pins[1]])
-            while distance > 15:
-                live_victims.route(v=25, kP=1)
+            success = live_victims.route(v=base_speed, kP=0.05)
 
-            motors.run(0, 0)
+            if success:
+                motors.claw_step(0, 0.01)
+
+            # motors.claw_step(0, 0.01)
 
         else:
             if not display_reset:
@@ -71,3 +75,5 @@ finally:
     gpio.cleanup()
     oled_display.reset()
     camera.close()
+    motors.run(0, 0)
+    motors.claw_step(270, 0)

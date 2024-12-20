@@ -4,6 +4,7 @@ import cv2
 
 import camera
 import motors
+import laser_sensors
 
 def find(image, kernal_size):
     spectral_highlights = cv2.inRange(image, (200, 200, 200), (255, 255, 255))
@@ -21,9 +22,23 @@ def find(image, kernal_size):
     return int(x + w/2), int(y + h/2)
 
 def route(v, kP):
-    image = camera.capture_array()
-    x, _ = find(image, 7)
+    distance = laser_sensors.read([x_shut_pins[1]])
+    while distance is None: distance = laser_sensors.read([x_shut_pins[1]])
 
-    error = WIDTH - x
-    turn = int(error * kP)
-    motors.run(v + turn, v - turn)
+    while distance[0] > 15:
+        image = camera.capture_array()
+        distance  = laser_sensors.read([x_shut_pins[1]])
+        x, _ = find(image, 7)
+
+        if x is None: return False
+
+        error = WIDTH / 2 - x
+        turn = int(error * kP)
+        motors.run(v - turn, v + turn)
+
+        cv2.imshow("image", image)
+        print(f"{error=} {turn=}")
+
+    motors.run(0, 0)
+
+    return True
