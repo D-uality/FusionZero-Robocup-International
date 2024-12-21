@@ -49,10 +49,14 @@ try:
                 display_found = True
                 display_reset = False
 
-            success = live_victims.route(v=base_speed, kP=0.05)
+            success = live_victims.route(v=base_speed * 0.8, kP=0.05)
 
             if success:
                 motors.claw_step(0, 0.01)
+                motors.run(base_speed * 0.8, base_speed * 0.8, 1)
+                motors.claw_step(90, 0.01)
+                motors.run(base_speed * -0.8, base_speed * -0.8, 1)
+                motors.claw_step(180, 0.01)
 
             # motors.claw_step(0, 0.01)
 

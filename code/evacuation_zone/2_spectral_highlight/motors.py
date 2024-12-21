@@ -66,6 +66,7 @@ def run_until(v1, v2, trigger_function, index, comparison, target_value):
         print()
 
 def claw_step(target_angle, time_delay):
+    if target_angle == 270: target_angle = 269
     current_angle = pca.servo[claw_pin].angle
     
     if current_angle == target_angle:
