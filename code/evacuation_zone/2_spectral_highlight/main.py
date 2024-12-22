@@ -36,9 +36,10 @@ try:
 
         if live_victims.route(v=base_speed, kP=0.08, target_distance=target_distance):
             if live_victims.align(v=base_speed, target_distance=target_distance):
-                evacuation_zone.grab(base_speed=base_speed)
+                if evacuation_zone.grab(base_speed=base_speed):
+                    evacuation_zone.find_triangle()
 
-                input()
+                    input()
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
