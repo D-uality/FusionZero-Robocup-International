@@ -9,9 +9,9 @@ def run(v1, v2, delay=0):
 
     calculatedAngles = [0, 0, 0, 0]
 
-    negativeGradients  = [0.64106, 0.68440, 0.68426, 0.67425]
+    negativeGradients  = [0.69106, 0.73440, 0.68426, 0.67425]
     negativeIntercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-    positiveGradients  = [0.64924, 0.61035, 0.69858, 0.67916]
+    positiveGradients  = [0.69924, 0.66035, 0.69858, 0.67916]
     positiveIntercepts = [4.1509, 6.5548, 3.5948, 4.2287]
     
     for i in range(0, 2):
