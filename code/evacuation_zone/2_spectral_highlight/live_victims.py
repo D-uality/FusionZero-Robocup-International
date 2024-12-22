@@ -22,7 +22,7 @@ def find(image, kernal_size):
 
     return int(x + w/2), int(y + h/2)
 
-def route(v, kP, target_distance):
+def route(base_speed, kP, target_distance):
     distance = laser_sensors.read([x_shut_pins[1]])
     while distance is None: distance = laser_sensors.read([x_shut_pins[1]])
 
@@ -36,18 +36,18 @@ def route(v, kP, target_distance):
         scalar = 0.5 + (distance[0] - 15) * (0.5 / 85)
         error = WIDTH / 2 - x
         turn = int(error * kP)
-        v1, v2 = scalar * (v-turn), scalar * (v+turn)
+        v1, v2 = scalar * (base_speed-turn), scalar * (base_speed+turn)
         motors.run(v1, v2)
 
         cv2.imshow("image", image)
         print(f"(APPROACHING)    |    {error=} {scalar=:.2f} {turn=}")
 
     motors.run(0, 0, 0.5)
-    motors.run_until(-v * 0.62, -v * 0.62, laser_sensors.read, 1, ">=", target_distance)
+    motors.run_until(-base_speed * 0.62, -base_speed * 0.62, laser_sensors.read, 1, ">=", target_distance, "ROUTE BACK")
 
     return True
 
-def align(v, target_distance):
+def align(base_speed, target_distance):
     print("(ALIGNING)")
     image = camera.capture_array()
     x, _ = find(image, 7)
@@ -60,9 +60,10 @@ def align(v, target_distance):
         if x is None: return False
         
         error = WIDTH / 2 - x
-        motors.run(-v * 0.62, v * 0.62, 0.005)
+        motors.run(-base_speed * 0.62, base_speed * 0.62, 0.005)
         motors.run(0, 0, 0.01)
 
+        if X11: cv2.imshow("image", image)
         print(f"(Aligning Right)    |    {error=}")
 
     motors.run(0, 0, 0.5)
@@ -73,13 +74,14 @@ def align(v, target_distance):
         if x is None: return False
 
         error = WIDTH / 2 - x
-        motors.run(v * 0.62, -v * 0.62, 0.005)
+        motors.run(base_speed * 0.62, -base_speed * 0.62, 0.005)
         motors.run(0, 0, 0.01)
     
+        if X11: cv2.imshow("image", image)
         print(f"(Aligning Left)    |    {error=}")
 
     motors.run(0, 0, 0.3)
-    motors.run_until(-v * 0.62, -v * 0.62, laser_sensors.read, 1, ">=", target_distance)
-    motors.run_until( v * 0.62,  v * 0.62, laser_sensors.read, 1, "<=", target_distance)
+    motors.run_until(-base_speed * 0.62, -base_speed * 0.62, laser_sensors.read, 1, ">=", target_distance, "ALIGN BACK")
+    motors.run_until( base_speed * 0.62,  base_speed * 0.62, laser_sensors.read, 1, "<=", target_distance, "ALIGN FRONT")
 
     return True
