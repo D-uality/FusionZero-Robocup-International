@@ -62,7 +62,7 @@ def grab(base_speed):
     motors.run(-base_speed * 0.8, -base_speed * 0.8, 1)
     print(f"(GRAB) claw open to readjust")
     motors.claw_step(75, 0.05)
-    motors.claw_step(75, 0.05)
+    motors.claw_step(90, 0.05)
     print(f"(GRAB) claw up")
     motors.claw_step(180, 0.005)
     motors.run(-base_speed, -base_speed, 2)
