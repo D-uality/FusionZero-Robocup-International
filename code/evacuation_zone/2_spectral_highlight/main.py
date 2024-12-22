@@ -11,7 +11,6 @@ import touch_sensors
 import oled_display
 import camera
 import motors
-
 import live_victims
 
 try:
@@ -28,6 +27,7 @@ try:
     display_found = False
     display_reset = False
     base_speed = 30
+    target_distance = 20
 
     while True:
         start_time = time.time()
@@ -37,11 +37,18 @@ try:
 
         touch_values = touch_sensors.read([touch_pins[0], touch_pins[1]])
         if touch_values[0] == 0 or touch_values[1] == 0:
-            motors.run(-base_speed, -base_speed, 0.6)
-            direction = 2 * randint(0, 1) - 1
-            motors.run(base_speed * direction, -base_speed * direction, randint(800, 1600) / 1000)
+            motors.run(-base_speed, -base_speed, 1.2)
+
+            spin_time, start_time = randint(800, 1600) / 1000, time.time()
+            while time.time() - start_time < spin_time:
+                motors.run(base_speed, -base_speed)
+
+                image = camera.capture_array()
+                live_x, _ = live_victims.find(image, 7)
+
+                if live_x is not None: break
         
-        live_x, live_y = live_victims.find(image, 7)
+        live_x, _ = live_victims.find(image, 7)
 
         if live_x is not None and live_y is not None:
             if not display_found:
@@ -49,16 +56,19 @@ try:
                 display_found = True
                 display_reset = False
 
-            success = live_victims.route(v=base_speed * 0.8, kP=0.05)
+            success = live_victims.route(v=base_speed, kP=0.08, target_distance=target_distance)
 
             if success:
                 motors.claw_step(0, 0.01)
-                motors.run(base_speed * 0.8, base_speed * 0.8, 1)
+                motors.run(base_speed * 0.8, base_speed * 0.8, 1.6)
                 motors.claw_step(90, 0.01)
-                motors.run(base_speed * -0.8, base_speed * -0.8, 1)
+                motors.run(-base_speed * 0.8, -base_speed * 0.8, 1)
                 motors.claw_step(180, 0.01)
+                motors.run(-base_speed, -base_speed, 2)
 
-            # motors.claw_step(0, 0.01)
+                input()
+
+            motors.claw_step(270, 0.01)
 
         else:
             if not display_reset:

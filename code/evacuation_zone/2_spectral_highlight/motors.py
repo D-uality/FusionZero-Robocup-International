@@ -61,12 +61,17 @@ def run_until(v1, v2, trigger_function, index, comparison, target_value):
     elif comparison == ">=": comparison_function = operator.ge
     elif comparison == "!=": comparison_function = operator.ne
 
-    while not comparison_function(trigger_function()[index], target_value):
+    value = trigger_function()[index]
+    while not comparison_function(value, target_value) and value is not None:
+        value = trigger_function()[index]
         run(v1, v2)
         print()
 
+    run(0, 0)
+
 def claw_step(target_angle, time_delay):
     if target_angle == 270: target_angle = 269
+    if target_angle == 0:   target_angle = 1
     current_angle = pca.servo[claw_pin].angle
     
     if current_angle == target_angle:

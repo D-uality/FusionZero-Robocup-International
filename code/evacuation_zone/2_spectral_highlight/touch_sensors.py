@@ -18,7 +18,7 @@ def initialise():
 def read(pins=touch_pins):
     values = []
 
-    for pin in touch_pins:
+    for pin in pins:
         values.append(GPIO.input(pin))
 
     print(f"Touch: {values}", end="    ")

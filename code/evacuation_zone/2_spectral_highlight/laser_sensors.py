@@ -48,7 +48,7 @@ def read(pins=x_shut_pins):
 
     for sensor_number, sensor in enumerate(sensors):
         try:
-            while not sensor.data_ready:
+            while not sensor.data_ready or sensor.distance is None:
                 time.sleep(0.00001)
 
             values.append(sensor.distance)
