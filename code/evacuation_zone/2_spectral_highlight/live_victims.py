@@ -40,35 +40,46 @@ def route(v, kP, target_distance):
         motors.run(v1, v2)
 
         cv2.imshow("image", image)
-        print(f"{error=} {scalar=:.2f} {turn=}")
+        print(f"(APPROACHING)    |    {error=} {scalar=:.2f} {turn=}")
 
     motors.run(0, 0, 0.5)
     motors.run_until(-v * 0.62, -v * 0.62, laser_sensors.read, 1, ">=", target_distance)
 
+    return True
+
+def align(v, target_distance):
+    print("(ALIGNING)")
     image = camera.capture_array()
     x, _ = find(image, 7)
+    if x is None: return False
     error = WIDTH / 2 - x
 
-    while error > 5:
+    while error > 2:
         image = camera.capture_array()
         x, _ = find(image, 7)
+        if x is None: return False
+        
         error = WIDTH / 2 - x
         motors.run(-v * 0.62, v * 0.62, 0.005)
         motors.run(0, 0, 0.01)
 
-        print(f"Aligning Right: {error=}")
+        print(f"(Aligning Right)    |    {error=}")
 
     motors.run(0, 0, 0.5)
 
-    while error < -5:
+    while error < -2:
         image = camera.capture_array()
         x, _ = find(image, 7)
+        if x is None: return False
+
         error = WIDTH / 2 - x
         motors.run(v * 0.62, -v * 0.62, 0.005)
         motors.run(0, 0, 0.01)
     
-        print(f"Aligning Right: {error=}")
+        print(f"(Aligning Left)    |    {error=}")
 
-    motors.run(0, 0, 0.5)
+    motors.run(0, 0, 0.3)
+    motors.run_until(-v * 0.62, -v * 0.62, laser_sensors.read, 1, ">=", target_distance)
+    motors.run_until( v * 0.62,  v * 0.62, laser_sensors.read, 1, "<=", target_distance)
 
     return True
