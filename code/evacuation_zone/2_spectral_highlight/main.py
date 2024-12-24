@@ -40,6 +40,7 @@ try:
                 if evacuation_zone.grab(base_speed=base_speed):
                     triangles.find(base_speed=base_speed)
                     evacuation_zone.dump(base_speed=base_speed)
+                    
             else: motors.run(base_speed, -base_speed, 0.8)
 
 except KeyboardInterrupt:

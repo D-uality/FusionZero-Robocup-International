@@ -8,7 +8,7 @@ import laser_sensors
 import math
 
 def find(image, kernal_size):
-    spectral_highlights = cv2.inRange(image, (220, 220, 220), (255, 255, 255))
+    spectral_highlights = cv2.inRange(image, (200, 200, 200), (255, 255, 255))
     spectral_highlights = cv2.dilate(spectral_highlights, np.ones((kernal_size, kernal_size), np.uint8), iterations=1)
 
     contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

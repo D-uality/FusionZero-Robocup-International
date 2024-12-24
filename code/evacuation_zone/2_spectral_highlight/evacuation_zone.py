@@ -54,7 +54,7 @@ def grab(base_speed):
     print(f"(GRAB) claw down")
     motors.claw_step(0, 0.005)
     print(f"(GRAB) move forwards")
-    motors.run(base_speed * 0.7, base_speed * 0.7, 1.4)
+    motors.run(base_speed * 0.8, base_speed * 0.8, 1.3)
     print(f"(GRAB) claw close")
     motors.claw_step(90, 0.01)
     print(f"(GRAB) move backwards")
