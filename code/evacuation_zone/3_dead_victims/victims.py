@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
+
+from config import *
 import camera
+
 
 def live(image: np.ndarray) -> int:
     spectral_threshold = 200
@@ -16,6 +19,8 @@ def live(image: np.ndarray) -> int:
     largest_contour = max(contours, key=cv2.contourArea)
 
     x, _, w, _ = cv2.boundingRect(largest_contour)
+
+    if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 
     return int(x + w/2)
 
@@ -47,5 +52,6 @@ def dead(image: np.ndarray) -> int:
     largest_contour = max(circular_contours, key=cv2.contourArea)
 
     x, _, w, _ = cv2.boundingRect(largest_contour)
+    if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 
     return int(x + w/2)

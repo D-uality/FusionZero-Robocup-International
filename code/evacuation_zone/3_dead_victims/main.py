@@ -26,8 +26,6 @@ try:
     input(f"({time.time() - start_time:.2f}) Press enter to begin program! ")
     oled_display.reset()
 
-    target_distance = 18
-
     while True:
         search_type = victims.live if victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
@@ -35,7 +33,7 @@ try:
         evacuation_zone.find(search_function=search_type)
 
         if evacuation_zone.route(search_function=search_type, kP=0.08):
-            if evacuation_zone.align(target_distance):
+            if evacuation_zone.align(search_function=search_type, step_time=0.01):
                 if evacuation_zone.grab():
                     motors.claw_step(180, 0.005)
                     triangles.find()

@@ -7,7 +7,7 @@ import camera
 import motors
 
 def find():
-    def align(tolerance: int, text: str, time_step: float) -> None:
+    def align(tolerance: int, text: str, time_step: float = None) -> None:
         direction = 1
         while True:
             print(f"({text})    |    ", end="")
@@ -19,9 +19,16 @@ def find():
 
             image = camera.capture_array()
 
-            green = cv2.inRange(image, (20, 80, 10), (80, 160, 50))
-            green = cv2.dilate(green, np.ones((7, 7), np.uint8), iterations=1)
-            contours, _ = cv2.findContours(green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            mask = image.copy()
+
+            if victim_count < 2:
+                mask = cv2.inRange(image, (10, 50, 10), (80, 160, 50))
+                mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+            else:
+                mask = cv2.inRange(image, (0, 0, 60), (40, 40, 255))
+                mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+                
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             if not contours:
                 if X11: cv2.imshow("image", image)
