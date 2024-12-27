@@ -10,8 +10,9 @@ import oled_display
 import camera
 import motors
 import live_victims
+import dead_victims
 
-def search_while(v1, v2, time_constraint, conditional_function=None):
+def search_while(v1, v2, time_constraint, search_function, conditional_function=None):
     start_time = time.time()
     motors.run(v1, v2)
     
@@ -21,9 +22,9 @@ def search_while(v1, v2, time_constraint, conditional_function=None):
         print(f"(SEARCH WHILE) ({v1}, {v2})   |    {time.time()-start_time:.2f}")
         image = camera.capture_array()
 
-        live_x, _ = live_victims.find(image, 7)
+        x = search_function(image)
 
-        if live_x is not None: return 1
+        if x is not None: return 1
         
         if conditional_function:
             current_condition = conditional_function()
@@ -35,18 +36,18 @@ def search_while(v1, v2, time_constraint, conditional_function=None):
 
     return None
 
-def find_live(base_speed):
+def find(base_speed, search_function):
     found = 0
 
     while found != 1:
-        found = search_while(v1=base_speed, v2=base_speed, time_constraint=3.5, conditional_function=touch_sensors.read)
+        found = search_while(v1=base_speed, v2=base_speed, time_constraint=3.5, search_function=search_function, conditional_function=touch_sensors.read)
 
         if found == 1: continue
         elif found == 0: motors.run(-base_speed, -base_speed, 1.2)
 
         time_delay = 3.5 if found is None else randint(800, 1600) / 1000
         
-        found = search_while(v1=base_speed, v2=-base_speed, time_constraint=time_delay)
+        found = search_while(v1=base_speed, v2=-base_speed, search_function=search_function, time_constraint=time_delay)
 
     motors.run(0, 0)
 

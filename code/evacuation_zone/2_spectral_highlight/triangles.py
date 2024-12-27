@@ -14,14 +14,10 @@ def align(base_speed, tolerance, text, time_step=None):
     while True:
         print(f"({text})    |    ", end="")
 
-        laser_values = laser_sensors.read()
-
-        if laser_values[1] < 25: motors.run(-base_speed, -base_speed)
+        if time_step is None: motors.run(base_speed * direction, -base_speed * direction)
         else:
-            if time_step is None: motors.run(base_speed * direction, -base_speed * direction)
-            else:
-                motors.run(base_speed * direction, -base_speed * direction, time_step)
-                motors.run(0, 0, time_step)
+            motors.run(base_speed * direction, -base_speed * direction, time_step)
+            motors.run(0, 0, time_step)
 
         image = camera.capture_array()
 
@@ -65,6 +61,6 @@ def find(base_speed):
     motors.run_until(-base_speed, -base_speed, laser_sensors.read, 1, ">=", 35)
 
     print("(TRIANGLE SEARCH) Fine alignment")
-    align(base_speed=base_speed * 0.2, tolerance=3, text="Fine Alignment", time_step=0.1)
+    align(base_speed=base_speed * 0.4, tolerance=3, text="Fine Alignment", time_step=0.1)
 
     motors.run(0, 0)
