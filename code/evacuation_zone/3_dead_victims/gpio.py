@@ -7,7 +7,7 @@ def initialise():
         print("GPIO initialised!")
         
     except Exception as e:
-        pritn(f"GPIO failed to initialise: {e}")
+        print(f"GPIO failed to initialise: {e}")
 
 def cleanup():
     GPIO.cleanup()

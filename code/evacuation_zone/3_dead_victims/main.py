@@ -12,8 +12,7 @@ import oled_display
 import camera
 import motors
 import evacuation_zone
-import live_victims
-import dead_victims
+import victims
 import triangles
 
 try:
@@ -27,26 +26,26 @@ try:
     input(f"({time.time() - start_time:.2f}) Press enter to begin program! ")
     oled_display.reset()
 
-    display_found = False
-    display_reset = False
     target_distance = 18
-    base_speed = 30
 
     while True:
+        search_type = victims.live if victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
-        # evacuation_zone.find_live(base_speed=base_speed)
 
-        # if live_victims.route(base_speed=base_speed, kP=0.08, target_distance=target_distance):
-        #     if live_victims.align(base_speed=base_speed, target_distance=target_distance):
-        #         if evacuation_zone.grab(base_speed=base_speed):
-        #             triangles.find(base_speed=base_speed)
-        #             evacuation_zone.dump(base_speed=base_speed)
-                    
-        #     else: motors.run(base_speed, -base_speed, 0.8)
+        evacuation_zone.find(search_function=search_type)
 
-        evacuation_zone.find(base_speed=base_speed, search_function=dead_victims.find)
-
-        input()
+        if evacuation_zone.route(search_function=search_type, kP=0.08):
+            if evacuation_zone.align(target_distance):
+                if evacuation_zone.grab():
+                    motors.claw_step(180, 0.005)
+                    triangles.find()
+                    evacuation_zone.dump()
+                    victim_count += 1
+                else:
+                    motors.claw_step(0, 0)
+                    motors.run(-base_evacuation_speed, -base_evacuation_speed, 1.2)
+            else: motors.run(-base_evacuation_speed, -base_evacuation_speed, 1.2)
+        else: motors.run(-base_evacuation_speed, base_evacuation_speed, 0.8)
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")

@@ -17,7 +17,7 @@ def initialise():
     except Exception as e:
         print(f"Failed to initialise motors: {e}")
 
-def run(v1, v2, delay=0):
+def run(v1: int, v2: int, delay: int = 0):
 
     calculatedAngles = [0, 0, 0, 0]
 
