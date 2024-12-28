@@ -6,13 +6,11 @@ import laser_sensors
 import camera
 import motors
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 def find() -> None:
     def align(tolerance: int, text: str, time_step: float = None) -> None:
         direction = 1
         while True:
-            logging.info(f"({text})    |    ")
+            print(f"({text})    |    ")
 
             if time_step is None: motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4)
             else:
@@ -34,14 +32,14 @@ def find() -> None:
 
             if not contours:
                 if config.X11: cv2.imshow("image", image)
-                logging.info("")
+                print("")
                 continue
 
             largest_contour = max(contours, key=cv2.contourArea)
 
             if cv2.contourArea(largest_contour) < 2000:
                 if config.X11: cv2.imshow("image", image)
-                logging.info("")
+                print("")
                 continue
 
             x, y, w, h = cv2.boundingRect(largest_contour)
@@ -57,9 +55,9 @@ def find() -> None:
                 if time_step is not None:
                     break
 
-            logging.info(f"{config.WIDTH/2 - (x + w / 2)}")
+            print(f"{config.WIDTH/2 - (x + w / 2)}")
 
-    logging.info("(TRIANGLE SEARCH) Initial alignment")
+    print("(TRIANGLE SEARCH) Initial alignment")
     align(tolerance=10, text="Initial Alignment")
 
     motors.run(0, 0, 0.3)
@@ -67,7 +65,7 @@ def find() -> None:
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 1, ">=", 35)
 
-    logging.info("(TRIANGLE SEARCH) Fine alignment")
+    print("(TRIANGLE SEARCH) Fine alignment")
     align(tolerance=3, text="Fine Alignment", time_step=0.1)
 
     motors.run(0, 0)

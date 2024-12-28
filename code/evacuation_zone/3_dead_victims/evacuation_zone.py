@@ -2,15 +2,12 @@ import time
 import cv2
 import numpy as np
 from random import randint
-import logging
 import config
 import camera
 import motors
 import touch_sensors
 import laser_sensors
 from typing import Optional
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -20,7 +17,7 @@ def find(search_function: callable) -> None:
         initial_condition = conditional_function() if conditional_function else None
 
         while time.time() - start_time < time_constraint:
-            logging.info(f"(SEARCH WHILE) ({v1}, {v2}) ({search_function}) ({config.victim_count=})    |    {time.time()-start_time:.2f}")
+            print(f"(SEARCH WHILE) ({v1}, {v2}) ({search_function}) ({config.victim_count=})    |    {time.time()-start_time:.2f}")
             image = camera.capture_array()
 
             if config.X11: cv2.imshow("image", image)
@@ -47,8 +44,7 @@ def find(search_function: callable) -> None:
 
         time_delay = 3.5 if found_status is None else randint(800, 1600) / 1000
 
-        if config.victim_count < 2: found_status = search_while(v1=config.evacuation_speed       , v2=-config.evacuation_speed       , search_function=search_function, time_constraint=time_delay)
-        else:                found_status = search_while(v1=config.evacuation_speed * 0.62, v2=-config.evacuation_speed * 0.62, search_function=search_function, time_constraint=time_delay)
+        found_status = search_while(v1=config.evacuation_speed * 0.62, v2=-config.evacuation_speed * 0.62, search_function=search_function, time_constraint=time_delay)
 
     motors.run(0, 0)
 
@@ -69,7 +65,7 @@ def route(search_function: callable, kP: float) -> bool:
         motors.run(v1, v2)
 
         if config.X11: cv2.imshow("image", image)
-        logging.info(f"(APPROACHING)    |    {error=} {scalar=:.2f} {turn=}")
+        print(f"(APPROACHING)    |    {error=} {scalar=:.2f} {turn=}")
 
     motors.run(0, 0, 0.5)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ROUTE BACK")
@@ -77,7 +73,6 @@ def route(search_function: callable, kP: float) -> bool:
     return True
 
 def align(search_function: callable, step_time: float) -> bool:
-    logging.info("(ALIGNING)")
     image = camera.capture_array()
 
     x = search_function(image)
@@ -95,7 +90,7 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
 
         if config.X11: cv2.imshow("image", image)
-        logging.info(f"(ALIGN RIGHT)    |    {error=}")
+        print(f"(ALIGN RIGHT)    |    {error=}")
 
     motors.run(0, 0, 0.3)
 
@@ -109,7 +104,7 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
     
         if config.X11: cv2.imshow("image", image)
-        logging.info(f"(ALIGN LEFT)    |    {error=}")
+        print(f"(ALIGN LEFT)    |    {error=}")
 
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ALIGN BACK")
@@ -171,26 +166,26 @@ def grab() -> bool:
         for x, y in points:
             if black_mask[y, x] == 1: black_count += 1
 
-        logging.info(f"(PRESENCE CHECK)    |    {black_count=} {average=}")
+        print(f"(PRESENCE CHECK)    |    {black_count=} {average=}")
             
         if average > 0.5:
             if black_count < len(points) * 0.5 and config.victim_count < 2:    return True
             elif black_count > len(points) * 0.5 and config.victim_count == 2: return True
-            else:                                                       return False
-        else:                                                           return False
+            else:                                                              return False
+        else:                                                                  return False
 
-    logging.info(f"(GRAB) claw down")
+    print(f"(GRAB) claw down")
     motors.claw_step(0, 0.005)
-    logging.info(f"(GRAB) move forwards")
+    print(f"(GRAB) move forwards")
     motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 1.3)
-    logging.info(f"(GRAB) claw close")
+    print(f"(GRAB) claw close")
     motors.claw_step(90, 0.007)
-    logging.info(f"(GRAB) move backwards")
+    print(f"(GRAB) move backwards")
     motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
-    logging.info(f"(GRAB) claw open to readjust")
+    print(f"(GRAB) claw open to readjust")
     motors.claw_step(75, 0.05)
     motors.claw_step(90, 0.05)
-    logging.info(f"(GRAB) claw check")
+    print(f"(GRAB) claw check")
     motors.claw_step(110, 0.005)
 
     time.sleep(0.3)

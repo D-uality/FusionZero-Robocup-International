@@ -1,12 +1,9 @@
-import logging
 import cv2
 import numpy as np
 from typing import Optional
 
 from config import *
 import camera
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def live(image: np.ndarray) -> Optional[int]:
     spectral_threshold = 200

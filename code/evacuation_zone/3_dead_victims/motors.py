@@ -1,13 +1,10 @@
 import time
 from adafruit_servokit import ServoKit
 import operator
-import logging
 import config
 
 pca = ServoKit(channels=16)
 pca.servo[config.claw_pin].actuation_range = 270
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def initialise() -> None:
     try:
@@ -18,7 +15,7 @@ def initialise() -> None:
 
         pca.servo[config.claw_pin].angle = 270
     except Exception as e:
-        logging.error(f"Failed to initialise motors: {e}")
+        print(f"Failed to initialise motors: {e}")
 
 def run(v1: int, v2: int, delay: int = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
@@ -67,7 +64,7 @@ def run_until(v1: int, v2: int, trigger_function: callable, index: int, comparis
     while not comparison_function(value, target_value) and value is not None:
         value = trigger_function()[index]
         run(v1, v2)
-        logging.info(f"({text})")
+        print(f"({text})")
 
     run(0, 0)
 

@@ -3,7 +3,6 @@ start_time = time.time()
 import cv2
 import numpy as np
 from random import randint
-import logging
 import config
 import gpio
 import laser_sensors
@@ -14,8 +13,6 @@ import motors
 import evacuation_zone
 import victims
 import triangles
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 try:
     gpio.initialise()
@@ -47,7 +44,7 @@ try:
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
 
 except KeyboardInterrupt:
-    logging.info("Exiting Gracefully")
+    print("Exiting Gracefully")
 
 finally:
     gpio.cleanup()

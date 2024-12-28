@@ -2,23 +2,20 @@ import time
 import adafruit_ssd1306
 import board
 from PIL import Image, ImageDraw, ImageFont
-import logging
 import config
 
 i2c = board.I2C()
 oled = adafruit_ssd1306.SSD1306_I2C(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, i2c, addr=0x3c)
 image = Image.new("1", (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 def initialise() -> None:
     try:
         oled.fill(0)
         oled.show()
 
-        logging.info("OLED initialised!")
+        print("OLED initialised!")
     except Exception as e:
-        logging.error(f"OLED failed to initialise: {e}")
+        print(f"OLED failed to initialise: {e}")
 
 def reset() -> None:
     global image
