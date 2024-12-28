@@ -3,8 +3,8 @@ start_time = time.time()
 import cv2
 import numpy as np
 from random import randint
-
-from config import *
+import logging
+import config
 import gpio
 import laser_sensors
 import touch_sensors
@@ -14,6 +14,8 @@ import motors
 import evacuation_zone
 import victims
 import triangles
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 try:
     gpio.initialise()
@@ -27,7 +29,7 @@ try:
     oled_display.reset()
 
     while True:
-        search_type = victims.live if victim_count < 2 else victims.dead
+        search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
 
         evacuation_zone.find(search_function=search_type)
@@ -38,15 +40,14 @@ try:
                     motors.claw_step(180, 0.005)
                     triangles.find()
                     evacuation_zone.dump()
-                    victim_count += 1
+                    config.victim_count += 1
                 else:
                     motors.claw_step(0, 0)
-                    motors.run(-base_evacuation_speed, -base_evacuation_speed, 1.2)
-            else: motors.run(-base_evacuation_speed, -base_evacuation_speed, 1.2)
-        else: motors.run(-base_evacuation_speed, base_evacuation_speed, 0.8)
+                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+            else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
 
 except KeyboardInterrupt:
-    print("Exiting Gracefully")
+    logging.info("Exiting Gracefully")
 
 finally:
     gpio.cleanup()

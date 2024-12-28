@@ -1,47 +1,49 @@
-from config import *
 import RPi.GPIO as GPIO
 import adafruit_vl53l1x
 import board
 import time
-
+import logging
+import config
 import oled_display
 
 i2c = board.I2C()
 tof_sensors = []
 
-def initialise():
-    def change_address(pin_number, x_shut_pin):
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def initialise() -> None:
+    def change_address(pin_number: int, x_shut_pin: int) -> None:
         try:
-            print(f"\tSetting GPIO output for x_shut_pin {x_shut_pin} to HIGH")
+            logging.info(f"\tSetting GPIO output for x_shut_pin {x_shut_pin} to HIGH")
             GPIO.output(x_shut_pin, GPIO.HIGH)
-            print(f"\tInitializing VL53L1X sensor on I2C bus for pin {x_shut_pin}")
+            logging.info(f"\tInitializing VL53L1X sensor on I2C bus for pin {x_shut_pin}")
             sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
 
             tof_sensors.append(sensor_i2c)
 
-            if pin_number < len(x_shut_pins) - 1:
-                print(f"\tSetting new I2C address for sensor: 0x{pin_number + 0x30:02X}")
+            if pin_number < len(config.x_shut_pins) - 1:
+                logging.info(f"\tSetting new I2C address for sensor: 0x{pin_number + 0x30:02X}")
                 sensor_i2c.set_address(pin_number + 0x30)
 
-            print(f"\t\tSuccess!")
+            logging.info(f"\t\tSuccess!")
             oled_display.text(f"ToF[{pin_number}]: ✓", 0, 0 + 10 * pin_number)
         except Exception as e:
-            print(f"\tToF[{pin_number}] failed to initialise, on pin {x_shut_pin}: {e}")
+            logging.error(f"\tToF[{pin_number}] failed to initialise, on pin {x_shut_pin}: {e}")
             oled_display.text(f"ToF[{pin_number}]: x", 0, 0 + 10 * pin_number)
 
-    for x_shut_pin in x_shut_pins:
+    for x_shut_pin in config.x_shut_pins:
         GPIO.setup(x_shut_pin, GPIO.OUT)
         GPIO.output(x_shut_pin, GPIO.LOW)
 
-    for pin_number, x_shut_pin in enumerate(x_shut_pins):
-        print(f"Changing address for ToF[{pin_number}] at pin {x_shut_pin}")
+    for pin_number, x_shut_pin in enumerate(config.x_shut_pins):
+        logging.info(f"Changing address for ToF[{pin_number}] at pin {x_shut_pin}")
         change_address(pin_number, x_shut_pin)
 
     for sensor in tof_sensors:
         sensor.start_ranging()
 
-def read(pins=x_shut_pins):
-    indices = [i for i, pin in enumerate(x_shut_pins) if pin in pins]
+def read(pins=config.x_shut_pins) -> list[int]:
+    indices = [i for i, pin in enumerate(config.x_shut_pins) if pin in pins]
     sensors = [tof_sensors[i] for i in indices]
 
     values = []
@@ -56,8 +58,8 @@ def read(pins=x_shut_pins):
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            print(f"Failed reading ToF {sensor_number}: {str(e)}")
+            logging.error(f"Failed reading ToF {sensor_number}: {str(e)}")
             values.append(0)
 
-    print("Lasers:", values, end="    ")
+    logging.info(f"Lasers: {values}")
     return values

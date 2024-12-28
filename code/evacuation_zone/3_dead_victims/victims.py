@@ -1,11 +1,14 @@
+import logging
 import cv2
 import numpy as np
+from typing import Optional
 
 from config import *
 import camera
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def live(image: np.ndarray) -> int:
+def live(image: np.ndarray) -> Optional[int]:
     spectral_threshold = 200
 
     kernal_size = 7
@@ -25,8 +28,8 @@ def live(image: np.ndarray) -> int:
     return int(x + w/2)
 
 
-def dead(image: np.ndarray) -> int:
-    def circularity_check(contour, threshold):
+def dead(image: np.ndarray) -> Optional[int]:
+    def circularity_check(contour: np.ndarray, threshold: float) -> bool:
         perimeter = cv2.arcLength(contour, True)
         area = cv2.contourArea(contour)
 
@@ -42,7 +45,7 @@ def dead(image: np.ndarray) -> int:
     black_mask = cv2.inRange(image, (0, 0, 0), (black_threshold, black_threshold, black_threshold))
     contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    if contours is None: return None
+    if not contours: return None
 
     circular_contours = [contour for contour in contours if circularity_check(contour, 0.5)]
     circular_contours = [contour for contour in circular_contours if cv2.contourArea(contour) > 2000]

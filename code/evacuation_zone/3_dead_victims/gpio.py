@@ -1,13 +1,15 @@
-from config import *
 import RPi.GPIO as GPIO
+import logging
 
-def initialise():
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def initialise() -> None:
     try:
         GPIO.setmode(GPIO.BCM)
-        print("GPIO initialised!")
+        logging.info("GPIO initialised!")
         
     except Exception as e:
-        print(f"GPIO failed to initialise: {e}")
+        logging.error(f"GPIO failed to initialise: {e}")
 
-def cleanup():
+def cleanup() -> None:
     GPIO.cleanup()
