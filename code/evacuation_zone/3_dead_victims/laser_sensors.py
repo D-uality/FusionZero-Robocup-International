@@ -58,5 +58,5 @@ def read(pins=config.x_shut_pins) -> list[int]:
             print(f"Failed reading ToF {sensor_number}: {str(e)}")
             values.append(0)
 
-    print(f"Lasers: {values}")
+    print(f"Lasers: {values}", end="    ")
     return values

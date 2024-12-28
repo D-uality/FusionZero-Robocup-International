@@ -20,5 +20,5 @@ def read(pins=config.touch_pins) -> list[int]:
     for pin in pins:
         values.append(GPIO.input(pin))
 
-    print(f"Touch: {values}")
+    print(f"Touch: {values}", end="    ")
     return values

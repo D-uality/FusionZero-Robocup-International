@@ -64,7 +64,7 @@ def run_until(v1: int, v2: int, trigger_function: callable, index: int, comparis
     while not comparison_function(value, target_value) and value is not None:
         value = trigger_function()[index]
         run(v1, v2)
-        print(f"({text})")
+        print(f"({text})    |    {value=} {target_value=}")
 
     run(0, 0)
 

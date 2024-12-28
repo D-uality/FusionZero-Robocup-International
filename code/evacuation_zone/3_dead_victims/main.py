@@ -31,7 +31,7 @@ try:
 
         evacuation_zone.find(search_function=search_type)
 
-        if evacuation_zone.route(search_function=search_type, kP=0.08):
+        if evacuation_zone.route(search_function=search_type, kP=0.12):
             if evacuation_zone.align(search_function=search_type, step_time=0.01):
                 if evacuation_zone.grab():
                     motors.claw_step(180, 0.005)

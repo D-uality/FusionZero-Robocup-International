@@ -10,7 +10,7 @@ def find() -> None:
     def align(tolerance: int, text: str, time_step: float = None) -> None:
         direction = 1
         while True:
-            print(f"({text})    |    ")
+            print(f"({text})    |    ", end="    ")
 
             if time_step is None: motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4)
             else:
@@ -51,9 +51,7 @@ def find() -> None:
                 cv2.circle(image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
                 cv2.imshow("image", image)
 
-            if config.WIDTH/2 - (x + w / 2) < tolerance and config.WIDTH/2 - (x + w / 2) > -tolerance:
-                if time_step is not None:
-                    break
+            if config.WIDTH/2 - (x + w / 2) < tolerance and config.WIDTH/2 - (x + w / 2) > -tolerance: break
 
             print(f"{config.WIDTH/2 - (x + w / 2)}")
 
