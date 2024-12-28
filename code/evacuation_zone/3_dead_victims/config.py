@@ -10,5 +10,5 @@ servo_pins = [14, 13, 12, 10]
 claw_pin = 9
 
 victim_count = 0
-base_evacuation_speed = 35
+evacuation_speed = 35
 approach_distance = 18
