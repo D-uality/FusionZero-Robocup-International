@@ -9,6 +9,11 @@ stop_angles = [89, 88, 89, 88]
 servo_pins = [14, 13, 12, 10]
 claw_pin = 9
 
+# ------------------------------------------
+
+status_messages = []
+
 victim_count = 0
 evacuation_speed = 35
 approach_distance = 18
+

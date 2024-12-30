@@ -1,10 +1,8 @@
-import logging
-import config
-
 import cv2
 from picamera2 import Picamera2
 from libcamera import Transform
 import oled_display
+import config
     
 camera = None
 
@@ -17,7 +15,7 @@ def initialise():
         camera.configure(camera_config)
         camera.start()
         
-        print("Camera initialised!")
+        config.status_messages.append(["Camera", "✓"])
         oled_display.text("Camera: ✓", 0, 40)
     except Exception as e:
         print(f"Camera failed to initialise: {e}")
@@ -26,10 +24,10 @@ def initialise():
     if config.X11:
         try:
             cv2.startWindowThread()
-            print("X11 initialised!")
+            config.status_messages.append(["X11", "✓"])
             oled_display.text("X11: ✓", 60, 40)
         except Exception as e:
-            print(f"X11 failed to initialise: {e}")
+            config.status_messages.append(["X11", "X", f"{e}"])
             oled_display.text("X11: X", 60, 40)
 
 def close():

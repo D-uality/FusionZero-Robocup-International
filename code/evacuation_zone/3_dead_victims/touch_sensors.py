@@ -7,11 +7,11 @@ def initialise() -> None:
         for touch_pin in config.touch_pins:
             GPIO.setup(touch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        print("Touch initialised!")
+        config.status_messages.append(["Touch", "✓"])
         oled_display.text("Touch: ✓", 0, 30)
         
     except Exception as e:
-        print(f"Touch failed to initialise: {e}")
+        config.status_messages.append(["Touch", "X", f"{e}"])
         oled_display.text("Touch: x", 0, 30)
 
 def read(pins=config.touch_pins) -> list[int]:
@@ -20,5 +20,4 @@ def read(pins=config.touch_pins) -> list[int]:
     for pin in pins:
         values.append(GPIO.input(pin))
 
-    print(f"Touch: {values}", end="    ")
     return values

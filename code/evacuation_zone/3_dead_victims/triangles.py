@@ -1,16 +1,15 @@
 import cv2
 import numpy as np
-import logging
 import config
 import laser_sensors
 import camera
 import motors
+from tabulate import tabulate
 
 def find() -> None:
     def align(tolerance: int, text: str, time_step: float = None) -> None:
         direction = 1
         while True:
-            print(f"({text})    |    ", end="    ")
 
             if time_step is None: motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4)
             else:
@@ -32,14 +31,12 @@ def find() -> None:
 
             if not contours:
                 if config.X11: cv2.imshow("image", image)
-                print("")
                 continue
 
             largest_contour = max(contours, key=cv2.contourArea)
 
             if cv2.contourArea(largest_contour) < 2000:
                 if config.X11: cv2.imshow("image", image)
-                print("")
                 continue
 
             x, y, w, h = cv2.boundingRect(largest_contour)
@@ -53,7 +50,7 @@ def find() -> None:
 
             if config.WIDTH/2 - (x + w / 2) < tolerance and config.WIDTH/2 - (x + w / 2) > -tolerance: break
 
-            print(f"{config.WIDTH/2 - (x + w / 2)}")
+            print(tabulate(f"({text})", f"{config.WIDTH/2 - (x + w / 2)}", headers=["function_name", "error"]))
 
     print("(TRIANGLE SEARCH) Initial alignment")
     align(tolerance=10, text="Initial Alignment")

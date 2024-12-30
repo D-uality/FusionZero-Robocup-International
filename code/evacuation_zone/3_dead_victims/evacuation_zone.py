@@ -8,6 +8,7 @@ import motors
 import touch_sensors
 import laser_sensors
 from typing import Optional
+from tabulate import tabulate
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -17,7 +18,7 @@ def find(search_function: callable) -> None:
         initial_condition = conditional_function() if conditional_function else None
 
         while time.time() - start_time < time_constraint:
-            print(f"(SEARCH WHILE) ({v1}, {v2}) ({search_function}) ({config.victim_count=})    |    {time.time()-start_time:.2f}")
+            print(tabulate(f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{time.time()-start_time:.2f}", headers=["function_name", "v1", "v2", "search_function", "victim_count", "time_elapsed"]))
             image = camera.capture_array()
 
             if config.X11: cv2.imshow("image", image)
@@ -65,7 +66,7 @@ def route(search_function: callable, kP: float) -> bool:
         motors.run(v1, v2)
 
         if config.X11: cv2.imshow("image", image)
-        print(f"(APPROACHING)    |    {error=} {scalar=:.2f} {turn=}")
+        print(tabulate(f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", headers=["function_name", "error", "scalar", "turn"]))
 
     motors.run(0, 0, 0.5)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ROUTE BACK")
@@ -90,7 +91,7 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
 
         if config.X11: cv2.imshow("image", image)
-        print(f"(ALIGN RIGHT)    |    {error=}")
+        print(tabulate(f"ALIGN RIGHT", f"{error}", headers=["function_name", "error"]))
 
     motors.run(0, 0, 0.3)
 
@@ -104,7 +105,7 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
     
         if config.X11: cv2.imshow("image", image)
-        print(f"(ALIGN LEFT)    |    {error=}")
+        print(tabulate(f"ALIGN LEFT", f"{error}", headers=["function_name", "error"]))
 
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ALIGN BACK")
@@ -166,7 +167,7 @@ def grab() -> bool:
         for x, y in points:
             if black_mask[y, x] == 1: black_count += 1
 
-        print(f"(PRESENCE CHECK)    |    {black_count=} {average=}")
+        print(tabulate(f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", headers=["function_name", "black_count", "average"]))
             
         if average > 0.5:
             if black_count < len(points) * 0.5 and config.victim_count < 2:    return True
@@ -174,18 +175,23 @@ def grab() -> bool:
             else:                                                              return False
         else:                                                                  return False
 
-    print(f"(GRAB) claw down")
+    status_messages = []
+    def log_status(function, status):
+        status_messages.append([function, status])
+        print(tabulate([status_messages[-1]], headers=["function", "status"]))
+
+    log_status("GRAB", "CLAW DOWN")
     motors.claw_step(0, 0.005)
-    print(f"(GRAB) move forwards")
+    log_status("GRAB", "MOVE FORWARDS")
     motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 1.3)
-    print(f"(GRAB) claw close")
+    log_status("GRAB", "CLAW CLOSE")
     motors.claw_step(90, 0.007)
-    print(f"(GRAB) move backwards")
+    log_status("GRAB", "MOVE BACKWARDS")
     motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
-    print(f"(GRAB) claw open to readjust")
+    log_status("GRAB", "CLAW READJUST")
     motors.claw_step(75, 0.05)
     motors.claw_step(90, 0.05)
-    print(f"(GRAB) claw check")
+    log_status("GRAB", "CLAW CHECK")
     motors.claw_step(110, 0.005)
 
     time.sleep(0.3)

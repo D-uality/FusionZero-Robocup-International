@@ -1,4 +1,3 @@
-import time
 import adafruit_ssd1306
 import board
 from PIL import Image, ImageDraw, ImageFont
@@ -13,9 +12,10 @@ def initialise() -> None:
         oled.fill(0)
         oled.show()
 
-        print("OLED initialised!")
+        config.status_messages.append(["OLED", "✓"])
+
     except Exception as e:
-        print(f"OLED failed to initialise: {e}")
+        config.status_messages.append(["OLED", "X", f"{e}"])
 
 def reset() -> None:
     global image

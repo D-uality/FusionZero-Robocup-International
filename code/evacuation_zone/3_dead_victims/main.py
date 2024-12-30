@@ -1,8 +1,6 @@
 import time
 start_time = time.time()
-import cv2
-import numpy as np
-from random import randint
+
 import config
 import gpio
 import laser_sensors

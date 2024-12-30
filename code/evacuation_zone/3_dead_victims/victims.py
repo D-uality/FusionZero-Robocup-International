@@ -3,7 +3,6 @@ import numpy as np
 from typing import Optional
 
 from config import *
-import camera
 
 def live(image: np.ndarray) -> Optional[int]:
     spectral_threshold = 200
