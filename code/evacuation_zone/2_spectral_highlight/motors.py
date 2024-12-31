@@ -55,7 +55,7 @@ def run(v1, v2, delay=0):
         pca.servo[servo_pins[2]].angle = stop_angles[2]
         pca.servo[servo_pins[3]].angle = stop_angles[3]
 
-def run_until(v1, v2, trigger_function, index, comparison, target_value):
+def run_until(v1, v2, trigger_function, index, comparison, target_value, text=""):
     if   comparison == "==": comparison_function = operator.eq
     elif comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
@@ -65,7 +65,7 @@ def run_until(v1, v2, trigger_function, index, comparison, target_value):
     while not comparison_function(value, target_value) and value is not None:
         value = trigger_function()[index]
         run(v1, v2)
-        print()
+        print(f"({text})")
 
     run(0, 0)
 
