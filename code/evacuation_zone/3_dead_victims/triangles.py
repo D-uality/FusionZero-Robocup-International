@@ -50,7 +50,7 @@ def find() -> None:
 
             if config.WIDTH/2 - (x + w / 2) < tolerance and config.WIDTH/2 - (x + w / 2) > -tolerance: break
 
-            print(tabulate(f"({text})", f"{config.WIDTH/2 - (x + w / 2)}", headers=["function_name", "error"]))
+            print(config.update_log([f"({text})", f"{config.WIDTH/2 - (x + w / 2)}"], [24, 10]))
 
     print("(TRIANGLE SEARCH) Initial alignment")
     align(tolerance=10, text="Initial Alignment")

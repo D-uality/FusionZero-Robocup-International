@@ -18,7 +18,7 @@ def find(search_function: callable) -> None:
         initial_condition = conditional_function() if conditional_function else None
 
         while time.time() - start_time < time_constraint:
-            print(tabulate(f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{time.time()-start_time:.2f}", headers=["function_name", "v1", "v2", "search_function", "victim_count", "time_elapsed"]))
+            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6]))
             image = camera.capture_array()
 
             if config.X11: cv2.imshow("image", image)
@@ -43,7 +43,7 @@ def find(search_function: callable) -> None:
         if found_status == 1: continue
         elif found_status == 0: motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.2)
 
-        time_delay = 3.5 if found_status is None else randint(800, 1600) / 1000
+        time_delay = 7 if found_status is None else randint(800, 1600) / 1000
 
         found_status = search_while(v1=config.evacuation_speed * 0.62, v2=-config.evacuation_speed * 0.62, search_function=search_function, time_constraint=time_delay)
 
@@ -66,7 +66,7 @@ def route(search_function: callable, kP: float) -> bool:
         motors.run(v1, v2)
 
         if config.X11: cv2.imshow("image", image)
-        print(tabulate(f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", headers=["function_name", "error", "scalar", "turn"]))
+        print(config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}"], [24, 12, 12]))
 
     motors.run(0, 0, 0.5)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ROUTE BACK")
@@ -91,7 +91,7 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
 
         if config.X11: cv2.imshow("image", image)
-        print(tabulate(f"ALIGN RIGHT", f"{error}", headers=["function_name", "error"]))
+        print(config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12]))
 
     motors.run(0, 0, 0.3)
 
@@ -105,7 +105,7 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
     
         if config.X11: cv2.imshow("image", image)
-        print(tabulate(f"ALIGN LEFT", f"{error}", headers=["function_name", "error"]))
+        print(config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12]))
 
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ALIGN BACK")
@@ -159,15 +159,17 @@ def grab() -> bool:
 
         black_count = 0
         points = generate_random_points(80, 25, 20) + generate_random_points(240, 25, 20)
+        print(points)
 
         image = camera.capture_array()
 
         black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
         
         for x, y in points:
-            if black_mask[y, x] == 1: black_count += 1
+            print(black_mask[y, x], end="   ")
+            if black_mask[y, x] == 255: black_count += 1
 
-        print(tabulate(f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", headers=["function_name", "black_count", "average"]))
+        print(config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}"], [24, 10, 10, 10]))
             
         if average > 0.5:
             if black_count < len(points) * 0.5 and config.victim_count < 2:    return True
@@ -175,23 +177,18 @@ def grab() -> bool:
             else:                                                              return False
         else:                                                                  return False
 
-    status_messages = []
-    def log_status(function, status):
-        status_messages.append([function, status])
-        print(tabulate([status_messages[-1]], headers=["function", "status"]))
-
-    log_status("GRAB", "CLAW DOWN")
+    config.update_log(["GRAB", "CLAW DOWN"], [24, 24])
     motors.claw_step(0, 0.005)
-    log_status("GRAB", "MOVE FORWARDS")
+    config.update_log(["GRAB", "MOVE FORWARDS"], [24, 24])
     motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 1.3)
-    log_status("GRAB", "CLAW CLOSE")
+    config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
     motors.claw_step(90, 0.007)
-    log_status("GRAB", "MOVE BACKWARDS")
+    config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
     motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
-    log_status("GRAB", "CLAW READJUST")
+    config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
     motors.claw_step(75, 0.05)
     motors.claw_step(90, 0.05)
-    log_status("GRAB", "CLAW CHECK")
+    config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
     motors.claw_step(110, 0.005)
 
     time.sleep(0.3)

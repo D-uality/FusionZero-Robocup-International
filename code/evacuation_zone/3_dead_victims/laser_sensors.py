@@ -17,10 +17,10 @@ def initialise() -> None:
             tof_sensors.append(sensor_i2c)
             if pin_number < len(config.x_shut_pins) - 1: sensor_i2c.set_address(pin_number + 0x30)
             
-            config.status_messages.append([f"ToF[{pin_number}]", "✓"])
+            print([f"ToF[{pin_number}]", "✓"])
             oled_display.text(f"ToF[{pin_number}]: ✓", 0, 0 + 10 * pin_number)
         except Exception as e:
-            config.status_messages.append([f"ToF[{pin_number}]", "X", f"{e}"])
+            print([f"ToF[{pin_number}]", "X", f"{e}"])
             oled_display.text(f"ToF[{pin_number}]: x", 0, 0 + 10 * pin_number)
 
     for x_shut_pin in config.x_shut_pins:
@@ -32,6 +32,8 @@ def initialise() -> None:
 
     for sensor in tof_sensors:
         sensor.start_ranging()
+
+    read()
 
 def read(pins=config.x_shut_pins) -> list[int]:
     indices = [i for i, pin in enumerate(config.x_shut_pins) if pin in pins]
@@ -52,5 +54,4 @@ def read(pins=config.x_shut_pins) -> list[int]:
             print(f"Failed reading ToF[{sensor_number}]: {str(e)}")
             values.append(0)
 
-    print(f"Lasers: {values}", end="    ")
     return values

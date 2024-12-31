@@ -5,10 +5,10 @@ def initialise() -> None:
     try:
         GPIO.setmode(GPIO.BCM)
         
-        config.status_messages.append(["GPIO", "✓"])
+        print(["GPIO", "✓"])
         
     except Exception as e:
-        config.status_messages.append(["GPIO", "X", f"{e}"])
+        print(["GPIO", "X", f"{e}"])
 
 def cleanup() -> None:
     GPIO.cleanup()

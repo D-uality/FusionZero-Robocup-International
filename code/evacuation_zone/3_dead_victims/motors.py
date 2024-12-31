@@ -2,20 +2,22 @@ import time
 from adafruit_servokit import ServoKit
 import operator
 import config
-from tabulate import tabulate
 
 pca = ServoKit(channels=16)
+pca.servo[config.claw_pin].actuation_range = 270
 
 def initialise() -> None:
     try:
-        pca.servo[config.claw_pin].actuation_range = 270
+        pca.servo[config.servo_pins[0]].angle = config.stop_angles[0]
+        pca.servo[config.servo_pins[1]].angle = config.stop_angles[1]
+        pca.servo[config.servo_pins[2]].angle = config.stop_angles[2]
+        pca.servo[config.servo_pins[3]].angle = config.stop_angles[3]
 
-        for servo_pin in config.servo_pins: pca.servo[servo_pin].angle = config.stop_angles[servo_pin]
         pca.servo[config.claw_pin].angle = 270
-        config.status_messages.append(["Motors", "✓"])
-
+        print("Motors", "✓")
     except Exception as e:
-        config.status_messages.append(["Motors", "X", f"{e}"])
+        print("Motors", "X")
+        print(f"Failed to initialise motors: {e}")
 
 def run(v1: int, v2: int, delay: int = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
@@ -41,11 +43,18 @@ def run(v1: int, v2: int, delay: int = 0) -> None:
 
         calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
 
-    for pin_number, servo_pin in enumerate(config.servo_pins): pca.servo[servo_pin].angle = config.stop_angles[servo_pin] + calculated_angles[pin_number]
+    pca.servo[config.servo_pins[0]].angle = config.stop_angles[0] + calculated_angles[0]
+    pca.servo[config.servo_pins[1]].angle = config.stop_angles[1] + calculated_angles[1]
+    pca.servo[config.servo_pins[2]].angle = config.stop_angles[2] + calculated_angles[2]
+    pca.servo[config.servo_pins[3]].angle = config.stop_angles[3] + calculated_angles[3]
 
     if delay > 0:
         time.sleep(delay)
-        for servo_pin in config.servo_pins: pca.servo[servo_pin].angle = config.stop_angles[servo_pin]
+
+        pca.servo[config.servo_pins[0]].angle = config.stop_angles[0]
+        pca.servo[config.servo_pins[1]].angle = config.stop_angles[1]
+        pca.servo[config.servo_pins[2]].angle = config.stop_angles[2]
+        pca.servo[config.servo_pins[3]].angle = config.stop_angles[3]
 
 def run_until(v1: int, v2: int, trigger_function: callable, index: int, comparison: str, target_value: int, text: str = "") -> None:
     if   comparison == "==": comparison_function = operator.eq
@@ -57,7 +66,8 @@ def run_until(v1: int, v2: int, trigger_function: callable, index: int, comparis
     while not comparison_function(value, target_value) and value is not None:
         value = trigger_function()[index]
         run(v1, v2)
-        print(tabulate(text, value, target_value, headers=["function_name", "value", "target_value"]))
+
+        print(config.update_log([f"{text}", f"{value}", f"{target_value}"], [24, 10, 10]))
 
     run(0, 0)
 

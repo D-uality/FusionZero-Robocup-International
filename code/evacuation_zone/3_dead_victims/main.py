@@ -11,6 +11,7 @@ import motors
 import evacuation_zone
 import victims
 import triangles
+from tabulate import tabulate
 
 try:
     gpio.initialise()
