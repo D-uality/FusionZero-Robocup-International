@@ -25,6 +25,7 @@ try:
     oled_display.reset()
 
     while True:
+        if config.victim_count == 3: break
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
 
@@ -41,6 +42,8 @@ try:
                     motors.claw_step(0, 0)
                     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+
+    print("EVAC FINISHED")
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
