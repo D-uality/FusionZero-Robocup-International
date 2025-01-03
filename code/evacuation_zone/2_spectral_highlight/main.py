@@ -13,6 +13,8 @@ import camera
 import motors
 import evacuation_zone
 import live_victims
+import dead_victims
+import triangles
 
 try:
     gpio.initialise()
@@ -32,13 +34,19 @@ try:
 
     while True:
         motors.claw_step(270, 0)
-        evacuation_zone.find_live(base_speed=base_speed)
+        # evacuation_zone.find_live(base_speed=base_speed)
 
-        if live_victims.route(v=base_speed, kP=0.08, target_distance=target_distance):
-            if live_victims.align(v=base_speed, target_distance=target_distance):
-                evacuation_zone.grab(base_speed=base_speed)
+        # if live_victims.route(base_speed=base_speed, kP=0.08, target_distance=target_distance):
+        #     if live_victims.align(base_speed=base_speed, target_distance=target_distance):
+        #         if evacuation_zone.grab(base_speed=base_speed):
+        #             triangles.find(base_speed=base_speed)
+        #             evacuation_zone.dump(base_speed=base_speed)
+                    
+        #     else: motors.run(base_speed, -base_speed, 0.8)
 
-                input()
+        evacuation_zone.find(base_speed=base_speed, search_function=dead_victims.find)
+
+        input()
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
