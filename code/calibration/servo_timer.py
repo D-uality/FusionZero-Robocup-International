@@ -2,8 +2,8 @@ import time
 from adafruit_servokit import ServoKit
 
 pca = ServoKit(channels=16)
-servo_pins = [14, 13, 12, 10]
-stop_angles = [89, 88, 89, 88]
+servo_pins = [15, 14, 13, 12]
+stop_angles = [97, 96, 96, 97]
 
 def control_loop(pin_number, servo_pin, angle):
     pca.servo[servo_pin].angle = angle
@@ -32,7 +32,7 @@ try:
         mode = int(input())
 
         if mode == 1:
-            calibration_values = open("calibration_values.txt", "w")
+            calibration_values = open("/home/fusion/FusionZero-Robocup-International/code/calibration/calibration_values.txt", "a")
 
             for pin_number, servo_pin in enumerate(servo_pins):
                 stop_angle = stop_angles[pin_number]
@@ -44,6 +44,7 @@ try:
 
                     elapsed_time = control_loop(pin_number, servo_pin, angle)
                     calibration_values.write(f"{elapsed_time:.2f} ")
+                    print(f"Saved: {elapsed_time:.2f}")
 
                     input("Waiting for next angle")
 
@@ -65,3 +66,6 @@ except KeyboardInterrupt:
 finally:
     for pin_number, servo_pin in enumerate(servo_pins):
         pca.servo[servo_pin].angle = stop_angles[pin_number]
+
+        # messed up:
+        # FR 106?
