@@ -36,8 +36,3 @@ def run(v1: int, v2: int, delay: int = 0) -> None:
 
     if delay > 0:
         time.sleep(delay)
-
-        pca.servo[servo_pins[0]].angle = stop_angles[0]
-        pca.servo[servo_pins[1]].angle = stop_angles[1]
-        pca.servo[servo_pins[2]].angle = stop_angles[2]
-        pca.servo[servo_pins[3]].angle = stop_angles[3]

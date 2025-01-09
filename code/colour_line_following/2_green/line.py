@@ -2,8 +2,8 @@ import sensors
 import motors
 
 white_min = 60
-black_max = 20
-green_max = -20
+black_max = 30
+green_max = 20
 
 outer_multi = 1.1
 inner_multi = 1.1
@@ -30,28 +30,28 @@ def align_black(align_type, white_min, black_max):
     turn_count = 0
     if align_type == 'left':
         print("Aligning from left.")
-        motors.run(-line_speed - 5, line_speed + 5, 0.7)
-        motors.run(line_speed, line_speed)
+        motors.run(-line_speed - 5, line_speed + 5, 0.8)
+        motors.run(line_speed, line_speed, 0.2)
         colour_values = sensors.read_mapped_analog(True)
-        while colour_values[0] < black_max and turn_count < 50:
+        while colour_values[0] < black_max and turn_count < 500:
             turn_count += 1
             colour_values = sensors.read_mapped_analog(True)
 
     elif align_type == 'right':
         print("Aligning from right.")
-        motors.run(line_speed + 5, -line_speed - 5, 0.7)
-        motors.run(line_speed, line_speed)
+        motors.run(line_speed + 5, -line_speed - 5, 0.8)
+        motors.run(line_speed, line_speed, 0.2)
         colour_values = sensors.read_mapped_analog(True)
-        while colour_values[4] < black_max and turn_count < 50:
+        while colour_values[4] < black_max and turn_count < 500:
             turn_count += 1
             colour_values = sensors.read_mapped_analog(True)
     
     elif align_type == 'double':
         print("Aligning from double.")
-        motors.run(line_speed + 5, line_speed + 5, 0.3)
-        motors.run(-line_speed - 10, line + 10, 0.8)
+        motors.run(line_speed + 5, line_speed + 5, 0.2)
+        motors.run(-line_speed - 10, line_speed + 10, 2)
         colour_values = sensors.read_mapped_analog(True)
-        while colour_values[3] > white_min and turn_count < 300:
+        while colour_values[3] > white_min and turn_count < 1000:
             turn_count += 1
             colour_values = sensors.read_mapped_analog(True)
 
@@ -82,10 +82,10 @@ def follow_black_line(colour_values, outer_multi, inner_multi, line_speed, line_
     return turn
 
 def check_green(colour_values, black_max, green_max):
-    left_black = colour_values[0] < black_max and colour_values[1] < black_max and colour_values[2] < black_max
-    right_black = colour_values[3] < black_max and colour_values[4] < black_max and colour_values[2] < black_max
-    left_double_black = left_black and colour_values[3] < black_max + 10 and colour_values[4] < black_max + 10
-    right_double_black = right_black and colour_values[0] < black_max + 10 and colour_values[1] < black_max + 10
+    left_black = colour_values[0] < black_max and colour_values[1] < black_max
+    right_black = colour_values[3] < black_max and colour_values[4] < black_max
+    left_double_black = left_black and (colour_values[3] < black_max + 10 or colour_values[4] < black_max + 10)
+    right_double_black = right_black and (colour_values[0] < black_max + 10 or colour_values[1] < black_max + 10)
 
     left_green = left_black and colour_values[5] < green_max
     right_green = right_black and colour_values[6] < green_max
