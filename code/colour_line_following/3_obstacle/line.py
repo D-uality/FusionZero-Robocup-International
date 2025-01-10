@@ -5,12 +5,12 @@ import touch
 import motors
 
 white_min = 60
-black_max = 30
-green_max = 20
+black_max = 20
+green_max = -10
 
-outer_multi = 1.1
-inner_multi = 1.1
-line_speed = 25
+outer_multi = 1.5
+inner_multi = 1.5
+line_speed = 20
 line_ignore_value = 10
 green_distance = 20
 main_loop_count = green_distance
@@ -113,19 +113,19 @@ def check_green(colour_values):
     elif right_green:
         return 'right'
 
-def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_black):
+def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_black, min_move_time):
     global black_max
     laser_condition_met = False
     starting_time = time.time()
     current_time = 0
 
-    while (not laser_condition_met or current_time < 1) and (not colour_is_black[0] or not colour_is_black[1]):
+    while (not laser_condition_met or current_time < min_move_time) and (not colour_is_black[0] or not colour_is_black[1]):
         if turn_type == 'straight':
-            motors.run(line_speed+5, line_speed+5)
+            motors.run(30, 30)
         elif turn_type == 'left':
-            motors.run(line_speed, -line_speed)
+            motors.run(25, -25)
         elif turn_type == 'right':
-            motors.run(-line_speed, line_speed)
+            motors.run(-25, 25)
 
         colour_values = colour.read(display_mapped=True)
         distances = lasers.read(display=True)
@@ -169,23 +169,23 @@ def avoid_obstacle():
 
     if distances[0] > distances[2]:
         print("Going Left")
-        colour_is_black = circle_obstacle(2, 'right', '<', False, colour_is_black)
-        colour_is_black = circle_obstacle(2, 'straight', '>', False, colour_is_black)
+        colour_is_black = circle_obstacle(2, 'right', '<', False, colour_is_black, 0.5)
+        colour_is_black = circle_obstacle(2, 'straight', '>', False, colour_is_black, 0.5)
 
         print("Left Obstacle Loop Phase")
         while not colour_is_black[0]:
-            colour_is_black = circle_obstacle(2, 'left', '>', True, colour_is_black)
-            colour_is_black = circle_obstacle(2, 'straight', '>', True, colour_is_black)
+            colour_is_black = circle_obstacle(2, 'left', '>', True, colour_is_black, 1)
+            colour_is_black = circle_obstacle(2, 'straight', '>', True, colour_is_black, 1)
 
         align_black('left')
     else:
         print("Going Right")
-        colour_is_black = circle_obstacle(0, 'left', '<', False, colour_is_black)
-        colour_is_black = circle_obstacle(0, 'straight', '>', False, colour_is_black)
+        colour_is_black = circle_obstacle(0, 'left', '<', False, colour_is_black, 0.5)
+        colour_is_black = circle_obstacle(0, 'straight', '>', False, colour_is_black, 0.5)
 
         print("Right Obstacle Loop Phase")
         while not colour_is_black[1]:
-            colour_is_black = circle_obstacle(0, 'right', '>', True, colour_is_black)
-            colour_is_black = circle_obstacle(0, 'straight', '>', True, colour_is_black)
+            colour_is_black = circle_obstacle(0, 'right', '>', True, colour_is_black, 1)
+            colour_is_black = circle_obstacle(0, 'straight', '>', True, colour_is_black, 1)
 
         align_black('right')
