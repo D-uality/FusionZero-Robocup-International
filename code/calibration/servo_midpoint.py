@@ -2,9 +2,9 @@ import time
 from adafruit_servokit import ServoKit
 
 # BL TL TR BR
-servo_pins = [14, 13, 12, 10]
+servo_pins = [15, 14, 13, 12]
 pca = ServoKit(channels=16)
-stop_angles = [89, 88, 89, 88]
+stop_angles = [97, 96, 96, 97]
 
 try:
     while True:

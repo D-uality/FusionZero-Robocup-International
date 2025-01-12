@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-calibration_values = open("calibration_values.txt", "r")
+calibration_values = open("/home/fusion/FusionZero-Robocup-International/code/calibration/calibration_values.txt", "r")
 allTimes = calibration_values.read().split("\n")
 
 negativeGradients  = []
