@@ -4,6 +4,7 @@ from picamera2 import Picamera2
 from libcamera import Transform
 
 # Config variables
+TRANSFORM = False
 WIDTH, HEIGHT = 320, 240  # Correct resolution for Pi Camera
 FLIP = False
 CROP_MIN, CROP_MAX = 0, HEIGHT
@@ -69,13 +70,14 @@ try:
         image = camera.capture_array()
 
         # Apply perspective transform
-        transformed_image = perspective_transform(image)
+        if TRANSFORM:
+            image = perspective_transform(image)
 
         # Apply HSV mask
-        masked_image, mask_result = hsv_mask(transformed_image)
+        masked_image, mask_result = hsv_mask(image)
 
         # Display the frames
-        cv2.imshow("Original Frame", transformed_image)
+        cv2.imshow("Original Frame", image)
         cv2.imshow("HSV Mask", masked_image)
         cv2.imshow("Result", mask_result)
 
