@@ -4,7 +4,7 @@ from libcamera import Transform
 import oled_display
 import config
     
-camera = Picamera2()
+camera = None
 
 def initialise():
     global camera

@@ -1,21 +1,33 @@
-import time
 import cv2
-import numpy
+import numpy as np
+import time
+import RPi.GPIO as GPIO
 
-from motor import *
+from config import *
+from camera import *
+from cv2_functions import *
+from exit_sequence import *
+import oled_display
+import motors
 
-servos = ServoKit(channels=16)
-servoPins = [14, 13, 12, 10]
+GPIO.setmode(GPIO.BCM)
 
-def mapValue(x, inMin, inMax, outMin, outMax):
-    return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
+laser_sensors.initalise()
+touch_sensors.initalise()
 
 try:
     while True:
-        run(30, 30)
+        exit_sequence()
+
 
 except KeyboardInterrupt:
     print("Exiting Gracefully")
 
 finally:
-    run(0, 0)
+    motors.run(0, 0)
+    oled_display.reset()
+
+    cv2.destroyAllWindows()
+    camera.stop()
+
+    GPIO.cleanup()

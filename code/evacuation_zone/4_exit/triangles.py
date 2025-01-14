@@ -11,7 +11,8 @@ def find() -> None:
         direction = 1
         while True:
 
-            if time_step is None: motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4)
+            if time_step is None: 
+                motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4)
             else:
                 motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4, time_step)
                 motors.run(0, 0, time_step)
@@ -54,11 +55,13 @@ def find() -> None:
 
     print("(TRIANGLE SEARCH) Initial alignment")
     align(tolerance=10, text="Initial Alignment")
+    motors.run(0, 0)
 
     motors.run(0, 0, 0.3)
     motors.run_until(config.evacuation_speed, config.evacuation_speed, laser_sensors.read, 1, "<=", 35)
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 1, ">=", 35)
+    motors.run(0, 0)
 
     print("(TRIANGLE SEARCH) Fine alignment")
     align(tolerance=3, text="Fine Alignment", time_step=0.1)

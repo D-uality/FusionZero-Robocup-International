@@ -14,10 +14,13 @@ def initialise() -> None:
         print(["Touch", "X", f"{e}"])
         oled_display.text("Touch: x", 0, 30)
 
-def read(pins=config.touch_pins) -> list[int]:
+def read(pins=config.touch_pins, display=False) -> list[int]:
     values = []
 
     for pin in pins:
         values.append(GPIO.input(pin))
+
+    if display:
+        print(f"T: {values}", end=", ")
 
     return values

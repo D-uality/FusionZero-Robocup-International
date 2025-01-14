@@ -1,58 +1,55 @@
+import cv2
+import numpy as np
 import time
-start_time = time.time()
 
-import config
-import gpio
-import laser_sensors
-import touch_sensors
-import oled_display
-import camera
 import motors
-import evacuation_zone
-import victims
-import triangles
-from tabulate import tabulate
+import line
+import colour
+import laser_sensors
+import oled_display
+import touch_sensors
+import camera
+
+mode = 's'
+
+dummy_image = 255 * np.ones((500, 500, 3), dtype=np.uint8)
+cv2.imshow("Control Window", dummy_image)
 
 try:
-    gpio.initialise()
     oled_display.initialise()
     laser_sensors.initialise()
     touch_sensors.initialise()
-    camera.initialise()
     motors.initialise()
-
-    input(f"({time.time() - start_time:.2f}) Press enter to begin program! ")
+    camera.initialise()
+    
     oled_display.reset()
-
+    
     while True:
-        if config.victim_count == 3: break
-        search_type = victims.live if config.victim_count < 2 else victims.dead
-        motors.claw_step(270, 0)
+        key = cv2.waitKey(1) & 0xFF
 
-        evacuation_zone.find(search_function=search_type)
+        if key != -1:
+            if key >= 32 and key <= 126:  # Check if key is an ASCII character
+                mode = chr(key)
+                print(f"Recieved input: {mode}")
 
-        if evacuation_zone.route(search_function=search_type, kP=0.12):
-            if evacuation_zone.align(search_function=search_type, step_time=0.01):
-                if evacuation_zone.grab():
-                    motors.claw_step(180, 0.005)
-                    triangles.find()
-                    evacuation_zone.dump()
-                    config.victim_count += 1
-                else:
-                    motors.claw_step(0, 0)
-                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
-            else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
-
-    print("EVAC FINISHED")
-
-    evacuation_zone.exit()
+        if mode == 's':
+            motors.run(0, 0)
+        elif mode == 'g':
+            line.follow_line()
+        elif mode == 'r':
+            colour.read(display_mapped=True, display_raw=True)
+            lasers.read(display=True)
+            touch.read(display=True)
+            print()
+        elif mode == 'c':
+            colour.calibration(True)
+            mode = 's'
 
 except KeyboardInterrupt:
-    print("Exiting Gracefully")
+    print("Exiting...")
 
 finally:
-    gpio.cleanup()
-    oled_display.reset()
-    camera.close()
     motors.run(0, 0)
+    cv2.destroyAllWindows()
+    camera.close()
     motors.claw_step(270, 0)

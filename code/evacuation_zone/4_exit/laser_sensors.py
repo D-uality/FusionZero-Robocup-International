@@ -35,7 +35,7 @@ def initialise() -> None:
 
     read()
 
-def read(pins=config.x_shut_pins) -> list[int]:
+def read(pins=config.x_shut_pins, display=False) -> list[int]:
     indices = [i for i, pin in enumerate(config.x_shut_pins) if pin in pins]
     sensors = [tof_sensors[i] for i in indices]
 
@@ -53,5 +53,8 @@ def read(pins=config.x_shut_pins) -> list[int]:
         except Exception as e:
             print(f"Failed reading ToF[{sensor_number}]: {str(e)}")
             values.append(0)
+
+    if display:
+        print(f"L: {values}", end=", ")
 
     return values

@@ -7,7 +7,34 @@ import camera
 import motors
 import touch_sensors
 import laser_sensors
+
 from typing import Optional
+import victims
+import triangles
+
+def main():
+    start_time = time.time()
+
+    while True:
+        if config.victim_count == 3 and time.time() - start_time > 5 * 60: break
+
+        search_type = victims.live if config.victim_count < 2 else victims.dead
+        motors.claw_step(270, 0)
+
+        find(search_function=search_type)
+
+        if route(search_function=search_type, kP=0.12):
+            if align(search_function=search_type, step_time=0.01):
+                if grab():
+                    motors.claw_step(180, 0.005)
+                    triangles.find()
+                    dump()
+                    config.victim_count += 1
+                else:
+                    motors.claw_step(0, 0)
+                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+            else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+            motors.run(0, 0)
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -41,6 +68,7 @@ def find(search_function: callable) -> None:
 
         if found_status == 1: continue
         elif found_status == 0: motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.2)
+        motors.run(0, 0)
 
         time_delay = 7 if found_status is None else randint(800, 1600) / 1000
 
@@ -180,10 +208,12 @@ def grab() -> bool:
     motors.claw_step(0, 0.005)
     config.update_log(["GRAB", "MOVE FORWARDS"], [24, 24])
     motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 1.3)
+    motors.run(0, 0)
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
     motors.claw_step(90, 0.007)
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
     motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
+    motors.run(0, 0)
     config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
     motors.claw_step(75, 0.05)
     motors.claw_step(90, 0.05)
@@ -198,6 +228,7 @@ def dump() -> None:
     motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS")
 
     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.3)
+    motors.run(0, 0)
     motors.claw_step(90, 0.005)
     
     time.sleep(1)
@@ -205,30 +236,4 @@ def dump() -> None:
     motors.claw_step(270, 0)
 
     motors.run(config.evacuation_speed, -config.evacuation_speed, randint(300, 1600) / 1000)
-
-def exit() -> None:
-    touch_values = touch_sensors.read()
-    laser_values = laser_sensors.read()
-
-    if touch_values[0] == 0 or touch_values[1] == 0:
-        motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.5)
-        motors.run(config.evacuation_speed * 1.3, config.evacuation_speed * 0.7, 0.8)
-
-    elif laser_values[0] > 20:
-        motors.run(config.evacuation_speed, config.evacuation_speed, 1.3)
-        motors.run(-config.evacuation_speed, config.evacuation_speed, 1)
-        motors.run_until(
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    motors.run(0, 0)
