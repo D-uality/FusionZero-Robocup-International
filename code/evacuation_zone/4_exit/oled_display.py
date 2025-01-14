@@ -24,7 +24,7 @@ def reset() -> None:
     oled.show()
 
 def text(text: str, x: int, y: int, size: int = 10) -> None:
-    font = ImageFont.truetype("/home/fusion/.fonts/JetBrainsMono-Regular.ttf", size=size)
+    font = ImageFont.truetype("/home/fusion-zero/.fonts/JetBrainsMono-Regular.ttf", size=size)
 
     draw = ImageDraw.Draw(image)
 

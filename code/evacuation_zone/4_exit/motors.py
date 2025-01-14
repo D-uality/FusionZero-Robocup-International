@@ -22,10 +22,10 @@ def initialise() -> None:
 def run(v1: int, v2: int, delay: int = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
 
-    negative_gradients  = [0.80872, 0.87105, 0.68875, 0.79321]
-    negative_intercepts = [-3.3078, -5.3841, -2.8756, -1.1818]
-    positive_gradients  = [0.81624, 0.80004, 0.68003, 0.67527]
-    positive_intercepts = [2.1236, 5.9884, 2.6411, 2.8736]
+    negative_gradients  = [0.69106, 0.73440, 0.68426, 0.67425]
+    negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
+    positive_gradients  = [0.69924, 0.66035, 0.69858, 0.67916]
+    positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
     
     for i in range(0, 2):
         if   (v1 < negative_intercepts[i]): calculated_angles[i] = negative_gradients[i] * v1 + negative_intercepts[i]

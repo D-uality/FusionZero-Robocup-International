@@ -5,9 +5,9 @@ X11 = True
 touch_pins = [5, 6, 22, 26]  # FL, FR, BL, BR
 x_shut_pins = [23, 24, 25]  # Left, Middle, Right
 
-stop_angles = [97, 96, 96, 97]
-servo_pins = [15, 14, 13, 12]  # FL, FR, BL, BR
-claw_pin = 11
+stop_angles = [88, 89, 88, 89]
+servo_pins = [14, 13, 12, 10]  # FL, FR, BL, BR
+claw_pin = 9
 
 # ------------------------------------------
 
