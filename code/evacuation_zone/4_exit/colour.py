@@ -31,9 +31,13 @@ def load_calibration_values():
         min_values = [255] * 7
         max_values = [0] * 7
 
+    min_values = [32, 35, 45, 36,30, 93, 100]
+    max_values = [190, 190, 190, 215, 220, 175, 180]
+
     return min_values, max_values
 
 calibrated_min, calibrated_max = load_calibration_values()
+
 
 def read_raw(display=False):
     """
