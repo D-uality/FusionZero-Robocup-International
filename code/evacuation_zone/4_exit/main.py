@@ -38,8 +38,8 @@ try:
             line.follow_line()
         elif mode == 'r':
             colour.read(display_mapped=True, display_raw=True)
-            lasers.read(display=True)
-            touch.read(display=True)
+            laser_sensors.read(display=True)
+            touch_sensors.read(display=True)
             print()
         elif mode == 'c':
             colour.calibration(True)

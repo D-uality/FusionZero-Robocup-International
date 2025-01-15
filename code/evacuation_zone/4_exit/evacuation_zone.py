@@ -7,6 +7,7 @@ import camera
 import motors
 import touch_sensors
 import laser_sensors
+import colour
 
 from typing import Optional
 import victims
@@ -29,6 +30,7 @@ def main():
                     motors.claw_step(180, 0.005)
                     triangles.find()
                     dump()
+                    dump()
                     config.victim_count += 1
                 else:
                     motors.claw_step(0, 0)
@@ -36,12 +38,14 @@ def main():
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             motors.run(0, 0)
 
+
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
         start_time = time.time()
         motors.run(v1, v2)
         
         initial_condition = conditional_function() if conditional_function else None
+        silver_count = 0
 
         while time.time() - start_time < time_constraint:
             print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6]))
@@ -56,6 +60,14 @@ def find(search_function: callable) -> None:
             if conditional_function is not None:
                 current_condition = conditional_function()
                 if current_condition != initial_condition: return 0
+
+                colour_values = colour.read()
+                for value in colour_values: silver_count += 1 if value > 120 or value < 30 else 0\
+
+                if silver_count > 10: 
+                    silver_count = 0
+                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+                    return 0
 
         motors.run(0, 0)
 

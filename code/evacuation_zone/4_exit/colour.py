@@ -8,8 +8,7 @@ import motors
 
 i2c = board.I2C()
 adc = ADC.ADS7830(i2c)
-
-CALIBRATION_FILE = "/home/fusion/FusionZero-Robocup-International/code/colour_line_following/calibration_values.txt"
+CALIBRATION_FILE = "/home/fusion-zero/FusionZero-Robocup-International/code/evacuation_zone/calibration_values.txt"
 
 def load_calibration_values():
     """

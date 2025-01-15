@@ -5,10 +5,8 @@ import touch_sensors
 import motors
 import evacuation_zone
 
-silver_min = 120
+silver_min = 135
 silver_count = 0
-inverse_count = 0
-inverse_threshold = 20
 white_min = 60
 black_max = 20
 green_max = -10
@@ -21,7 +19,7 @@ green_distance = 20
 main_loop_count = green_distance
 
 def follow_line():
-    global main_loop_count
+    global main_loop_count, silver_count
 
     main_loop_count += 1
     colour_values = colour.read(display_mapped=True)
@@ -29,7 +27,7 @@ def follow_line():
     print()
 
     green_signal = check_green(colour_values)
-    silver_count = silver_check(colour_values)
+    silver_count = silver_check(colour_values, silver_count)
     if silver_count > 10:
         print("Silver Found")
         motors.run(0, 0, 1)
@@ -79,24 +77,9 @@ def align_black(align_type):
             colour_values = colour.read(display_mapped=True)
             print()
 
-def check_inverse(colour_values):
-    global black_max, left_black, right_black, inverse_count, inverse_threshold
-    if ((left_black and (colour_values[3] < black_max or colour_values[4] < black_max)) or
-        (right_black and (colour_values[0] < black_max or colour_values[1] < black_max))) and \
-        ((colour_values[5] > 50 and colour_values[6] > 50) or (colour_values[5] < 10 and colour_values[6] < 10)):
 
-        if inverse_count < inverse_threshold + 2:
-            inverse_count += 1
-
-
-    elif inverse_count > 0 and colour_values[0] > 50 and colour_values[1] > 50 and colour_values[3] > 50 and  colour_values[4] > 50:
-        inverse_count -= 1
-    
-    print(f"Inverse Count: {inverse_count}", end=", ")
-    return inverse_count
-        
 def follow_black_line(colour_values):
-    global outer_multi, inner_multi, line_speed, line_ignore_value, inverse_count, inverse_threshold
+    global outer_multi, inner_multi, line_speed, line_ignore_value
     """
     Follows the black line.
 
@@ -108,19 +91,12 @@ def follow_black_line(colour_values):
     return: An error which is used for turning values.
     """  
 
-    inverse_count = check_inverse(colour_values)
+    front_multi = 1 + (colour_values[2] - 100) / 100
 
     outer_error = outer_multi * (colour_values[0] - colour_values[4])
     inner_error = inner_multi * (colour_values[1] - colour_values[3])
 
-    if inverse_count > inverse_threshold:
-        front_multi = 1 + (100 - colour_values[2]) / 100
-        total_error = - outer_error - inner_error
-        print(f"Inverse Following", end=", ")
-    else:
-        front_multi = 1 + (colour_values[2] - 100) / 100
-        total_error = outer_error + inner_error
-
+    total_error = outer_error + inner_error
     if abs(total_error) < line_ignore_value:
         turn = [line_speed, line_speed]
     else:
@@ -226,8 +202,8 @@ def avoid_obstacle():
         align_black('right')
 
 
-def silver_check(colour_values):
-    global silver_min, silver_count
+def silver_check(colour_values, silver_count):
+    global silver_min
     if (colour_values[0] > silver_min or colour_values[1] > silver_min or colour_values[3] > silver_min or colour_values[4] > silver_min) and colour_values[2] > black_max:
         silver_count += 1
     
