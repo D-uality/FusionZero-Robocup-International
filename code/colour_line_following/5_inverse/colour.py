@@ -100,6 +100,7 @@ def save_calibration_values(min_values, max_values):
         print(f"Error saving calibration values: {e}")
 
 def calibration(auto_calibrate):
+    global calibrated_min, calibrated_max
     """
     Resets calibrated colour sensor values that are used for mapped values which is needed for line following.
 

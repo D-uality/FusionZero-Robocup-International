@@ -12,7 +12,7 @@ import camera
 
 mode = 's'
 
-dummy_image = 255 * np.ones((500, 500, 3), dtype=np.uint8)
+dummy_image = 255 * np.ones((300, 300, 3), dtype=np.uint8)
 cv2.imshow("Control Window", dummy_image)
 
 try:
