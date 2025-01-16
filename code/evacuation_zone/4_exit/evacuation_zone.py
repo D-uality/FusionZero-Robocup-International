@@ -8,6 +8,7 @@ import motors
 import touch_sensors
 import laser_sensors
 import colour
+import testing
 
 from typing import Optional
 import victims
@@ -15,6 +16,8 @@ import triangles
 
 def main():
     start_time = time.time()
+    motors.run(config.evacuation_speed, config.evacuation_speed, 0.5)
+    motors.run(0, 0)
 
     while True:
         if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
@@ -198,10 +201,8 @@ def grab() -> bool:
 
         black_count = 0
         points = generate_random_points(80, 25, 20) + generate_random_points(240, 25, 20)
-        print(points)
 
         image = camera.capture_array()
-
         black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
         
         for x, y in points:
@@ -258,6 +259,8 @@ def exit() -> bool:
             motors.run(config.evacuation_speed, config.evacuation_speed)
             colour_values = colour.read()
 
+            print(config.update_log(["APPROACHING", f"{colour_values}", f"{black_count}", f"{silver_count}"], [24, 24, 6, 6]))
+
             for value in colour_values:
                 if   value <= 20:  black_count  += 1
                 elif value >= 135: silver_count += 1
@@ -269,17 +272,24 @@ def exit() -> bool:
         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
         laser_values = laser_sensors.read([config.x_shut_pins[0]])
 
+        print(config.update_log(["EXITING", f"{touch_values}", f"{laser_values}"], [24, 10, 6]))
+
         if touch_values[0] == 0 or touch_values[1] == 0:
-            motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.4)
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.2)
             motors.run(config.evacuation_speed, -config.evacuation_speed, 0.3)
         elif laser_values[0] > 30:
-            motors.run(config.evacuation_speed, config.evacuation_speed, 1.5)
-            motors.run(-config.evacuation_speed, config.evacuation_speed, 1.5)
-            motors.run(0, 0, 1.5)
+            motors.run(config.evacuation_speed, config.evacuation_speed, 1.3)
+            motors.run(-config.evacuation_speed, config.evacuation_speed, 1.3)
 
-            if validate_exit(): return True
+            if validate_exit():
+                print("BLACK")
+                return True
             else:
-                motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
-                motors.run(config.evacuation_speed,  -config.evacuation_speed, 1.5)
+                print("SILVER")
+                motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.3)
+                motors.run( config.evacuation_speed, -config.evacuation_speed, 1.3)
+                motors.run( config.evacuation_speed,  config.evacuation_speed, 2)
         else:
-            motors.run(config.evacuation_speed, config.evacuation_speed)
+            motors.run(config.evacuation_speed * 0.95, config.evacuation_speed)
+
+    testing.main()

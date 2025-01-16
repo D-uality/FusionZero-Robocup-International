@@ -29,6 +29,7 @@ def follow_line():
     green_signal = check_green(colour_values)
     silver_count = silver_check(colour_values, silver_count)
     if silver_count > 10:
+        silver_count = 0
         print("Silver Found")
         motors.run(0, 0, 1)
 
@@ -37,8 +38,8 @@ def follow_line():
     elif green_signal is not None and main_loop_count > green_distance:
         align_black(green_signal)
         main_loop_count = 0
-    elif touch_values[0] == 0 or touch_values[1] == 0:
-        avoid_obstacle()
+    # elif touch_values[0] == 0 or touch_values[1] == 0:
+    #     avoid_obstacle()
 
     else:
         turn = follow_black_line(colour_values)

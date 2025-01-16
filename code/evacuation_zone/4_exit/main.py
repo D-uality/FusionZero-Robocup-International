@@ -44,6 +44,8 @@ try:
         elif mode == 'c':
             colour.calibration(True)
             mode = 's'
+        elif mode == 't':
+            testing.main()
 
 except KeyboardInterrupt:
     print("Exiting...")

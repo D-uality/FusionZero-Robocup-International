@@ -8,6 +8,7 @@ import motors
 
 i2c = board.I2C()
 adc = ADC.ADS7830(i2c)
+
 CALIBRATION_FILE = "/home/fusion-zero/FusionZero-Robocup-International/code/evacuation_zone/calibration_values.txt"
 
 def load_calibration_values():
@@ -31,13 +32,9 @@ def load_calibration_values():
         min_values = [255] * 7
         max_values = [0] * 7
 
-    min_values = [32, 35, 45, 36,30, 93, 100]
-    max_values = [190, 190, 190, 215, 220, 175, 180]
-
     return min_values, max_values
 
 calibrated_min, calibrated_max = load_calibration_values()
-
 
 def read_raw(display=False):
     """
@@ -79,7 +76,8 @@ def read(display_mapped=False, display_raw=False):
 
 def update_calibration(min_values, max_values):
     for i in range(1000):
-        analog_values = read()
+        analog_values = read_raw(True)
+        print()
 
         for i in range(7):
             min_values[i] = min(min_values[i], analog_values[i])
@@ -93,9 +91,13 @@ def save_calibration_values(min_values, max_values):
     """
     Save calibration values to environment variables.
     """
-    os.environ["CALIBRATED_MIN"] = ",".join(map(str, min_values))
-    os.environ["CALIBRATED_MAX"] = ",".join(map(str, max_values))
-    print("Calibration values saved.")
+    try:
+        with open(CALIBRATION_FILE, "w") as f:
+            f.write(",".join(map(str, min_values)) + "\n")
+            f.write(",".join(map(str, max_values)) + "\n")
+        print("Calibration values saved to file.")
+    except IOError as e:
+        print(f"Error saving calibration values: {e}")
 
 def calibration(auto_calibrate):
     """
