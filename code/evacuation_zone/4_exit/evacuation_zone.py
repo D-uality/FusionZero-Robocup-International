@@ -267,7 +267,9 @@ def exit() -> bool:
 
             if    black_count > 10: return True
             elif silver_count > 10: return False
-            
+    
+    motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 0, "==", 0)
+
     while True:
         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
         laser_values = laser_sensors.read([config.x_shut_pins[0]])
@@ -290,6 +292,4 @@ def exit() -> bool:
                 motors.run( config.evacuation_speed, -config.evacuation_speed, 1.3)
                 motors.run( config.evacuation_speed,  config.evacuation_speed, 2)
         else:
-            motors.run(config.evacuation_speed * 0.95, config.evacuation_speed)
-
-    testing.main()
+            motors.run(config.evacuation_speed * 0.7, config.evacuation_speed)
