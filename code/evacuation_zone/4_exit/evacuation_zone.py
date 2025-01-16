@@ -17,7 +17,7 @@ def main():
     start_time = time.time()
 
     while True:
-        if config.victim_count == 3 and time.time() - start_time > 5 * 60: break
+        if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
@@ -30,7 +30,6 @@ def main():
                     motors.claw_step(180, 0.005)
                     triangles.find()
                     dump()
-                    dump()
                     config.victim_count += 1
                 else:
                     motors.claw_step(0, 0)
@@ -38,6 +37,7 @@ def main():
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             motors.run(0, 0)
 
+    exit()
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -48,7 +48,7 @@ def find(search_function: callable) -> None:
         silver_count = 0
 
         while time.time() - start_time < time_constraint:
-            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6]))
+            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{silver_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6]))
             image = camera.capture_array()
 
             if config.X11: cv2.imshow("image", image)
@@ -62,10 +62,10 @@ def find(search_function: callable) -> None:
                 if current_condition != initial_condition: return 0
 
                 colour_values = colour.read()
-                for value in colour_values: silver_count += 1 if value > 120 or value < 30 else 0\
+                for value in colour_values:
+                    silver_count += 1 if value > 120 or value < 30 else 0
 
                 if silver_count > 10: 
-                    silver_count = 0
                     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
                     return 0
 
@@ -249,3 +249,37 @@ def dump() -> None:
 
     motors.run(config.evacuation_speed, -config.evacuation_speed, randint(300, 1600) / 1000)
     motors.run(0, 0)
+
+def exit() -> bool:
+    def validate_exit() -> bool:
+        black_count, silver_count = 0, 0
+
+        while True:
+            motors.run(config.evacuation_speed, config.evacuation_speed)
+            colour_values = colour.read()
+
+            for value in colour_values:
+                if   value <= 20:  black_count  += 1
+                elif value >= 135: silver_count += 1
+
+            if    black_count > 10: return True
+            elif silver_count > 10: return False
+            
+    while True:
+        touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
+        laser_values = laser_sensors.read([config.x_shut_pins[0]])
+
+        if touch_values[0] == 0 or touch_values[1] == 0:
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.4)
+            motors.run(config.evacuation_speed, -config.evacuation_speed, 0.3)
+        elif laser_values[0] > 30:
+            motors.run(config.evacuation_speed, config.evacuation_speed, 1.5)
+            motors.run(-config.evacuation_speed, config.evacuation_speed, 1.5)
+            motors.run(0, 0, 1.5)
+
+            if validate_exit(): return True
+            else:
+                motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
+                motors.run(config.evacuation_speed,  -config.evacuation_speed, 1.5)
+        else:
+            motors.run(config.evacuation_speed, config.evacuation_speed)
