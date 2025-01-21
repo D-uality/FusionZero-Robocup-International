@@ -13,7 +13,7 @@ claw_pin = 9
 
 status_messages = []
 
-victim_count = 2
+victim_count = 0
 evacuation_speed = 35
 approach_distance = 18
 
