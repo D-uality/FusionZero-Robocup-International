@@ -13,8 +13,8 @@ white_min = 60
 black_max = 30
 green_max = 20
 
-outer_multi = 1.3
-inner_multi = 1.3
+outer_multi = 0.7
+inner_multi = 0.7
 line_speed = 20
 line_ignore_value = 20
 green_distance = 20
@@ -42,7 +42,7 @@ def follow_line():
     elif touch_values[0] == 0 or touch_values[1] == 0:
         avoid_obstacle()
     else:
-        turn = follow_black_line(colour_values)
+        turn = follow_black_line(colour_values, False)
         motors.run(turn[0], turn[1])
 
 def align_black(align_type):
@@ -125,7 +125,7 @@ def follow_black_line(colour_values, inverse_following):
             front_multi = 1 + (colour_values[2] - 100) / 100
             total_error = outer_error + inner_error
     else:
-        front_multi = 1 + (colour_values[2] - 100) / 100
+        front_multi = 1 + (colour_values[2] - 80) / 100
         total_error = outer_error + inner_error
 
     if abs(total_error) < line_ignore_value:

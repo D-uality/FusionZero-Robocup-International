@@ -43,6 +43,7 @@ def dead(image: np.ndarray) -> Optional[int]:
     if not contours: return None
 
     circular_contours = [contour for contour in contours if circularity_check(contour, 0.5)]
+    circular_contours = [contour for contour in circular_contours if cv2.contourArea(contour) > 100]
 
     if len(circular_contours) == 0: return None
 

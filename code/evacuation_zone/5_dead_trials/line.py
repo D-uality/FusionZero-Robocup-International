@@ -5,16 +5,16 @@ import touch_sensors
 import motors
 import evacuation_zone
 
-silver_min = 135
+silver_min = 120
 silver_count = 0
 white_min = 60
 black_max = 20
-green_max = -10
+green_max = 25
 
-outer_multi = 1.5
-inner_multi = 1.5
+outer_multi = 1.1
+inner_multi = 1.1
 line_speed = 20
-line_ignore_value = 10
+line_ignore_value = 20
 green_distance = 20
 main_loop_count = green_distance
 
@@ -50,8 +50,8 @@ def align_black(align_type):
     turn_count = 0
     if align_type == 'left':
         print("Aligning from left.")
-        motors.run(-line_speed - 5, line_speed + 5, 0.8)
-        motors.run(line_speed, line_speed, 0.2)
+        motors.run(-line_speed - 5, line_speed + 5, 1)
+        motors.run(line_speed, line_speed, 0.5)
         colour_values = colour.read()
         while colour_values[0] < black_max and turn_count < 500:
             turn_count += 1
@@ -60,8 +60,8 @@ def align_black(align_type):
 
     elif align_type == 'right':
         print("Aligning from right.")
-        motors.run(line_speed + 5, -line_speed - 5, 0.8)
-        motors.run(line_speed, line_speed, 0.2)
+        motors.run(line_speed + 5, -line_speed - 5, 1)
+        motors.run(line_speed, line_speed, 0.5)
         colour_values = colour.read()
         while colour_values[4] < black_max and turn_count < 500:
             turn_count += 1
@@ -70,7 +70,7 @@ def align_black(align_type):
     
     elif align_type == 'double':
         print("Aligning from double.")
-        motors.run(line_speed + 5, line_speed + 5, 0.2)
+        motors.run(-line_speed - 5, -line_speed - 5, 0.2)
         motors.run(-line_speed - 10, line_speed + 10, 2)
         colour_values = colour.read()
         while colour_values[3] > white_min and turn_count < 1000:
@@ -93,6 +93,7 @@ def follow_black_line(colour_values):
     """  
 
     front_multi = 1 + (colour_values[2] - 100) / 100
+    # front_multi = 1
 
     outer_error = outer_multi * (colour_values[0] - colour_values[4])
     inner_error = inner_multi * (colour_values[1] - colour_values[3])
@@ -109,13 +110,13 @@ def check_green(colour_values):
     global black_max, green_max
     left_black = colour_values[0] < black_max and colour_values[1] < black_max
     right_black = colour_values[3] < black_max and colour_values[4] < black_max
-    left_double_black = left_black and (colour_values[3] < black_max + 10 or colour_values[4] < black_max + 10)
-    right_double_black = right_black and (colour_values[0] < black_max + 10 or colour_values[1] < black_max + 10)
+    left_double_black = left_black and (colour_values[3] < 50 or colour_values[4] < 50)
+    right_double_black = right_black and (colour_values[0] < 50 or colour_values[1] < 50)
 
     left_green = left_black and colour_values[5] < green_max
     right_green = right_black and colour_values[6] < green_max
-    left_double_green = left_green and colour_values[6] < green_max + 10
-    right_double_green =  right_green and colour_values[5] < green_max + 10
+    left_double_green = left_green and colour_values[6] < green_max + 30
+    right_double_green =  right_green and colour_values[5] < green_max + 30
     double_green = (left_double_black and left_double_green) or (right_double_black and right_double_green)
 
     if double_green:

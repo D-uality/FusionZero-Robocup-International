@@ -33,7 +33,7 @@ def initialise() -> None:
     for sensor in tof_sensors:
         sensor.start_ranging()
 
-    read()
+    # read()
 
 def read(pins=config.x_shut_pins, display=False) -> list[int]:
     indices = [i for i, pin in enumerate(config.x_shut_pins) if pin in pins]
