@@ -5,23 +5,21 @@ import touch_sensors
 import motors
 import evacuation_zone
 
-silver_min = 120
+silver_min = 135
 silver_count = 0
-inverse_count = 0
-inverse_threshold = 30
 white_min = 60
-black_max = 30
-green_max = 20
+black_max = 20
+green_max = -10
 
-outer_multi = 1.3
-inner_multi = 1.3
+outer_multi = 1.5
+inner_multi = 1.5
 line_speed = 20
-line_ignore_value = 20
+line_ignore_value = 10
 green_distance = 20
 main_loop_count = green_distance
 
 def follow_line():
-    global main_loop_count, inverse_count
+    global main_loop_count, silver_count
 
     main_loop_count += 1
     colour_values = colour.read(display_mapped=True)
@@ -29,18 +27,20 @@ def follow_line():
     print()
 
     green_signal = check_green(colour_values)
-    silver_count = silver_check(colour_values)
+    silver_count = silver_check(colour_values, silver_count)
     if silver_count > 10:
+        silver_count = 0
         print("Silver Found")
         motors.run(0, 0, 1)
 
         evacuation_zone.main()
 
-    elif green_signal is not None and inverse_count < 5 and main_loop_count > green_distance:
+    elif green_signal is not None and main_loop_count > green_distance:
         align_black(green_signal)
         main_loop_count = 0
-    elif touch_values[0] == 0 or touch_values[1] == 0:
-        avoid_obstacle()
+    # elif touch_values[0] == 0 or touch_values[1] == 0:
+    #     avoid_obstacle()
+
     else:
         turn = follow_black_line(colour_values)
         motors.run(turn[0], turn[1])
@@ -78,28 +78,9 @@ def align_black(align_type):
             colour_values = colour.read(display_mapped=True)
             print()
 
-def check_inverse(colour_values):
-    global black_max, inverse_count, inverse_threshold
 
-    left_double_black = colour_values[0] < black_max or colour_values[1] < black_max and (colour_values[3] < black_max + 30 or colour_values[4] < black_max + 10)
-    right_double_black = colour_values[3] < black_max or colour_values[4] < black_max and (colour_values[0] < black_max + 20 or colour_values[1] < black_max + 30)
-
-    if (left_double_black or right_double_black) and ((colour_values[5] > 40 and colour_values[6] > 40) or (colour_values[5] < 10 and colour_values[6] < 10)):
-        if inverse_count < inverse_threshold + 5:
-            inverse_count += 1
-
-
-    elif inverse_count > 0 and colour_values[0] > 50 and colour_values[1] > 50 and colour_values[3] > 50 and  colour_values[4] > 50:
-        inverse_count = inverse_count // 10
-        inverse_count -= 1
-
-    
-    print(f"Inverse Count: {inverse_count}", end=", ")
-
-    return inverse_count
-        
-def follow_black_line(colour_values, inverse_following):
-    global outer_multi, inner_multi, line_speed, line_ignore_value, inverse_count, inverse_threshold
+def follow_black_line(colour_values):
+    global outer_multi, inner_multi, line_speed, line_ignore_value
     """
     Follows the black line.
 
@@ -111,23 +92,12 @@ def follow_black_line(colour_values, inverse_following):
     return: An error which is used for turning values.
     """  
 
+    front_multi = 1 + (colour_values[2] - 100) / 100
+
     outer_error = outer_multi * (colour_values[0] - colour_values[4])
     inner_error = inner_multi * (colour_values[1] - colour_values[3])
 
-    if inverse_following:
-        inverse_count = check_inverse(colour_values)
-
-        if inverse_count > inverse_threshold:
-            front_multi = 1 + (100 - colour_values[2]) / 100
-            total_error = -0.3 * (outer_error + inner_error)
-            print(f"Inverse Following", end=", ")
-        else:
-            front_multi = 1 + (colour_values[2] - 100) / 100
-            total_error = outer_error + inner_error
-    else:
-        front_multi = 1 + (colour_values[2] - 100) / 100
-        total_error = outer_error + inner_error
-
+    total_error = outer_error + inner_error
     if abs(total_error) < line_ignore_value:
         turn = [line_speed, line_speed]
     else:
@@ -233,8 +203,8 @@ def avoid_obstacle():
         align_black('right')
 
 
-def silver_check(colour_values):
-    global silver_min, silver_count
+def silver_check(colour_values, silver_count):
+    global silver_min
     if (colour_values[0] > silver_min or colour_values[1] > silver_min or colour_values[3] > silver_min or colour_values[4] > silver_min) and colour_values[2] > black_max:
         silver_count += 1
     
