@@ -9,7 +9,8 @@ import motors
 i2c = board.I2C()
 adc = ADC.ADS7830(i2c)
 
-CALIBRATION_FILE = "/home/fusion/FusionZero-Robocup-International/code/evacuation_zone/calibration_values.txt"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+CALIBRATION_FILE = os.path.join(current_dir, "calibration_values.txt")
 
 def load_calibration_values():
     """
@@ -59,18 +60,16 @@ def read(display_mapped=False, display_raw=False):
     return: mapped values as an array, size 7.
     """
     global calibrated_min, calibrated_max
+    mapped_values = []
 
     raw_analog_values = read_raw()
-
-    mapped_values = []
+    
     for i in range(7):
         mapped_value = (raw_analog_values[i] - calibrated_min[i]) * 100 / (calibrated_max[i] - calibrated_min[i])
         mapped_values.append(int(mapped_value))
     
-    if display_mapped:
-        print(f"C: {mapped_values}", end=", ")
-    if display_raw:
-        read_raw(True)
+    if display_mapped: print(f"C: {mapped_values}", end=", ")
+    if display_raw:    print(f"Raw C: {raw_analog_values}")
 
     return mapped_values
 
@@ -99,7 +98,7 @@ def save_calibration_values(min_values, max_values):
     except IOError as e:
         print(f"Error saving calibration values: {e}")
 
-def calibration(auto_calibrate):
+def calibration(auto_calibrate=False):
     """
     Resets calibrated colour sensor values that are used for mapped values which is needed for line following.
 

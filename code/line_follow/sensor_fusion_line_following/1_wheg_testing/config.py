@@ -17,6 +17,11 @@ victim_count = 0
 evacuation_speed = 35
 approach_distance = 18
 
-def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|") -> str:
+def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|"):
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
-    return f" {separator} ".join(formatted_cells)
+    print(f" {separator} ".join(formatted_cells))
+
+# ------------------------------------------
+
+outer_multi, inner_multi = 1, 1
+line_base_speed = 25

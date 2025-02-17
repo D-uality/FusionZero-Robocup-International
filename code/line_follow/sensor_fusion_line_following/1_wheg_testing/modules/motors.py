@@ -15,6 +15,7 @@ def initialise() -> None:
 
         pca.servo[config.claw_pin].angle = 270
         print("Motors", "✓")
+        
     except Exception as e:
         print("Motors", "X")
         print(f"Failed to initialise motors: {e}")
@@ -22,9 +23,9 @@ def initialise() -> None:
 def run(v1: int, v2: int, delay: int = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
 
-    negative_gradients  = [0.69106, 0.73440, 0.68426, 0.67425]
+    negative_gradients  = [0.71106, 0.71440, 0.66426, 0.69425]
     negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-    positive_gradients  = [0.69924, 0.66035, 0.69858, 0.67916]
+    positive_gradients  = [0.71924, 0.64035, 0.67858, 0.69916]
     positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
     
     for i in range(0, 2):
@@ -86,33 +87,33 @@ def claw_step(target_angle: int, time_delay: float) -> None:
             pca.servo[config.claw_pin].angle = current_angle
             time.sleep(time_delay)
 
-def run_uphill(v1: int, v2: int, delay: int = 0) -> None:
-    calculated_angles = [0, 0, 0, 0]
+# def run_uphill(v1: int, v2: int, delay: int = 0) -> None:
+#     calculated_angles = [0, 0, 0, 0]
 
-    negative_gradients  = [0.69106, 0.73440, 0.68426, 0.67425]
-    negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-    positive_gradients  = [0.69924, 0.66035, 0.69858, 0.67916]
-    positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
+#     negative_gradients  = [0.69106, 0.73440, 0.68426, 0.67425]
+#     negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
+#     positive_gradients  = [0.69924, 0.66035, 0.69858, 0.67916]
+#     positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
 
-    speeds = [0, 0, 0, 0]
-    speeds[0] = v2
-    speeds[1] = v1
-    speeds[2] = v1
-    speeds[3] = v2
+#     speeds = [0, 0, 0, 0]
+#     speeds[0] = v2
+#     speeds[1] = v1
+#     speeds[2] = v1
+#     speeds[3] = v2
 
-    for i in range(4):
-        current_speed = speeds[i]
-        if i in [2, 3]:
-            current_speed = -current_speed
-        if current_speed < negative_intercepts[i]:
-            calculated_angles[i] = negative_gradients[i] * current_speed + negative_intercepts[i]
-        elif current_speed > positive_intercepts[i]:
-            calculated_angles[i] = positive_gradients[i] * current_speed + positive_intercepts[i]
-        else:
-            calculated_angles[i] = 0
-        calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
-    for i in range(4):
-        angle = config.stop_angles[i] + calculated_angles[i]
-        pca.servo[config.servo_pins[i]].angle = max(min(angle, 180), 0)
-    if delay > 0:
-        time.sleep(delay)
+#     for i in range(4):
+#         current_speed = speeds[i]
+#         if i in [2, 3]:
+#             current_speed = -current_speed
+#         if current_speed < negative_intercepts[i]:
+#             calculated_angles[i] = negative_gradients[i] * current_speed + negative_intercepts[i]
+#         elif current_speed > positive_intercepts[i]:
+#             calculated_angles[i] = positive_gradients[i] * current_speed + positive_intercepts[i]
+#         else:
+#             calculated_angles[i] = 0
+#         calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
+#     for i in range(4):
+#         angle = config.stop_angles[i] + calculated_angles[i]
+#         pca.servo[config.servo_pins[i]].angle = max(min(angle, 180), 0)
+#     if delay > 0:
+#         time.sleep(delay)

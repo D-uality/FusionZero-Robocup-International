@@ -17,6 +17,7 @@ def initialise():
         
         print(["Camera", "✓"])
         oled_display.text("Camera: ✓", 0, 40)
+        
     except Exception as e:
         print(f"Camera failed to initialise: {e}")
         oled_display.text("Camera: X", 0, 40)
