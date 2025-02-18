@@ -21,7 +21,6 @@ listener = C_MODE_LISTENER()
 listener.start()
 
 def main() -> None:
-    
     oled_display.initialise()
     laser_sensors.initialise()
     touch_sensors.initialise()
@@ -31,19 +30,26 @@ def main() -> None:
     motors.run(0, 0)
     oled_display.reset()
     
-    while not listener.has_exited():
-        mode = listener.get_mode()
-        
-        if   mode == 0: motors.run(0, 0)
-        elif mode == 1: line.follow_line()
-        
-        elif mode == 5: colour.calibration(auto_calibrate=True)
-        elif mode == 6: testing.run_input()
-        
-        elif mode == 9: listener.exit_event.set()
+    try:
+        while not listener.has_exited():
+            mode = listener.get_mode()
+            
+            if   mode == 0:
+                motors.run(0, 0)
+            elif mode == 1:
+                line.follow_line()
+            
+            elif mode == 5:
+                colour.calibration(auto_calibrate=True)
+                listener.mode = 0
+            elif mode == 6:
+                testing.run_input()
+            
+            elif mode == 9: listener.exit_event.set()
 
-    camera.close()
-    oled_display.reset()
-    motors.run(0, 0)
+    finally:
+        camera.close()
+        oled_display.reset()
+        motors.run(0, 0)
     
 if __name__ == "__main__": main()

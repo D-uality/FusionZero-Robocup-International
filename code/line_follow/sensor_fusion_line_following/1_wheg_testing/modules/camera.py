@@ -1,8 +1,10 @@
+import config
+
 import cv2
+import numpy as np
 from picamera2 import Picamera2
 from libcamera import Transform
 import oled_display
-import config
     
 camera = None
 
@@ -30,6 +32,32 @@ def initialise():
         except Exception as e:
             print(["X11", "X", f"{e}"])
             oled_display.text("X11: X", 60, 40)
+
+
+def perspective_transform(image):
+    """Apply perspective transform to the image"""
+    top_left =      (int(config.WIDTH / 32), int(config.HEIGHT / 2.4))
+    bottom_left =   (0, config.HEIGHT - 1)
+    top_right =     (config.WIDTH - int(config.WIDTH / 32), int(config.HEIGHT / 2.4))
+    bottom_right =  (config.WIDTH, config.HEIGHT- 1 )
+    
+    # Draw Source Coordinates
+    # cv2.circle(image, top_left, 3, (0, 0, 255), -1)
+    # cv2.circle(image, bottom_left, 3, (0, 0, 255), -1)
+    # cv2.circle(image, top_right, 3, (0, 0, 255), -1)
+    # cv2.circle(image, bottom_right, 3, (0, 0, 255), -1)
+
+    # Define points for the perspective transform (source and destination)
+    src_points = np.float32([top_left, bottom_left, top_right, bottom_right])
+    dst_points = np.float32([[0, 0], [0, config.HEIGHT], [config.WIDTH, 0], [config.WIDTH, config.HEIGHT]])
+
+    # Calculate the perspective matrix
+    matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+
+    # Apply the perspective transform to the image
+    transformed_image = cv2.warpPerspective(image, matrix, (image.shape[1], image.shape[0]))
+
+    return transformed_image
 
 def close():
     global camera
