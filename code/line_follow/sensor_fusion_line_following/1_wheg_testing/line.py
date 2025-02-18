@@ -23,20 +23,17 @@ def follow_line() -> None:
             if config.X11: cv2.imshow("Line Follow", image)
         
         colour_values = colour.read(display_mapped=True)
-        green_signal = green_check(colour_values)
-        
-        if "fake" in green_signal:
-            if "left" in green_signal:
-                colour_values[0] += 40
-                colour_values[1] += 40
-                return colour_values
 
-            elif "right" in green_signal:
-                colour_values[3] += 40
-                colour_values[4] += 40
-                return colour_values
+        green_signal = green_check(colour_values)
+
+        if "fake" not in green_signal and len(green_signal) != 0: 
+            intersection_handling(green_signal)
+        else:
+            if   green_signal == "fake left":  colour_values[0], colour_values[1] = colour_values[0] + 40, colour_values[1] + 40
+            elif green_signal == "fake right": colour_values[3], colour_values[4] = colour_values[3] + 40, colour_values[4] + 40
+            else: pass
         
-        PID(colour_values, 0.7, 0, 1)
+            PID(colour_values, 0.7, 0, 1)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
 
@@ -75,7 +72,8 @@ def green_check(colour_values) -> str:
     return signal
 
 def intersection_handling(signal: str) -> None:
-    if "fake" in signal: return None
+    if "fake" in signal:
+        return None
 
     motors.run(0, 0)
     input()
