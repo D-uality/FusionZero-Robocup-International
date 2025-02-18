@@ -3,6 +3,7 @@ import os
 import board
 import adafruit_ads7830.ads7830 as ADC
 from adafruit_ads7830.analog_in import AnalogIn
+import config
 
 import motors
 
@@ -53,7 +54,7 @@ def read_raw(display=False):
 
     return analog_readings
 
-def read(display_mapped=False, display_raw=False):
+def read():
     """
     Reads raw analog data then maps values from 0 to 100 based on their min and max values
 
@@ -67,9 +68,6 @@ def read(display_mapped=False, display_raw=False):
     for i in range(7):
         mapped_value = (raw_analog_values[i] - calibrated_min[i]) * 100 / (calibrated_max[i] - calibrated_min[i])
         mapped_values.append(int(mapped_value))
-    
-    if display_mapped: print(f"C: {mapped_values}", end=", ")
-    if display_raw:    print(f"Raw C: {raw_analog_values}")
 
     return mapped_values
 

@@ -10,6 +10,7 @@ import cv2
 
 integral, derivative, last_error = 0, 0, 0
 main_loop_count = 0
+min_green_loop_count, last_green_loop = 1000, 0
 
 def follow_line() -> None:
     while True:
@@ -22,22 +23,17 @@ def follow_line() -> None:
 
             if config.X11: cv2.imshow("Line Follow", image)
         
-        colour_values = colour.read(display_mapped=True)
-
+        colour_values = colour.read()
         green_signal = green_check(colour_values)
 
-        if "fake" not in green_signal and len(green_signal) != 0: 
-            intersection_handling(green_signal)
+        if len(green_signal) != 0 and main_loop_count - last_green_loop > min_green_loop_count: 
+            intersection_handling(green_signal, colour_values)
         else:
-            if   green_signal == "fake left":  colour_values[0], colour_values[1] = colour_values[0] + 40, colour_values[1] + 40
-            elif green_signal == "fake right": colour_values[3], colour_values[4] = colour_values[3] + 40, colour_values[4] + 40
-            else: pass
-        
-            PID(colour_values, 0.7, 0, 1)
+            PID(colour_values, 0.75, 0, 1)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
 
-def PID(colour_values, kP, kI, kD) -> None:
+def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     global main_loop_count, integral, derivative, last_error
     outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
     inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
@@ -59,7 +55,9 @@ def PID(colour_values, kP, kI, kD) -> None:
     
     last_error = total_error
 
-def green_check(colour_values) -> str:
+def green_check(colour_values: list[int]) -> str:
+    global last_green_loop, main_loop_count
+
     signal = ""
     
     if colour_values[0] < 30 and colour_values[1] < 20:
@@ -68,18 +66,27 @@ def green_check(colour_values) -> str:
     if colour_values[3] < 20 and colour_values[4] < 30:
         if colour_values[5] < 5: signal = "right"
         else:                    signal = "fake right"
-    
+
+    if len(signal) != 0: last_green_loop = main_loop_count
     return signal
 
-def intersection_handling(signal: str) -> None:
-    if "fake" in signal:
-        return None
+def intersection_handling(signal: str, colour_values) -> None:
+    print(signal)
+    if signal == "fake left" and colour_values[4] < 10:
+        print("T left")
+        motors.run(config.line_base_speed * 1.6, -config.line_base_speed * 0.4, 1.6)
 
-    motors.run(0, 0)
-    input()
-    if signal == "left":
+    elif signal == "fake right" and colour_values[1] < 10: 
+        print("T right")
+        motors.run(-config.line_base_speed * 0.4, config.line_base_speed * 1.6, 1.6)
+
+    elif signal == "left":
+        motors.run(0, 0)
+        input()
         pass
     elif signal == "right":
+        motors.run(0, 0)
+        input()
         pass
     else:
         pass
