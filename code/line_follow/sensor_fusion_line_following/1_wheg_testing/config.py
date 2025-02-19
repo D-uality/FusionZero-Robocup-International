@@ -9,6 +9,10 @@ stop_angles = [88, 89, 88, 89]
 servo_pins = [14, 13, 12, 10]  # FL, FR, BL, BR
 claw_pin = 9
 
+def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|"):
+    formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
+    print(f" {separator} ".join(formatted_cells), end="")
+
 # ------------------------------------------
 
 status_messages = []
@@ -17,9 +21,6 @@ victim_count = 0
 evacuation_speed = 35
 approach_distance = 18
 
-def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|"):
-    formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
-    print(f" {separator} ".join(formatted_cells))
 
 # ------------------------------------------
 

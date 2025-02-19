@@ -32,9 +32,11 @@ def follow_line() -> None:
             PID(colour_values, 0.75, 0, 1)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
+        
+        print()
 
 def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
-    global main_loop_count, integral, derivative, last_error
+    global integral, derivative, last_error
     outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
     inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
 
@@ -51,7 +53,7 @@ def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     
     motors.run(v1, v2)
     
-    config.update_log([f"Line Following ({main_loop_count:.4g})", f"Errors: {outer_error:.2f} {inner_error:.2f} {total_error:.2f}", f"{integral:.2f} {derivative:.2f}",f"{turn=:.2f} -> {v1:.2f} {v2:.2f}"], [25, 29, 13, 29])
+    config.update_log([f"PID", f"{", ".join(colour_values)}", f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{turn=:.2f} -> {v1:.2f} {v2:.2f}"], [24, 16, 16])
     
     last_error = total_error
 
@@ -60,25 +62,41 @@ def green_check(colour_values: list[int]) -> str:
 
     signal = ""
     
-    if colour_values[0] < 30 and colour_values[1] < 20:
-        if colour_values[5] < 5: signal = "left"
-        else:                    signal = "fake left"
-    if colour_values[3] < 20 and colour_values[4] < 30:
-        if colour_values[5] < 5: signal = "right"
-        else:                    signal = "fake right"
+    if   colour_values[0] <= 30 and colour_values[1] <= 20:
+        if colour_values[5] <= 5:    signal = "T left"
+        elif colour_values[3] <= 10: signal = "fake T left"
+        
+    elif colour_values[4] <= 30 and colour_values[3] <= 20:
+        if colour_values[6] <= 5:    signal = "T right"
+        elif colour_values[1] <= 10: signal = "fake T right"
+        
+    elif colour_values[0] <= 30 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 30:
+        signal += "+ "
+        
+        if   colour_values[5] < 10: signal += "left"
+        elif colour_values[6] < 10: signal += "right"
 
-    if len(signal) != 0: last_green_loop = main_loop_count
     return signal
 
 def intersection_handling(signal: str, colour_values) -> None:
-    print(signal)
-    if signal == "fake left" and colour_values[4] < 10:
-        print("T left")
+    global last_green_loop, main_loop_count
+    last_green_loop = main_loop_count
+    
+    if signal == "fake T left" and colour_values[4] < 10:
         motors.run(config.line_base_speed * 1.6, -config.line_base_speed * 0.4, 1.6)
 
-    elif signal == "fake right" and colour_values[1] < 10: 
-        print("T right")
+    elif signal == "fake T right" and colour_values[1] < 10: 
         motors.run(-config.line_base_speed * 0.4, config.line_base_speed * 1.6, 1.6)
+
+    elif signal == "T left":
+        motors.run(0, 0)
+        input()
+        pass
+    
+    elif signal == "T right":
+        motors.run(0, 0)
+        input()
+        pass
 
     elif signal == "left":
         motors.run(0, 0)
