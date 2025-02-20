@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
@@ -20,5 +21,10 @@ def run_input() -> None:
         colour_values = colour.read()
         config.update_log(["TESTING", ", ".join(list(map(str, colour_values)))], [24, 30])
         print()
+        
+def motor_test() -> None:
+    while True:
+        motors.run_test(60, 60, 0.5)
+        motors.run_test(-60, -60, 0.5)
 
-if __name__ == "__main__": run_input()
+if __name__ == "__main__": motor_test()

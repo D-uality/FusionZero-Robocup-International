@@ -1,0 +1,9 @@
+      GREEN CHECK        |  0, -20, 38, -12, 18, 70, 82  
+ INTERSECTION HANDLING   |   fake T left 
+
+      GREEN CHECK        |  6, -18, 40, -14, 15, 76, 80  
+ INTERSECTION HANDLING   |   fake T left
+
+      GREEN CHECK        |  -14, -18, 35, -20, 3, 53, 85 
+ INTERSECTION HANDLING   |   fake T left
+

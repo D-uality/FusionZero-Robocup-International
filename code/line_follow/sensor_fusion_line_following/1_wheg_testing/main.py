@@ -16,6 +16,7 @@ import oled_display
 import line
 import testing
 import motors
+import config
 
 listener = C_MODE_LISTENER()
 listener.start()
@@ -34,14 +35,20 @@ def main() -> None:
         while not listener.has_exited():
             mode = listener.get_mode()
             
-            if   mode == 0:
+            if mode == 0:
                 motors.run(0, 0)
+
             elif mode == 1:
                 line.follow_line()
             
+            elif mode == 4:
+                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read())))], [24, 30])
+                print()
+
             elif mode == 5:
                 colour.calibration(auto_calibrate=True)
                 listener.mode = 0
+
             elif mode == 6:
                 testing.run_input()
             
