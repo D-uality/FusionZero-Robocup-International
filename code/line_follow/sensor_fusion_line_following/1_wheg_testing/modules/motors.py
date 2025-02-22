@@ -44,10 +44,10 @@ def run(v1: float, v2: float, delay: float = 0) -> None:
 
         calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
     
-    pca.servo[config.servo_pins[0]].angle = max(min(config.stop_angles[0] + calculated_angles[0], 175), 5)
-    pca.servo[config.servo_pins[1]].angle = max(min(config.stop_angles[1] + calculated_angles[1], 175), 5)
-    pca.servo[config.servo_pins[2]].angle = max(min(config.stop_angles[2] + calculated_angles[2], 175), 5)
-    pca.servo[config.servo_pins[3]].angle = max(min(config.stop_angles[3] + calculated_angles[3], 175), 5)
+    pca.servo[config.servo_pins[0]].angle = max(min(config.stop_angles[0] + calculated_angles[0], 165), 25)
+    pca.servo[config.servo_pins[1]].angle = max(min(config.stop_angles[1] + calculated_angles[1], 165), 25)
+    pca.servo[config.servo_pins[2]].angle = max(min(config.stop_angles[2] + calculated_angles[2], 165), 25)
+    pca.servo[config.servo_pins[3]].angle = max(min(config.stop_angles[3] + calculated_angles[3], 165), 25)
 
     if delay > 0: time.sleep(delay)
 
