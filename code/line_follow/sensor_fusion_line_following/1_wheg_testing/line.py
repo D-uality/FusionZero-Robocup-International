@@ -75,40 +75,27 @@ def green_check(colour_values: list[int]) -> str:
 			elif colour_values[6] <= 50: signal = "+ right"
 			else: pass
 
-	elif colour_values[2] >= 30:
+	else:
 		outer_values = [colour_values[0], colour_values[4]]
 		outer_values.sort()      
-
-		left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 15 else False
-		right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 15 else False
+		inner_values = [colour_values[1], colour_values[3]]
+		inner_values.sort()
+  
+		outer_left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 15 else False
+		outer_right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 15 else False
+		inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 0 else False
+		inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 0 else False
 		
-		print(f"First Pass: {left_enable} {right_enable}", end="     ")
-		
-		if left_enable == right_enable:
-			inner_values = [colour_values[1], colour_values[3]]
-			inner_values.sort()      
-
-			left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 0 else False
-			right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 0 else False
-			
-		print(f"SecondPass: {left_enable} {right_enable}")
+		if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30:   
+			difference = (colour_values[0] + colour_values[1]) - (colour_values[3] + colour_values[4])
+			if abs(difference) <= 3:
+				signal = ""
+			else:
+				print("checking")
+				signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
+				real_fake = " fake" if colour_values[5] + colour_values[6] >= 134 else " real"
    
-		if left_enable == right_enable:
-			ranges = [abs(colour_values[0] - colour_values[1]), abs(colour_values[3] - colour_values[4])]
-			if   ranges[0] < ranges[1] and colour_values[0] <= 30 and colour_values[1] <= 15: signal = "-|"
-			elif ranges[1] < ranges[0] and colour_values[4] <= 30 and colour_values[3] <= 15: signal = "|-"
-		else:
-			signal = "-|" if left_enable else "|-"
-			
-		if signal == "|-":
-			if colour_values[0] >= 35 or colour_values[3] >= 35 or (colour_values[5] >= 70 and colour_values[6] >= 60): signal = ""
-			elif colour_values[6] <= 35 or (colour_values[5] <= 45 and colour_values[6] <= 45): signal = "|- confirmed"
-			else: signal = "|- fake"
-		
-		elif signal == "-|":
-			if colour_values[4] >= 35 or colour_values[3] >= 35 or (colour_values[6] >= 70 and colour_values[5] >= 60): signal = ""
-			elif colour_values[5] <= 35 or (colour_values[5] <= 45 and colour_values[6] <= 45): signal = "-| confirmed"
-			else: signal = "-| fake"
+				signal += real_fake
 			
 	if len(signal) != 0:
 		config.update_log(["GREEN CHECK", ", ".join(list(map(str, colour_values)))], [24, 30])
