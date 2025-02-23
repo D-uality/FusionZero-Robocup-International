@@ -7,6 +7,7 @@ import colour
 import motors
 import camera
 import cv2
+import evacuation_zone
 
 integral, derivative, last_error = 0, 0, 0
 main_loop_count = 0
@@ -32,8 +33,8 @@ def follow_line() -> None:
         if len(green_signal) != 0 and main_loop_count > min_green_loop_count: 
             intersection_handling(green_signal, colour_values)
         elif silver_loop_count >= 20:
-            motors.pause()
             silver_loop_count = 0
+            evacuation_zone.main()
         else:
             PID(colour_values, 0.9, 0.006, 0.5)
 

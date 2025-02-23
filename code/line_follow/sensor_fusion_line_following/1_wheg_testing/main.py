@@ -23,7 +23,7 @@ listener.start()
 
 def main() -> None:
     oled_display.initialise()
-    # laser_sensors.initialise()
+    laser_sensors.initialise()
     touch_sensors.initialise()
     motors.initialise()
     camera.initialise()

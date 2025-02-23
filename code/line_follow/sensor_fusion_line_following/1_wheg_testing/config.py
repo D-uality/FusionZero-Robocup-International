@@ -21,7 +21,6 @@ victim_count = 0
 evacuation_speed = 35
 approach_distance = 18
 
-
 # ------------------------------------------
 
 outer_multi, inner_multi = 1, 1.2
