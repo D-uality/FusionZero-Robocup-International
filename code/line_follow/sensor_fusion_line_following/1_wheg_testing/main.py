@@ -1,6 +1,6 @@
 import os
 import sys
-from listener import C_MODE_LISTENER
+from listener import listener
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
@@ -14,12 +14,10 @@ import touch_sensors
 import oled_display
 
 import line
+import evacuation_zone
 import testing
 import motors
 import config
-
-listener = C_MODE_LISTENER()
-listener.start()
 
 def main() -> None:
     oled_display.initialise()
@@ -40,9 +38,12 @@ def main() -> None:
 
             elif mode == 1:
                 line.follow_line()
+                
+            elif mode == 2:
+                evacuation_zone.main()
             
             elif mode == 4:
-                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read())))], [24, 30])
+                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read()))), ", ".join(list(map(str, touch_sensors.read())))], [24, 30, 10])
                 print()
 
             elif mode == 5:

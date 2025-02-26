@@ -2,6 +2,8 @@ import time
 import cv2
 import numpy as np
 from random import randint
+
+from listener import listener
 import config
 import camera
 import motors
@@ -20,6 +22,7 @@ def main():
     motors.run(0, 0)
 
     while True:
+        if listener.get_mode() != 2: break
         if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
@@ -194,7 +197,7 @@ def grab() -> bool:
                 cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
                 cv2.imshow("image", image)
 
-            if y + h/2 > 135: y_levels.append(0)
+            if y + h/2 > 150: y_levels.append(0)
             else:             y_levels.append(1)
 
         average = sum(y_levels) / trials
@@ -223,15 +226,15 @@ def grab() -> bool:
     motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 1.3)
     motors.run(0, 0)
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
-    motors.claw_step(90, 0.007)
+    motors.claw_step(100, 0.007)
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
     motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
     motors.run(0, 0)
     config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
-    motors.claw_step(75, 0.05)
-    motors.claw_step(90, 0.05)
+    motors.claw_step( 85, 0.05)
+    motors.claw_step(100, 0.05)
     config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
-    motors.claw_step(110, 0.005)
+    motors.claw_step(130, 0.001)
 
     time.sleep(0.3)
     return presence_check(25, 0.01)
@@ -293,3 +296,5 @@ def exit() -> bool:
                 motors.run( config.evacuation_speed,  config.evacuation_speed, 2)
         else:
             motors.run(config.evacuation_speed * 0.7, config.evacuation_speed)
+            
+if __name__ == "__main__": main()

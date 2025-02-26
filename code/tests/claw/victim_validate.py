@@ -41,10 +41,10 @@ def claw_step(target_angle, time_delay):
 
 while True:
     image = camera.capture_array()
-    yellow = cv2.GaussianBlur(image, (15, 15), 0)
-    yellow = cv2.inRange(yellow, (0, 40, 65), (30, 140, 200))
+    blue = cv2.GaussianBlur(image, (15, 15), 0)
+    blue = cv2.inRange(blue, (0, 0, 65), (30, 30, 100))
 
-    contours, _ = cv2.findContours(yellow, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if contours:
         largest_contour = max(contours, key=cv2.contourArea)
@@ -55,6 +55,6 @@ while True:
 
 
     cv2.imshow("image", image)
-    cv2.imshow("yellow", yellow)
+    cv2.imshow("blue", blue)
 
     claw_step(int(input("ANGLE: ")), 0)

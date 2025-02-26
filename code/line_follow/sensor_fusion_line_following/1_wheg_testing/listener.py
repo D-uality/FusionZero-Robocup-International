@@ -40,3 +40,6 @@ class C_MODE_LISTENER():
         
     def has_exited(self) -> bool:
         return self.exit_event.is_set()
+    
+listener = C_MODE_LISTENER()
+listener.start()

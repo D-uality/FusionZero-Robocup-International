@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from typing import Optional
+import laser_sensors
 
 from config import *
 
@@ -17,7 +18,10 @@ def live(image: np.ndarray) -> Optional[int]:
 
     largest_contour = max(contours, key=cv2.contourArea)
 
-    x, _, w, _ = cv2.boundingRect(largest_contour)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+    laser_values = laser_sensors.read([x_shut_pins[1]])
+    
+    if y + h/2 > 20 or laser_values[0] >= 120: return None
 
     if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 
