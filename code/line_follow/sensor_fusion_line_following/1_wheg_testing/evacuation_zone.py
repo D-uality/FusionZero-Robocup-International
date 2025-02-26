@@ -184,9 +184,10 @@ def grab() -> bool:
             time.sleep(time_step)
 
             image = camera.capture_array()
+            hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-            yellow_mask = cv2.inRange(image, (0, 30, 50), (30, 140, 200))
-            contours, _ = cv2.findContours(yellow_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            blue_mask = cv2.inRange(hsv_image, (100, 0, 0), (160, 255, 60))
+            contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             if not contours: continue
 
@@ -197,7 +198,7 @@ def grab() -> bool:
                 cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
                 cv2.imshow("image", image)
 
-            if y + h/2 > 150: y_levels.append(0)
+            if y + h/2 > 144: y_levels.append(0)
             else:             y_levels.append(1)
 
         average = sum(y_levels) / trials

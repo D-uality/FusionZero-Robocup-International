@@ -21,7 +21,7 @@ def live(image: np.ndarray) -> Optional[int]:
     x, y, w, h = cv2.boundingRect(largest_contour)
     laser_values = laser_sensors.read([x_shut_pins[1]])
     
-    if y + h/2 > 20 or laser_values[0] >= 120: return None
+    if y + h/2 > 100 or laser_values[0] >= 120: return None
 
     if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 

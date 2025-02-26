@@ -12,7 +12,8 @@ import evacuation_zone
 integral, derivative, last_error = 0, 0, 0
 main_loop_count = 0
 silver_loop_count = 0
-min_green_loop_count = 23
+min_green_loop_count = 20
+min_integral_reset_count, integral_reset_count = 3, 0
 running_error = [0 for _ in range(0, 25)]
 
 def follow_line() -> None:
@@ -37,7 +38,7 @@ def follow_line() -> None:
             listener.mode = 2
             evacuation_zone.main()
         else:
-            PID(colour_values, 0.76, 0.004, 0.6)
+            PID(colour_values, 0.63, 0.0028, 0.75)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
@@ -45,17 +46,19 @@ def follow_line() -> None:
 
 def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     global main_loop_count, last_green_loop, running_error
-    global integral, derivative, last_error
+    global integral, derivative, last_error, integral_reset_count
     outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
     inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
  
     total_error = outer_error + inner_error
     running_error[main_loop_count % 25] = total_error
-
-    if abs(total_error) <= 10 and colour_values[1] >= 10 and colour_values[3] >= 10: integral = 0
-    elif integral <= - 1500: integral = -1499
-    elif integral >=   1500: integral =  1499
-    else: integral += total_error
+    
+    integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 else 0
+    
+    if integral_reset_count > min_integral_reset_count and colour_values[1] >= 10 and colour_values[3] >= 10: integral = 0
+    elif integral <= -10000: integral = -10000
+    elif integral >=  10000: integral =  10000
+    else: integral += total_error * 0.5
     derivative = total_error - last_error
 
     turn = total_error * kP + integral * kI + derivative * kD
@@ -70,13 +73,13 @@ def green_check(colour_values: list[int]) -> str:
     global integral, main_loop_count
     signal = ""    
 
-    if colour_values[0] <= 20 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 20 and colour_values[2] <= 25 and abs(integral) <= 400:
-        if colour_values[5] >= 30 and colour_values[6] >= 30:
+    if colour_values[0] <= 20 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 20 and colour_values[2] <= 25 and abs(integral) <= 1000:
+        if colour_values[5] > 32 and colour_values[6] > 32:
             signal = "+ pass"
         else: 
             if colour_values[5] <= 32 and colour_values[6] <= 32: signal = "+ double"
-            elif colour_values[5] <= 23: signal = "+ left"
-            elif colour_values[6] <= 23: signal = "+ right"
+            elif colour_values[5] <= 32: signal = "+ left"
+            elif colour_values[6] <= 32: signal = "+ right"
             else: pass
 
     else:
@@ -87,10 +90,10 @@ def green_check(colour_values: list[int]) -> str:
   
         outer_left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 20 else False
         outer_right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 20 else False
-        inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 0 else False
-        inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 0 else False
+        inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 10 else False
+        inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 10 else False
         
-        if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 1400:
+        if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 8000:
             motors.run(0, 0, 0.1)
             colour_values = colour.read()
             
@@ -104,8 +107,9 @@ def green_check(colour_values: list[int]) -> str:
                         signal = "|-" if colour_values[6] < colour_values[5] else "-|"
                     else:
                         signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
+                        
                     real_fake = " fake" if colour_values[5] + colour_values[6] >= 120 else " real"
-        
+                        
                     signal += real_fake
 
     if len(signal) != 0:
@@ -122,29 +126,32 @@ def intersection_handling(signal: str, colour_values) -> None:
     print()
     
     if signal == "+ left":
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.5)
-        motors.run      (-config.line_base_speed,  config.line_base_speed, 1.9)
+        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.35)
+        motors.run      (-config.line_base_speed,  config.line_base_speed, 1.85)
         motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
         motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
         motors.run      ( config.line_base_speed, -config.line_base_speed, 0.35)
 
     elif signal == "+ double":
-        motors.run      (-config.line_base_speed * 2,  config.line_base_speed * 2, 2)
-        motors.run_until(-config.line_base_speed * 2,  config.line_base_speed * 2, colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
+        motors.run      (-config.line_base_speed * 2,   config.line_base_speed * 2, 1.65)
+        motors.run_until(-config.line_base_speed * 2,   config.line_base_speed * 2, colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
+        motors.run      ( config.line_base_speed * 2,  -config.line_base_speed * 2, 0.2)
         
     elif signal == "+ pass":
-        motors.run      (config.line_base_speed, config.line_base_speed, 0.8)
+        motors.run      (config.line_base_speed, config.line_base_speed, 0.6)
     
     elif signal == "+ right":
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.5)
-        motors.run      ( config.line_base_speed, -config.line_base_speed, 1.9)
+        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.35)
+        motors.run      ( config.line_base_speed, -config.line_base_speed, 1.85)
         motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
         motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, "<=", 45, "[L] ALIGNING <= 45")
         motors.run      (-config.line_base_speed,  config.line_base_speed, 0.35)
     
     elif signal == "-| real":
+        motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
+        motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
         motors.run_until( config.line_base_speed,  config.line_base_speed, colour.read, 1, "<=", 20, "[L] FORWARDS <= 10")
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.4)
+        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.3)
         motors.run      (-config.line_base_speed,  config.line_base_speed, 0.8)
         motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, "<=", 45, "[R] ALIGNING <= 30")
         motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
@@ -156,8 +163,9 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run      ( config.line_base_speed,  config.line_base_speed, 0.5)
  
     elif signal == "|- real":
+        motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
         motors.run_until( config.line_base_speed,  config.line_base_speed, colour.read, 3, "<=", 20, "[R] FORWARDS <= 10")
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.4)
+        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.3)
         motors.run      ( config.line_base_speed, -config.line_base_speed, 0.8)
         motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
         motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, "<=", 45, "[L] ALIGNING <= 30")
