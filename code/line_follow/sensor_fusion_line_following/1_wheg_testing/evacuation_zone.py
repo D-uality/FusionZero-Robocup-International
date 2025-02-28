@@ -33,7 +33,7 @@ def main():
         if route(search_function=search_type, kP=0.12):
             if align(search_function=search_type, step_time=0.01):
                 if grab():
-                    motors.claw_step(180, 0.005)
+                    motors.claw_step(210, 0.005)
                     triangles.find()
                     dump()
                     config.victim_count += 1
@@ -51,10 +51,10 @@ def find(search_function: callable) -> None:
         motors.run(v1, v2)
         
         initial_condition = conditional_function() if conditional_function else None
-        silver_count = 0
+        exit_entrance_count = 0
 
         while time.time() - start_time < time_constraint:
-            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{silver_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6]))
+            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6]))
             image = camera.capture_array()
 
             if config.X11: cv2.imshow("image", image)
@@ -68,12 +68,15 @@ def find(search_function: callable) -> None:
                 if current_condition != initial_condition: return 0
 
                 colour_values = colour.read()
-                for value in colour_values:
-                    silver_count += 1 if value > 120 or value < 30 else 0
+                exit_entrance_values = [1 if value >= 120 or value <= 30 else 0 for value in colour_values]
+                exit_entrance_count += 1 if sum(exit_entrance_values) >= 1 else 0
 
-                if silver_count > 10: 
-                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+                if exit_entrance_count >= 10:
+                    motors.run(-config,evacuation_speed, -config.evacuation_speed, 0.8)
+                    motors.run( config.evacuation_speed, -config.evacuation_speed, 2)
                     return 0
+                else:
+                    exit_entrance_count = 0
 
         motors.run(0, 0)
 
@@ -96,6 +99,7 @@ def find(search_function: callable) -> None:
 
 def route(search_function: callable, kP: float) -> bool:
     distance = laser_sensors.read([config.x_shut_pins[1]])
+    exit_entrance_count = 0
 
     while distance[0] > config.approach_distance:
         image = camera.capture_array()
@@ -109,9 +113,20 @@ def route(search_function: callable, kP: float) -> bool:
         turn = int(error * kP)
         v1, v2 = scalar * (config.evacuation_speed-turn), scalar * (config.evacuation_speed+turn)
         motors.run(v1, v2)
+        
+        colour_values = colour.read()
+        exit_entrance_values = [1 if value >= 120 or value <= 30 else 0 for value in colour_values]
+        exit_entrance_count += 1 if sum(exit_entrance_values) >= 1 else 0
+
+        if exit_entrance_count >= 10:
+            motors.run(-config,evacuation_speed, -config.evacuation_speed, 0.8)
+            motors.run( config.evacuation_speed, -config.evacuation_speed, 2)
+            return False
+        else:
+            exit_entrance_count = 0
 
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}"], [24, 12, 12]))
+        print(config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", f"{exit_entrance_count}"], [24, 12, 12, 12]))
 
     motors.run(0, 0, 0.5)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ROUTE BACK")
@@ -222,19 +237,26 @@ def grab() -> bool:
         else:                                                                  return False
 
     config.update_log(["GRAB", "CLAW DOWN"], [24, 24])
+    print()
     motors.claw_step(0, 0.005)
     config.update_log(["GRAB", "MOVE FORWARDS"], [24, 24])
-    motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 1.3)
+    print()
+    motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 0.85)
     motors.run(0, 0)
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
-    motors.claw_step(100, 0.007)
+    print()
+    motors.claw_step(100, 0.004)
+    time.sleep(1)
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
+    print()
     motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
     motors.run(0, 0)
     config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
+    print()
     motors.claw_step( 85, 0.05)
     motors.claw_step(100, 0.05)
     config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
+    print()
     motors.claw_step(130, 0.001)
 
     time.sleep(0.3)

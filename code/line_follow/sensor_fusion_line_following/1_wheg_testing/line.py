@@ -13,7 +13,7 @@ integral, derivative, last_error = 0, 0, 0
 main_loop_count = 0
 silver_loop_count = 0
 min_green_loop_count = 20
-min_integral_reset_count, integral_reset_count = 3, 0
+min_integral_reset_count, integral_reset_count = 2, 0
 running_error = [0 for _ in range(0, 25)]
 
 def follow_line() -> None:
@@ -38,7 +38,7 @@ def follow_line() -> None:
             listener.mode = 2
             evacuation_zone.main()
         else:
-            PID(colour_values, 0.63, 0.0028, 0.75)
+            PID(colour_values, 0.32, 0.003, 0)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
@@ -49,7 +49,7 @@ def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     global integral, derivative, last_error, integral_reset_count
     outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
     inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
- 
+  
     total_error = outer_error + inner_error
     running_error[main_loop_count % 25] = total_error
     
@@ -58,7 +58,7 @@ def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     if integral_reset_count > min_integral_reset_count and colour_values[1] >= 10 and colour_values[3] >= 10: integral = 0
     elif integral <= -10000: integral = -10000
     elif integral >=  10000: integral =  10000
-    else: integral += total_error * 0.5
+    else: integral += total_error * 0.55
     derivative = total_error - last_error
 
     turn = total_error * kP + integral * kI + derivative * kD
@@ -88,10 +88,10 @@ def green_check(colour_values: list[int]) -> str:
         inner_values = [colour_values[1], colour_values[3]]
         inner_values.sort()
   
-        outer_left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 20 else False
-        outer_right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 20 else False
-        inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 10 else False
-        inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 10 else False
+        outer_left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 25 else False
+        outer_right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 25 else False
+        inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 15 else False
+        inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 15 else False
         
         if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 8000:
             motors.run(0, 0, 0.1)
@@ -109,7 +109,10 @@ def green_check(colour_values: list[int]) -> str:
                         signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
                         
                     real_fake = " fake" if colour_values[5] + colour_values[6] >= 120 else " real"
-                        
+                    
+                    if signal == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
+                    if signal == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
+                    
                     signal += real_fake
 
     if len(signal) != 0:
