@@ -53,13 +53,14 @@ def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     total_error = outer_error + inner_error
     running_error[main_loop_count % 25] = total_error
     
-    integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 else 0
+    integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 and colour_values[1] >= 20 and colour_values[3] >= 20 else 0
     
-    if integral_reset_count > min_integral_reset_count and colour_values[1] >= 10 and colour_values[3] >= 10: integral = 0
+    if integral_reset_count >= min_integral_reset_count: integral = 0
     elif integral <= -10000: integral = -10000
     elif integral >=  10000: integral =  10000
     else: integral += total_error * 0.55
     derivative = total_error - last_error
+    
 
     turn = total_error * kP + integral * kI + derivative * kD
     v1, v2 = config.line_base_speed + turn, config.line_base_speed - turn
@@ -68,6 +69,10 @@ def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     last_error = total_error
 
     config.update_log([f"PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
+    # if abs(derivative) >= 50 and abs(integral) >= 2000: 
+    #     direction = 1 if total_error < 0 else -1
+    #     sensor_pin = 1 if total_error < 0 else 3
+    #     motors.run_until(-config.line_base_speed * direction, config.line_base_speed * direction, colour.read, sensor_pin, ">=", 50, "PID [ CONTROLLED ]")
 
 def green_check(colour_values: list[int]) -> str:
     global integral, main_loop_count

@@ -85,6 +85,10 @@ def claw_step(target_angle: int, time_delay: float) -> None:
             current_angle += 1
             pca.servo[config.claw_pin].angle = current_angle
             time.sleep(time_delay)
+            
+def pause() -> None:
+    run(0, 0)
+    input()
 
 # def run_uphill(v1: int, v2: int, delay: int = 0) -> None:
 #     calculated_angles = [0, 0, 0, 0]
@@ -116,10 +120,6 @@ def claw_step(target_angle: int, time_delay: float) -> None:
 #         pca.servo[config.servo_pins[i]].angle = max(min(angle, 180), 0)
 #     if delay > 0:
 #         time.sleep(delay)
-
-def pause() -> None:
-    run(0, 0)
-    input()
     
 # def run(v1: float, v2: float, delay: float = 0) -> None:
 #     STEP_SIZE = 75
