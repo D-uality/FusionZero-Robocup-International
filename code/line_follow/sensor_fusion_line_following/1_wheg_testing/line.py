@@ -49,7 +49,7 @@ def follow_line() -> None:
                 
                 if len(green_signal) != 0 and abs(integral) <= 500 and green_signal != "+ pass": acute_loop_count = 0
             else:
-                PID("PID", colour_values, 0.32, 0.003, 0)
+                PID("PID", colour_values, 0.3, 0.003, 0)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
@@ -106,12 +106,12 @@ def green_check(colour_values: list[int]) -> str:
         
         if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 8000:
             motors.run(0, 0, 0.1)
-            colour_values = colour.read()
+            new_colour_values = colour.read()
             
             if colour_values[0] > 30 or colour_values[4] > 30: signal = ""
             else:
-                if (colour_values[5] <= 5 or colour_values[6] <= 5) and abs(colour_values[5] - colour_values[6]) >= 70:
-                    signal = "|-" if colour_values[6] < colour_values[5] else "-|"
+                if (new_colour_values[5] <= 5 or new_colour_values[6] <= 5) and abs(new_colour_values[5] - new_colour_values[6]) >= 70:
+                    signal = "|-" if new_colour_values[6] < new_colour_values[5] else "-|"
                 else:
                     signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
                     
@@ -191,8 +191,8 @@ def intersection_handling(signal: str, colour_values) -> None:
         
 def acute_check(colour_values: list[int]) -> None:
     global acute_loop_count
-    right_acute = colour_values[6] <= 10
-    left_acute  = colour_values[5] <= 10 
+    right_acute = colour_values[6] <= 10 and colour_values[5] <= 60
+    left_acute  = colour_values[5] <= 10 and colour_values[6] <= 60 
     
     signal = ""
     
