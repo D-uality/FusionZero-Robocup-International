@@ -27,7 +27,7 @@ def follow_line() -> None:
             image = camera.capture_array()
             image = camera.perspective_transform(image)
 
-            if config.X11: cv2.imshow("Line Follow", image)
+            # if config.X11: cv2.imshow("Line Follow", image)
         
         colour_values = colour.read()
         green_signal = green_check(colour_values)
@@ -43,25 +43,26 @@ def follow_line() -> None:
             evacuation_zone.main()
         else:
             if acute_loop_count > 0:
-                PID("PID ACUTE", colour_values, 0.6, 0, 0)
-                config.update_log([f"| {acute_loop_count}"], [8])
+                PID("PID ACUTE", colour_values, 0.65, 0.008, 0)
                 acute_loop_count -= 1
                 
                 if len(green_signal) != 0 and abs(integral) <= 500 and green_signal != "+ pass": acute_loop_count = 0
             else:
-                PID("PID", colour_values, 0.3, 0.003, 0)
+                PID("PID", colour_values, 0.32, 0.003, 0)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
         print()
 
 def PID(text: str, colour_values: list[int], kP: float, kI: float, kD: float) -> None:
-    global main_loop_count, last_green_loop, running_error
+    global main_loop_count, last_green_loop, running_error, acute_loop_count
     global integral, derivative, last_error, integral_reset_count
     outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
     inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
   
-    total_error = outer_error + inner_error
+    if "ACUTE" in text: total_error = outer_error + inner_error * 0.65
+    else:               total_error = outer_error + inner_error
+    
     running_error[main_loop_count % 25] = total_error
     
     integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 and colour_values[1] >= 20 and colour_values[3] >= 20 else 0
@@ -78,8 +79,9 @@ def PID(text: str, colour_values: list[int], kP: float, kI: float, kD: float) ->
     motors.run(v1, v2)
     last_error = total_error
     
-    config.update_log([f"{text}", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
- 
+    if "ACUTE" in text: config.update_log([f"{text}", f"{acute_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
+    else:               config.update_log([f"{text}", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
+    
 def green_check(colour_values: list[int]) -> str:
     global integral, main_loop_count
     signal = ""    
@@ -99,8 +101,8 @@ def green_check(colour_values: list[int]) -> str:
         inner_values = [colour_values[1], colour_values[3]]
         inner_values.sort()
   
-        outer_left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 25 else False
-        outer_right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 25 else False
+        outer_left_enable  = True if outer_values[0] == colour_values[0] and outer_values[0] < 27 else False
+        outer_right_enable = True if outer_values[0] == colour_values[4] and outer_values[0] < 27 else False
         inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 15 else False
         inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 15 else False
         
@@ -170,7 +172,7 @@ def intersection_handling(signal: str, colour_values) -> None:
     elif signal == "-| fake":
         motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 3,  ">=", 23, "[R] ALIGNING >= 23")
         motors.run      ( config.line_base_speed, -config.line_base_speed, 0.3)
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.5)
+        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.7)
  
     elif signal == "|- real":
         motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
@@ -184,25 +186,35 @@ def intersection_handling(signal: str, colour_values) -> None:
     elif signal == "|- fake":
         motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 1,  ">=", 23, "[L] ALIGNING >= 23")
         motors.run      (-config.line_base_speed,  config.line_base_speed, 0.3)
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.5)
+        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.7)
     
     else:
         print(signal)
         
 def acute_check(colour_values: list[int]) -> None:
     global acute_loop_count
-    right_acute = colour_values[6] <= 10 and colour_values[5] <= 60
-    left_acute  = colour_values[5] <= 10 and colour_values[6] <= 60 
+    right_acute = colour_values[6] <= 20 and colour_values[5] <= 70
+    left_acute  = colour_values[5] <= 20 and colour_values[6] <= 70 
     
     signal = ""
     
-    if (left_acute or right_acute) and colour_values[2] >= 80:
-        signal = ">" if right_acute else "<"
+    if (left_acute or right_acute) and colour_values[2] >= 80: signal = "acute"
     
     if len(signal) != 0:
-        acute_loop_count = 300
-        config.update_log([f"PID ACUTE", ", ".join(list(map(str, colour_values))), f"{signal}"], [24, 30, 10])
+        while True:
+            colour_values = colour.read()
+            
+            if colour_values[5] < 50 and colour_values[6] < 50: motors.run(-config.line_base_speed, -config.line_base_speed)
+            elif colour_values[5] < 50:                         motors.run(-config.line_base_speed, 0)
+            else:                                               motors.run(0, -config.line_base_speed)
+            
+            if colour_values[0] >= 50 or colour_values[4] >= 50 and colour_values[5] >= 60 and colour_values[6] >= 60: break
+        
         motors.run(-config.line_base_speed, -config.line_base_speed, 0.6)
+
+        acute_loop_count = 250
+    
+        config.update_log([f"PID ACUTE CHECK", ", ".join(list(map(str, colour_values))), f"{signal}"], [24, 30, 10])
     
     return signal
         
