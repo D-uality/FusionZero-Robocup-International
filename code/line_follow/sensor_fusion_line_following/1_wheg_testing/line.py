@@ -16,8 +16,10 @@ min_green_loop_count = 20
 min_integral_reset_count, integral_reset_count = 2, 0
 running_error = [0 for _ in range(0, 25)]
 
+acute_loop_count = 0
+
 def follow_line() -> None:
-    global main_loop_count, silver_loop_count  
+    global main_loop_count, silver_loop_count, acute_loop_count, integral
     while True:
         if listener.get_mode() != 1: break
 
@@ -30,21 +32,30 @@ def follow_line() -> None:
         colour_values = colour.read()
         green_signal = green_check(colour_values)
         silver_check(colour_values)
+        acute_signal = acute_check(colour_values)
 
-        if len(green_signal) != 0 and main_loop_count > min_green_loop_count: 
+        if len(green_signal) != 0 and main_loop_count > min_green_loop_count and acute_loop_count == 0:
+            integral = 0
             intersection_handling(green_signal, colour_values)
         elif silver_loop_count >= 20:
             silver_loop_count = 0
             listener.mode = 2
             evacuation_zone.main()
         else:
-            PID(colour_values, 0.32, 0.003, 0)
+            if acute_loop_count > 0:
+                PID("PID ACUTE", colour_values, 0.6, 0, 0)
+                config.update_log([f"| {acute_loop_count}"], [8])
+                acute_loop_count -= 1
+                
+                if len(green_signal) != 0 and abs(integral) <= 500 and green_signal != "+ pass": acute_loop_count = 0
+            else:
+                PID("PID", colour_values, 0.32, 0.003, 0)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
         print()
 
-def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
+def PID(text: str, colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     global main_loop_count, last_green_loop, running_error
     global integral, derivative, last_error, integral_reset_count
     outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
@@ -60,31 +71,26 @@ def PID(colour_values: list[int], kP: float, kI: float, kD: float) -> None:
     elif integral >=  10000: integral =  10000
     else: integral += total_error * 0.55
     derivative = total_error - last_error
-    
 
     turn = total_error * kP + integral * kI + derivative * kD
     v1, v2 = config.line_base_speed + turn, config.line_base_speed - turn
 
     motors.run(v1, v2)
     last_error = total_error
-
-    config.update_log([f"PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
-    # if abs(derivative) >= 50 and abs(integral) >= 2000: 
-    #     direction = 1 if total_error < 0 else -1
-    #     sensor_pin = 1 if total_error < 0 else 3
-    #     motors.run_until(-config.line_base_speed * direction, config.line_base_speed * direction, colour.read, sensor_pin, ">=", 50, "PID [ CONTROLLED ]")
-
+    
+    config.update_log([f"{text}", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
+ 
 def green_check(colour_values: list[int]) -> str:
     global integral, main_loop_count
     signal = ""    
 
-    if colour_values[0] <= 20 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 20 and colour_values[2] <= 25 and abs(integral) <= 1000:
-        if colour_values[5] > 32 and colour_values[6] > 32:
+    if colour_values[0] <= 20 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 20 and colour_values[2] <= 25 and abs(integral) <= 1500:
+        if colour_values[5] > 35 and colour_values[6] > 35:
             signal = "+ pass"
         else: 
-            if colour_values[5] <= 32 and colour_values[6] <= 32: signal = "+ double"
-            elif colour_values[5] <= 32: signal = "+ left"
-            elif colour_values[6] <= 32: signal = "+ right"
+            if colour_values[5] <= 35 and colour_values[6] <= 35: signal = "+ double"
+            elif colour_values[5] <= 35: signal = "+ left"
+            elif colour_values[6] <= 35: signal = "+ right"
             else: pass
 
     else:
@@ -104,21 +110,17 @@ def green_check(colour_values: list[int]) -> str:
             
             if colour_values[0] > 30 or colour_values[4] > 30: signal = ""
             else:
-                difference = (colour_values[0] + colour_values[1]) - (colour_values[3] + colour_values[4])
-                if abs(difference) <= 3:
-                    signal = ""
+                if (colour_values[5] <= 5 or colour_values[6] <= 5) and abs(colour_values[5] - colour_values[6]) >= 70:
+                    signal = "|-" if colour_values[6] < colour_values[5] else "-|"
                 else:
-                    if (colour_values[5] <= 5 or colour_values[6] <= 5) and abs(colour_values[5] - colour_values[6]) >= 70:
-                        signal = "|-" if colour_values[6] < colour_values[5] else "-|"
-                    else:
-                        signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
-                        
-                    real_fake = " fake" if colour_values[5] + colour_values[6] >= 120 else " real"
+                    signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
                     
-                    if signal == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
-                    if signal == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
-                    
-                    signal += real_fake
+                real_fake = " fake" if colour_values[5] + colour_values[6] >= 120 else " real"
+                
+                if signal == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
+                if signal == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
+                
+                signal += real_fake
 
     if len(signal) != 0:
         config.update_log(["GREEN CHECK", ", ".join(list(map(str, colour_values))), f"{signal}"], [24, 30, 10])
@@ -186,10 +188,27 @@ def intersection_handling(signal: str, colour_values) -> None:
     
     else:
         print(signal)
-
-def silver_check(colour_values: list[int]) -> bool:
+        
+def acute_check(colour_values: list[int]) -> None:
+    global acute_loop_count
+    right_acute = colour_values[6] <= 10
+    left_acute  = colour_values[5] <= 10 
+    
+    signal = ""
+    
+    if (left_acute or right_acute) and colour_values[2] >= 80:
+        signal = ">" if right_acute else "<"
+    
+    if len(signal) != 0:
+        acute_loop_count = 300
+        config.update_log([f"PID ACUTE", ", ".join(list(map(str, colour_values))), f"{signal}"], [24, 30, 10])
+        motors.run(-config.line_base_speed, -config.line_base_speed, 0.6)
+    
+    return signal
+        
+def silver_check(colour_values: list[int]) -> str:
     global silver_loop_count
     
-    silver_colour_check = [1 if value >= 120 else 0 for value in colour_values[0:5]]
+    silver_colour_check = [1 if value >= 130 else 0 for value in colour_values[0:5]]
     if sum(silver_colour_check) > 0: silver_loop_count += 1
     else: silver_loop_count = 0
