@@ -24,7 +24,7 @@ def main() -> None:
     laser_sensors.initialise()
     touch_sensors.initialise()
     motors.initialise()
-    camera.initialise()
+    camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
     
     motors.run(0, 0)
     oled_display.reset()

@@ -17,6 +17,10 @@ import victims
 import triangles
 
 def main():
+    camera.close()
+    camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
+    motors.run(0, 0, 4)
+    
     start_time = time.time()
     motors.run(config.evacuation_speed, config.evacuation_speed, 0.5)
     motors.run(0, 0)

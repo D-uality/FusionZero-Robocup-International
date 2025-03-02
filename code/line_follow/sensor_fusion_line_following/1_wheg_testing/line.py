@@ -10,10 +10,14 @@ import cv2
 import evacuation_zone
 
 integral, derivative, last_error = 0, 0, 0
+last_angle = 90
+
 main_loop_count = 0
 silver_loop_count = 0
 min_green_loop_count = 20
 min_integral_reset_count, integral_reset_count = 2, 0
+gap_loop_count = 0
+
 running_error = [0 for _ in range(0, 25)]
 
 acute_loop_count = 0
@@ -22,12 +26,6 @@ def follow_line() -> None:
     global main_loop_count, silver_loop_count, acute_loop_count, integral
     while True:
         if listener.get_mode() != 1: break
-
-        if main_loop_count % 10 == 0:
-            image = camera.capture_array()
-            image = camera.perspective_transform(image)
-
-            # if config.X11: cv2.imshow("Line Follow", image)
         
         colour_values = colour.read()
         green_signal = green_check(colour_values)
@@ -41,6 +39,9 @@ def follow_line() -> None:
             silver_loop_count = 0
             listener.mode = 2
             evacuation_zone.main()
+        elif gap_check(colour_values):
+            motors.run(0, 0)
+            gap_handling(1)
         else:
             if acute_loop_count > 0:
                 PID("PID ACUTE", colour_values, 0.65, 0.008, 0)
@@ -86,7 +87,7 @@ def green_check(colour_values: list[int]) -> str:
     global integral, main_loop_count
     signal = ""    
 
-    if colour_values[0] <= 20 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 20 and colour_values[2] <= 25 and abs(integral) <= 1500:
+    if colour_values[0] <= 20 and colour_values[1] <= 20 and colour_values[3] <= 20 and colour_values[4] <= 20 and colour_values[2] <= 40 and abs(integral) <= 1500:
         if colour_values[5] > 35 and colour_values[6] > 35:
             signal = "+ pass"
         else: 
@@ -106,7 +107,7 @@ def green_check(colour_values: list[int]) -> str:
         inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 15 else False
         inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 15 else False
         
-        if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 8000:
+        if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 6000:
             motors.run(0, 0, 0.1)
             new_colour_values = colour.read()
             
@@ -208,12 +209,11 @@ def acute_check(colour_values: list[int]) -> None:
             elif colour_values[5] < 50:                         motors.run(-config.line_base_speed, 0)
             else:                                               motors.run(0, -config.line_base_speed)
             
-            if colour_values[0] >= 50 or colour_values[4] >= 50 and colour_values[5] >= 60 and colour_values[6] >= 60: break
+            if colour_values[2] <= 30: break
         
-        motors.run(-config.line_base_speed, -config.line_base_speed, 0.6)
-
+        motors.run(-config.line_base_speed, -config.line_base_speed, 0.8)
         acute_loop_count = 250
-    
+
         config.update_log([f"PID ACUTE CHECK", ", ".join(list(map(str, colour_values))), f"{signal}"], [24, 30, 10])
     
     return signal
@@ -224,3 +224,37 @@ def silver_check(colour_values: list[int]) -> str:
     silver_colour_check = [1 if value >= 130 else 0 for value in colour_values[0:5]]
     if sum(silver_colour_check) > 0: silver_loop_count += 1
     else: silver_loop_count = 0
+    
+def gap_check(colour_values: list[int]) -> bool:
+    global gap_loop_count
+    
+    white_values = [1 if value > 100 else 0 for value in colour_values]
+    gap_loop_count = gap_loop_count + 1 if sum(white_values) == 7 else 0
+    
+    return True if gap_loop_count > 30 else False
+
+def gap_handling(kP: float) -> None:
+    global last_angle
+    motors.run(config.line_base_speed, config.line_base_speed, 0.3)
+    motors.run(0, 0)
+    
+    while True:
+        image = camera.capture_array()
+        transformed_image = camera.perspective_transform(image)
+        line_image = transformed_image.copy()
+        
+        colour_values = colour.read()
+        if colour_values[2] < 50: break
+        
+        black_contour, black_image = camera.find_line_black_mask(transformed_image, line_image, last_angle)
+        angle = camera.calculate_angle(black_contour, line_image, last_angle)
+        
+        error = 90 - angle
+        turn = error * kP
+        motors.run(config.line_base_speed - turn, config.line_base_speed + turn)
+        
+        last_angle = angle
+        if config.X11: cv2.imshow("Line", line_image)
+        
+        config.update_log(["GAP HANDLING", f"{error} {angle}"], [24, 18])
+        print()
