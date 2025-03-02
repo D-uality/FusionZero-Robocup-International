@@ -1,0 +1,7 @@
+# Ignore Python bytecode and cache directories
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore Cython debug output
+cython_debug/
