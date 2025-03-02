@@ -37,7 +37,7 @@ for pin_number, shutdown_pin in enumerate(xshut):
     # This ensures no address change on one sensor board, specifically the last one in the series.
     if pin_number < len(xshut) - 1:
         # The default address is 0x29. Update it to an address that is not already in use.
-        sensor_i2c.set_address(pin_number + 0x30)
+        sensor_i2c.set_address(pin_number + 0x30 + 1)
 
 # Print the various sensor I2C addresses to the serial console.
 if i2c.try_lock():
