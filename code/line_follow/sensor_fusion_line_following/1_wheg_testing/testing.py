@@ -9,6 +9,7 @@ if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 import config
 import motors
 import colour
+import gyroscope
 
 def run_input() -> None:
     values = input("[v1, v2]: ").split()
@@ -27,4 +28,13 @@ def motor_test() -> None:
         motors.run_test(60, 60, 0.5)
         motors.run_test(-60, -60, 0.5)
 
-if __name__ == "__main__": motor_test()
+def gyro_test() -> None:
+    gyroscope.initialise()
+    
+    while True:
+        pitch, roll, yaw = gyroscope.read()
+        
+        if pitch is not None:
+            print(f"{pitch:.2f} {roll:.2f} {yaw:.2f}")
+
+if __name__ == "__main__": gyro_test()

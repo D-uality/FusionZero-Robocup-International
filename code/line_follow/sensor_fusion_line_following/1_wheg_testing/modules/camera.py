@@ -18,22 +18,25 @@ def initialise(WIDTH, HEIGHT):
         camera.configure(camera_config)
         camera.start()
         
-        print(["Camera", "✓"])
+        config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 24, 3])
         oled_display.text("Camera: ✓", 0, 40)
         
     except Exception as e:
+        config.update_log(["INITIALISATION", "CAMERA", "X"], [24, 24, 3])
         print(f"Camera failed to initialise: {e}")
         oled_display.text("Camera: X", 0, 40)
+        exit()
 
     if config.X11:
         try:
-            cv2.startWindowThread()
-            print(["X11", "✓"])
+            cv2.startWindowThread()            
+            config.update_log(["INITIALISATION", "X11", "✓"], [24, 24, 3])
             oled_display.text("X11: ✓", 60, 40)
         except Exception as e:
-            print(["X11", "X", f"{e}"])
+            config.update_log(["INITIALISATION", "X11", "X"], [24, 24, 3])
+            print(f"X11 failed to initialise: {e}")
             oled_display.text("X11: X", 60, 40)
-
+            exit()
 
 def perspective_transform(image):
     """Apply perspective transform to the image"""

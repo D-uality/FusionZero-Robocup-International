@@ -12,6 +12,7 @@ def initialise() -> None:
         oled.fill(0)
         oled.show()
 
+        
         print(["OLED", "✓"])
 
     except Exception as e:

@@ -12,19 +12,21 @@ import colour
 import laser_sensors
 import touch_sensors
 import oled_display
+import motors
+import gyroscope
 
 import line
 import evacuation_zone
 import testing
-import motors
 import config
 
 def main() -> None:
     oled_display.initialise()
-    laser_sensors.initialise()
+    # laser_sensors.initialise()
     touch_sensors.initialise()
     motors.initialise()
     camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
+    gyroscope.initialise()
     
     motors.run(0, 0)
     oled_display.reset()
