@@ -9,7 +9,7 @@ if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 import config
 import motors
 import colour
-import gyroscope
+import class_modules.gyroscope as gyroscope
 
 def run_input() -> None:
     values = input("[v1, v2]: ").split()
