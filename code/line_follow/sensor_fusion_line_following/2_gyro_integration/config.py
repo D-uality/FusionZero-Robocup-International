@@ -1,7 +1,7 @@
 EVACUATION_WIDTH, EVACUATION_HEIGHT, FLIP = 320, 240, False
 LINE_WIDTH, LINE_HEIGHT = 120, 90
 SCREEN_WIDTH, SCREEN_HEIGHT = 128, 64
-X11 = False
+X11 = True
 
 touch_pins = [22, 5, 6, 26]  # FL, FR, BL, BR
 x_shut_pins = [23, 24, 25]  # Left, Middle, Right

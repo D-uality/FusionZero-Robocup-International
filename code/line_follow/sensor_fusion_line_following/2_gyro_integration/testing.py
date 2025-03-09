@@ -10,6 +10,10 @@ import config
 import motors
 import colour
 import gyroscope
+import camera
+import numpy as np
+import cv2
+import led
 
 def run_input() -> None:
     values = input("[v1, v2]: ").split()
@@ -37,4 +41,36 @@ def gyro_test() -> None:
         if pitch is not None:
             print(f"{pitch:.2f} {roll:.2f} {yaw:.2f}")
 
-if __name__ == "__main__": gyro_test()
+def camera_line_follow():
+    try:
+        kP = 0.5
+        last_angle = 0
+        camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
+        led.led_on()
+        
+        while True:
+            image = camera.capture_array()
+            transformed_image = camera.perspective_transform(image)
+            line_image = transformed_image.copy()
+            
+            colour_values = colour.read()
+            
+            black_contour, black_image = camera.find_line_black_mask(transformed_image, line_image, last_angle)
+            angle = camera.calculate_angle(black_contour, line_image, last_angle)
+            
+            error = 90 - angle
+            turn = error * kP
+            motors.run(30 - turn, 30 + turn)
+            
+            last_angle = angle
+            if config.X11: cv2.imshow("Line", line_image)
+            
+            config.update_log(["GAP HANDLING", f"{error} {angle}"], [24, 18])
+            print()
+            
+    finally:
+        camera.close()
+        motors.run(0, 0)
+        led.led_off()
+
+if __name__ == "__main__": camera_line_follow()

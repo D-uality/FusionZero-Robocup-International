@@ -72,7 +72,7 @@ def read():
     return mapped_values
 
 def update_calibration(min_values, max_values):
-    for i in range(1000):
+    for i in range(5000):
         analog_values = read_raw(True)
         print()
 

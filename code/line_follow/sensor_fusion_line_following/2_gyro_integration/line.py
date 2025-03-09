@@ -69,7 +69,7 @@ def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], k
     
     if gyro_values[0] is not None or uphill_trigger or downhill_trigger:
         if uphill_trigger:
-            adjusted_speed = 40
+            adjusted_speed = 20
             text += " RAMP UP"
         
         elif downhill_trigger:

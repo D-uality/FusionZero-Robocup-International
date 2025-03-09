@@ -49,7 +49,7 @@ def main() -> None:
                 print()
 
             elif mode == 5:
-                colour.calibration(auto_calibrate=True)
+                colour.calibration(auto_calibrate=False)
                 listener.mode = 0
 
             elif mode == 6:
