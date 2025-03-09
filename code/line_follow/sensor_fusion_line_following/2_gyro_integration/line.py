@@ -9,6 +9,8 @@ import camera
 import cv2
 import evacuation_zone
 import gyroscope
+import led
+import numpy as np
 
 integral, derivative, last_error = 0, 0, 0
 last_angle = 90
@@ -44,6 +46,10 @@ def follow_line() -> None:
             silver_loop_count = 0
             listener.mode = 2
             evacuation_zone.main()
+            for i in range(100):
+                colour_values = colour.read()
+                gyro_values = gyroscope.read()
+                PID("PID EVAC", colour_values, gyro_values, 0.32, 0.003, 0)
         elif gap_check(colour_values):
             motors.run(0, 0)
             gap_handling(1)
@@ -65,47 +71,79 @@ def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], k
     global integral, derivative, last_error, integral_reset_count
     global uphill_trigger, downhill_trigger
     
-    adjusted_speed = config.line_base_speed
+    speed = config.line_base_speed
     
-    if gyro_values[0] is not None or uphill_trigger or downhill_trigger:
+    if gyro_values[0] is not None
+        uphill_trigger   = True if gyro_values[0] >=  35 else False
+        downhill_trigger = True if gyro_values[0] <= -35 else False
+    
+    if uphill_trigger or downhill_trigger or "ACUTE" in text or "EVAC" in text:
+        led.on()
         if uphill_trigger:
-            adjusted_speed = 20
+            camera_line_follow(0.5, 30)
             text += " RAMP UP"
-        
         elif downhill_trigger:
-            kP *= 0.5
-            adjusted_speed = 5
+            camera_line_follow(0.5, 7)
             text += " RAMP DOWN"
+        elif "ACUTE" in text:
+            camera_line_follow(0.7, speed)
+        else:
+            camera_line_follow(0.8, speed)
         
-        if gyro_values[0] is not None:
-            uphill_trigger   = True if gyro_values[0] >=  35 else False
-            downhill_trigger = True if gyro_values[0] <= -35 else False
+    else:
+        led.off()
     
-    outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
-    inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
-  
-    if "ACUTE" in text: total_error = outer_error + inner_error * 0.65
-    else:               total_error = outer_error + inner_error
+        outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
+        inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
+        total_error = outer_error + inner_error
+        
+        running_error[main_loop_count % 25] = total_error
+        
+        integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 and colour_values[1] >= 20 and colour_values[3] >= 20 else 0
+        
+        if integral_reset_count >= min_integral_reset_count: integral = 0
+        elif integral <= -10000: integral = -10000
+        elif integral >=  10000: integral =  10000
+        else: integral += total_error * 0.55
+        derivative = total_error - last_error
     
-    running_error[main_loop_count % 25] = total_error
+        turn = total_error * kP + integral * kI + derivative * kD
+        v1, v2 = speed + turn, speed - turn
     
-    integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 and colour_values[1] >= 20 and colour_values[3] >= 20 else 0
-    
-    if integral_reset_count >= min_integral_reset_count: integral = 0
-    elif integral <= -10000: integral = -10000
-    elif integral >=  10000: integral =  10000
-    else: integral += total_error * 0.55
-    derivative = total_error - last_error
+        motors.run(v1, v2)
+        last_error = total_error
+        
+        config.update_log([f"{text}", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
 
-    turn = total_error * kP + integral * kI + derivative * kD
-    v1, v2 = adjusted_speed + turn, adjusted_speed - turn
+def camera_line_follow(kP: float, speed: int) -> int:
+    global last_angle
+    
+    image = camera.capture_array()
+    transformed_image = camera.perspective_transform(image)
+    line_image = transformed_image.copy()
+    
+    black_contour, black_image = camera.find_line_black_mask(transformed_image, line_image, last_angle)
+    angle = camera.calculate_angle(black_contour, line_image, last_angle)
+    
+    error = 90 - angle
+    turn = error * kP
+
+    v1, v2 = speed + turn, speed - turn
 
     motors.run(v1, v2)
-    last_error = total_error
     
-    if "ACUTE" in text: config.update_log([f"{text}", f"{acute_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
-    else:               config.update_log([f"{text}", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
-    
+    last_angle = angle
+    if config.X11: cv2.imshow("Line", line_image)
+    config.update_log([
+            "Camera Line Follow", 
+            f"{angle:.2f}",
+            f"{error:.2f}",
+            f"{turn:.2f}",
+            f"{v1:.2f} {v2:.2f}"
+        ],
+        [24, 8, 30, 16, 10]
+    )
+
 def green_check(colour_values: list[int]) -> str:
     global integral, main_loop_count
     signal = ""    
