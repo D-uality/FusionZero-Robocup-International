@@ -4,17 +4,17 @@ import time
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(13, GPIO.OUT)
 
-def led_on():
+def on():
     GPIO.output(13, GPIO.HIGH)
 
-def led_off():
+def off():
     GPIO.output(13, GPIO.LOW)
 
-def led_blink(delay):
+def blink(delay):
     led_off()
     time.sleep(delay)
     led_on()
     time.sleep(delay)
 
-def led_close():
+def close():
     GPIO.cleanup()
