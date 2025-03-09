@@ -46,7 +46,7 @@ def camera_line_follow():
         kP = 0.5
         last_angle = 0
         camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
-        led.led_on()
+        led.on()
         
         while True:
             image = camera.capture_array()
@@ -71,6 +71,6 @@ def camera_line_follow():
     finally:
         camera.close()
         motors.run(0, 0)
-        led.led_off()
+        led.off()
 
 if __name__ == "__main__": camera_line_follow()
