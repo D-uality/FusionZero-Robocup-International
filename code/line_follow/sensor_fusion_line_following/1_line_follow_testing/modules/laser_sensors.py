@@ -37,7 +37,7 @@ def initialise() -> None:
 
 def read(pins=config.x_shut_pins, display=False) -> list[int]:
     indices = [i for i, pin in enumerate(config.x_shut_pins) if pin in pins]
-    sensors = [tof_sensors[i] for i in indices]``
+    sensors = [tof_sensors[i] for i in indices]
 
     values = []
 
