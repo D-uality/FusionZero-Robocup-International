@@ -45,12 +45,6 @@ def perspective_transform(image):
     top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 2.4))
     bottom_right =  (config.LINE_WIDTH, config.LINE_HEIGHT- 1 )
     
-    # Draw Source Coordinates
-    # cv2.circle(image, top_left, 3, (0, 0, 255), -1)
-    # cv2.circle(image, bottom_left, 3, (0, 0, 255), -1)
-    # cv2.circle(image, top_right, 3, (0, 0, 255), -1)
-    # cv2.circle(image, bottom_right, 3, (0, 0, 255), -1)
-
     # Define points for the perspective transform (source and destination)
     src_points = np.float32([top_left, bottom_left, top_right, bottom_right])
     dst_points = np.float32([[0, 0], [0, config.LINE_HEIGHT], [config.LINE_WIDTH, 0], [config.LINE_WIDTH, config.LINE_HEIGHT]])
