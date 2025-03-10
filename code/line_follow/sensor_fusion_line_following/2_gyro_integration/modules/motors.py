@@ -23,9 +23,9 @@ def initialise() -> None:
 def run(v1: float, v2: float, delay: float = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
 
-    negative_gradients  = [0.71106, 0.71440, 0.66426, 0.69425]
+    negative_gradients  = [0.70106, 0.70440, 0.66426, 0.69425]
     negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-    positive_gradients  = [0.71924, 0.64035, 0.67858, 0.69916]
+    positive_gradients  = [0.70924, 0.63035, 0.67858, 0.69916]
     positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
     
     for i in range(0, 2):
@@ -44,10 +44,10 @@ def run(v1: float, v2: float, delay: float = 0) -> None:
 
         calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
     
-    pca.servo[config.servo_pins[0]].angle = max(min(config.stop_angles[0] + calculated_angles[0], 135), 45)
-    pca.servo[config.servo_pins[1]].angle = max(min(config.stop_angles[1] + calculated_angles[1], 135), 45)
-    pca.servo[config.servo_pins[2]].angle = max(min(config.stop_angles[2] + calculated_angles[2], 135), 45)
-    pca.servo[config.servo_pins[3]].angle = max(min(config.stop_angles[3] + calculated_angles[3], 135), 45)
+    pca.servo[config.servo_pins[0]].angle = max(min(config.stop_angles[0] + calculated_angles[0], 125), 55)
+    pca.servo[config.servo_pins[1]].angle = max(min(config.stop_angles[1] + calculated_angles[1], 125), 55)
+    pca.servo[config.servo_pins[2]].angle = max(min(config.stop_angles[2] + calculated_angles[2], 125), 55)
+    pca.servo[config.servo_pins[3]].angle = max(min(config.stop_angles[3] + calculated_angles[3], 125), 55)
 
     if delay > 0: time.sleep(delay)
 

@@ -1,7 +1,7 @@
 EVACUATION_WIDTH, EVACUATION_HEIGHT, FLIP = 320, 240, False
 LINE_WIDTH, LINE_HEIGHT = 120, 90
 SCREEN_WIDTH, SCREEN_HEIGHT = 128, 64
-X11 = True
+X11 = False
 
 touch_pins = [22, 5, 6, 26]  # FL, FR, BL, BR
 x_shut_pins = [23, 24, 25]  # Left, Middle, Right
@@ -24,5 +24,5 @@ approach_distance = 18
 
 # ------------------------------------------
 
-outer_multi, inner_multi = 1, 1.2
+outer_multi, inner_multi = 1.1, 1
 line_base_speed = 18

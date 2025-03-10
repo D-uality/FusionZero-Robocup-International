@@ -29,8 +29,7 @@ def run_input() -> None:
         
 def motor_test() -> None:
     while True:
-        motors.run_test(60, 60, 0.5)
-        motors.run_test(-60, -60, 0.5)
+        motors.run(18, 18)
 
 def gyro_test() -> None:
     gyroscope.initialise()
@@ -73,4 +72,4 @@ def camera_line_follow():
         motors.run(0, 0)
         led.off()
 
-if __name__ == "__main__": camera_line_follow()
+if __name__ == "__main__": motor_test()

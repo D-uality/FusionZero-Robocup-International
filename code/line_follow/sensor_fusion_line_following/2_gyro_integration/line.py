@@ -10,7 +10,6 @@ import cv2
 import evacuation_zone
 import gyroscope
 import led
-import numpy as np
 
 integral, derivative, last_error = 0, 0, 0
 last_angle = 90
@@ -26,30 +25,36 @@ acute_loop_count = 0
 
 uphill_trigger   = False
 downhill_trigger = False
+camera_enable = False
 
 def follow_line() -> None:
     global main_loop_count, silver_loop_count, acute_loop_count, integral
+    global camera_enable
+
     while True:
         if listener.get_mode() != 1: break
         
         colour_values = colour.read()
         gyro_values = gyroscope.read()
         
-        green_signal = green_check(colour_values)
-        silver_check(colour_values)
-        acute_signal = acute_check(colour_values)
+        if not camera_enable:
+            green_signal = green_check(colour_values)
+            silver_check(colour_values)
+            acute_signal = acute_check(colour_values)
 
-        if len(green_signal) != 0 and main_loop_count > min_green_loop_count and acute_loop_count == 0:
+        if len(green_signal) != 0 and main_loop_count > min_green_loop_count and acute_loop_count == 0 and not camera_enable:
             integral = 0
             intersection_handling(green_signal, colour_values)
-        elif silver_loop_count >= 20:
+        elif silver_loop_count >= 20 and camera_enable:
             silver_loop_count = 0
             listener.mode = 2
             evacuation_zone.main()
+            
             for i in range(100):
                 colour_values = colour.read()
                 gyro_values = gyroscope.read()
                 PID("PID EVAC", colour_values, gyro_values, 0.32, 0.003, 0)
+                
         elif gap_check(colour_values):
             motors.run(0, 0)
             gap_handling(1)
@@ -60,7 +65,7 @@ def follow_line() -> None:
                 
                 if len(green_signal) != 0 and abs(integral) <= 500 and green_signal != "+ pass": acute_loop_count = 0
             else:
-                PID("PID", colour_values, gyro_values, 0.32, 0.003, 0)
+                PID("PID", colour_values, gyro_values, 0.45, 0.0011, -2)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
@@ -69,11 +74,11 @@ def follow_line() -> None:
 def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], kP: float, kI: float, kD: float) -> None:
     global main_loop_count, last_green_loop, running_error, acute_loop_count
     global integral, derivative, last_error, integral_reset_count
-    global uphill_trigger, downhill_trigger
+    global uphill_trigger, downhill_trigger, camera_enable
     
     speed = config.line_base_speed
     
-    if gyro_values[0] is not None
+    if gyro_values[0] is not None:
         uphill_trigger   = True if gyro_values[0] >=  35 else False
         downhill_trigger = True if gyro_values[0] <= -35 else False
     
@@ -82,16 +87,19 @@ def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], k
         if uphill_trigger:
             camera_line_follow(0.5, 30)
             text += " RAMP UP"
+            camera_enable = True
         elif downhill_trigger:
             camera_line_follow(0.5, 7)
             text += " RAMP DOWN"
+            camera_enable = True
         elif "ACUTE" in text:
-            camera_line_follow(0.7, speed)
+            motors.pause()
         else:
             camera_line_follow(0.8, speed)
         
     else:
         led.off()
+        camera_enable = False
     
         outer_error = config.outer_multi * (colour_values[0] - colour_values[4])
         inner_error = config.inner_multi * (colour_values[1] - colour_values[3])
@@ -99,12 +107,12 @@ def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], k
         
         running_error[main_loop_count % 25] = total_error
         
-        integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 and colour_values[1] >= 20 and colour_values[3] >= 20 else 0
+        integral_reset_count = integral_reset_count + 1 if abs(total_error) <= 15 and colour_values[1] >= 15 and colour_values[3] >= 15 else 0
         
         if integral_reset_count >= min_integral_reset_count: integral = 0
-        elif integral <= -10000: integral = -10000
-        elif integral >=  10000: integral =  10000
-        else: integral += total_error * 0.55
+        elif integral <= -20000: integral = -19999
+        elif integral >=  20000: integral =  19999
+        else: integral += total_error if abs(total_error) > 100 else total_error ** 2 * 0.00005
         derivative = total_error - last_error
     
         turn = total_error * kP + integral * kI + derivative * kD
@@ -128,7 +136,7 @@ def camera_line_follow(kP: float, speed: int) -> int:
     error = 90 - angle
     turn = error * kP
 
-    v1, v2 = speed + turn, speed - turn
+    v1, v2 = speed - turn, speed + turn
 
     motors.run(v1, v2)
     
@@ -200,55 +208,55 @@ def intersection_handling(signal: str, colour_values) -> None:
     print()
     
     if signal == "+ left":
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.35)
-        motors.run      (-config.line_base_speed,  config.line_base_speed, 1.85)
-        motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
-        motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
-        motors.run      ( config.line_base_speed, -config.line_base_speed, 0.35)
+        motors.run      ( config.line_base_speed * 0.9,  config.line_base_speed * 1.1, 0.35)
+        motors.run      (-config.line_base_speed * 0.9,  config.line_base_speed * 1.1, 1.85)
+        motors.run_until(-config.line_base_speed * 0.9,  config.line_base_speed * 1.1, colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
+        motors.run_until(-config.line_base_speed * 0.9,  config.line_base_speed * 1.1, colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
+        motors.run      ( config.line_base_speed * 0.9, -config.line_base_speed * 1.1, 0.35)
 
     elif signal == "+ double":
-        motors.run      (-config.line_base_speed * 2,   config.line_base_speed * 2, 1.65)
-        motors.run_until(-config.line_base_speed * 2,   config.line_base_speed * 2, colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
-        motors.run      ( config.line_base_speed * 2,  -config.line_base_speed * 2, 0.2)
+        motors.run      (-config.line_base_speed * 2  ,   config.line_base_speed * 2 , 1.65)
+        motors.run_until(-config.line_base_speed * 2  ,   config.line_base_speed * 2 , colour.read, 3, "<=", 45, "[R] ALIGNING <= 45")
+        motors.run      ( config.line_base_speed * 2  ,  -config.line_base_speed * 2 , 0.2)
         
     elif signal == "+ pass":
-        motors.run      (config.line_base_speed, config.line_base_speed, 0.6)
+        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.6)
     
     elif signal == "+ right":
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.35)
-        motors.run      ( config.line_base_speed, -config.line_base_speed, 1.85)
-        motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
-        motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, "<=", 45, "[L] ALIGNING <= 45")
-        motors.run      (-config.line_base_speed,  config.line_base_speed, 0.35)
+        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.35)
+        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 1.85)
+        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
+        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 1, "<=", 45, "[L] ALIGNING <= 45")
+        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.35)
     
     elif signal == "-| real":
-        motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
-        motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
-        motors.run_until( config.line_base_speed,  config.line_base_speed, colour.read, 1, "<=", 20, "[L] FORWARDS <= 10")
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.3)
-        motors.run      (-config.line_base_speed,  config.line_base_speed, 0.8)
-        motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, "<=", 45, "[R] ALIGNING <= 30")
-        motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
-        motors.run      ( config.line_base_speed, -config.line_base_speed, 0.35)
+        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.2)
+        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.2)
+        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 1, "<=", 20, "[L] FORWARDS <= 10")
+        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.3)
+        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.8)
+        motors.run_until(-config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, "<=", 45, "[R] ALIGNING <= 30")
+        motors.run_until(-config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
+        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 0.35)
   
     elif signal == "-| fake":
-        motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 3,  ">=", 23, "[R] ALIGNING >= 23")
-        motors.run      ( config.line_base_speed, -config.line_base_speed, 0.3)
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.7)
+        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 3,  ">=", 23, "[R] ALIGNING >= 23")
+        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 0.3)
+        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.7)
  
     elif signal == "|- real":
-        motors.run      (-config.line_base_speed, -config.line_base_speed, 0.2)
-        motors.run_until( config.line_base_speed,  config.line_base_speed, colour.read, 3, "<=", 20, "[R] FORWARDS <= 10")
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.3)
-        motors.run      ( config.line_base_speed, -config.line_base_speed, 0.8)
-        motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
-        motors.run_until( config.line_base_speed, -config.line_base_speed, colour.read, 1, "<=", 45, "[L] ALIGNING <= 30")
-        motors.run      (-config.line_base_speed,  config.line_base_speed, 0.35)
+        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.2)
+        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, "<=", 20, "[R] FORWARDS <= 10")
+        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.3)
+        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 0.8)
+        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
+        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 1, "<=", 45, "[L] ALIGNING <= 30")
+        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.35)
   
     elif signal == "|- fake":
-        motors.run_until(-config.line_base_speed,  config.line_base_speed, colour.read, 1,  ">=", 23, "[L] ALIGNING >= 23")
-        motors.run      (-config.line_base_speed,  config.line_base_speed, 0.3)
-        motors.run      ( config.line_base_speed,  config.line_base_speed, 0.7)
+        motors.run_until(-config.line_base_speed      ,  config.line_base_speed      , colour.read, 1,  ">=", 23, "[L] ALIGNING >= 23")
+        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.3)
+        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.7)
     
     else:
         print(signal)
@@ -289,15 +297,16 @@ def silver_check(colour_values: list[int]) -> str:
 def gap_check(colour_values: list[int]) -> bool:
     global gap_loop_count
     
-    white_values = [1 if value > 100 else 0 for value in colour_values]
+    white_values = [1 if value > 90 else 0 for value in colour_values]
     gap_loop_count = gap_loop_count + 1 if sum(white_values) == 7 else 0
     
-    return True if gap_loop_count > 30 else False
+    return True if gap_loop_count > 20 else False
 
 def gap_handling(kP: float) -> None:
     global last_angle
-    motors.run(config.line_base_speed, config.line_base_speed, 0.3)
-    motors.run(0, 0)
+    led.on()
+    image = camera.capture_array()
+    motors.run(0, 0, 0.5)
     
     while True:
         image = camera.capture_array()

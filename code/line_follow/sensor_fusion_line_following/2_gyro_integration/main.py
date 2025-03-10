@@ -14,6 +14,7 @@ import touch_sensors
 import oled_display
 import motors
 import gyroscope
+import led
 
 import line
 import evacuation_zone
@@ -30,6 +31,7 @@ def main() -> None:
     
     motors.run(0, 0)
     oled_display.reset()
+    led.off()
     
     try:
         while not listener.has_exited():
@@ -50,6 +52,7 @@ def main() -> None:
 
             elif mode == 5:
                 colour.calibration(auto_calibrate=False)
+                colour.load_calibration_values()
                 listener.mode = 0
 
             elif mode == 6:
