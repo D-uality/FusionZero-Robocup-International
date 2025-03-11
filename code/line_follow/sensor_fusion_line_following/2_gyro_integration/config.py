@@ -25,4 +25,4 @@ approach_distance = 18
 # ------------------------------------------
 
 outer_multi, inner_multi = 1.1, 1
-line_base_speed = 18
+line_base_speed = 22

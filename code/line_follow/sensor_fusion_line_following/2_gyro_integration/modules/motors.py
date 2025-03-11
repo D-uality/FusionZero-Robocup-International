@@ -57,12 +57,17 @@ def run_until(v1: float, v2: float, trigger_function: callable, index: int, comp
     elif comparison == ">=": comparison_function = operator.ge
     elif comparison == "!=": comparison_function = operator.ne
 
-    value = trigger_function()[index]
-    while not comparison_function(value, target_value) and value is not None:
+    while True:
+        value = trigger_function()[index]
+        if value is not None: break
+        
+    while True:
         value = trigger_function()[index]
         run(v1, v2)
-
-        print(config.update_log([f"{text}", f"{value}", f"{target_value}"], [24, 10, 10]))
+        
+        if value is not None: 
+            print(config.update_log([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10]))
+            if comparison_function(value, target_value): break
 
     run(0, 0)
 
