@@ -16,6 +16,7 @@ last_angle = 90
 
 min_integral_reset_count, integral_reset_count = 2, 0
 running_error = [0 for _ in range(0, 25)]
+last_yaw = 0
 
 main_loop_count = 0
 silver_loop_count = 0
@@ -65,14 +66,14 @@ def follow_line() -> None:
                 
                 if len(green_signal) != 0 and abs(integral) <= 500 and green_signal != "+ pass": acute_loop_count = 0
             else:
-                PID("PID", colour_values, gyro_values, 0.5, 0.00095, -3.5)
+                PID("PID", colour_values, gyro_values, 0.23, 0.004, 0.5)
 
         main_loop_count = main_loop_count + 1 if main_loop_count < 2**31 - 1 else 0
         
         print()
         
 def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], kP: float, kI: float, kD: float) -> None:
-    global main_loop_count, last_green_loop, running_error, acute_loop_count
+    global main_loop_count, last_green_loop, running_error, acute_loop_count, last_yaw
     global integral, derivative, last_error, integral_reset_count
     global uphill_trigger, downhill_trigger, camera_enable
     
@@ -112,7 +113,7 @@ def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], k
         if integral_reset_count >= min_integral_reset_count: integral = 0
         elif integral <= -20000: integral = -19999
         elif integral >=  20000: integral =  19999
-        else: integral += total_error if abs(total_error) > 100 else total_error ** 2 * 0.00005
+        else: integral += total_error * 0.8 if abs(total_error) > 65 else total_error ** 2 * 0.00005
         derivative = total_error - last_error
     
         turn = total_error * kP + integral * kI + derivative * kD
@@ -120,6 +121,7 @@ def PID(text: str, colour_values: list[int], gyro_values: list[Optional[int]], k
     
         motors.run(v1, v2)
         last_error = total_error
+        last_yaw = gyro_values[2] if integral == 0 and gyro_values[2] is not None else last_yaw
         
         config.update_log([f"{text}", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{total_error:.2f} {integral:.2f} {derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
 
@@ -176,13 +178,13 @@ def green_check(colour_values: list[int]) -> str:
         inner_left_enable  = True if inner_values[0] == colour_values[1] and inner_values[0] < 15 else False
         inner_right_enable = True if inner_values[0] == colour_values[3] and inner_values[0] < 15 else False
         
-        if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 6000:
+        if (outer_left_enable or outer_right_enable or inner_left_enable or inner_right_enable) and colour_values[2] >= 40 and colour_values[4] <= 30 and colour_values[0] <= 30 and abs(integral) <= 18000:
             motors.run(0, 0, 0.1)
             new_colour_values = colour.read()
             
             if colour_values[0] > 30 or colour_values[4] > 30: signal = ""
             else:
-                if (new_colour_values[5] <= 5 or new_colour_values[6] <= 5) and abs(new_colour_values[5] - new_colour_values[6]) >= 70:
+                if (new_colour_values[5] <= 10 or new_colour_values[6] <= 10) and abs(new_colour_values[5] - new_colour_values[6]) >= 70:
                     signal = "|-" if new_colour_values[6] < new_colour_values[5] else "-|"
                 else:
                     signal = "|-" if (colour_values[0] + colour_values[1]) >= (colour_values[3] + colour_values[4]) else "-|"
@@ -191,6 +193,13 @@ def green_check(colour_values: list[int]) -> str:
                 
                 if signal == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
                 if signal == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
+                
+                if signal == "|-" and real_fake == " fake":
+                    print("changed")
+                    signal = "-|"
+                if signal == "-|" and real_fake == " fake":
+                    signal = "|-"
+                    print("changed")
                 
                 signal += real_fake
 
@@ -201,7 +210,7 @@ def green_check(colour_values: list[int]) -> str:
     return signal
         
 def intersection_handling(signal: str, colour_values) -> None:
-    global main_loop_count
+    global main_loop_count, last_yaw
     main_loop_count = 0
     
     config.update_log([f"INTERSECTION HANDLING", f"{signal}"], [24, 16])
@@ -212,58 +221,55 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "+ left":
-        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.4)
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, "<=", 20, "FORWARDS")
-        motors.run_until(-config.line_base_speed * 1.2,  config.line_base_speed * 0.8, gyroscope.read, 2, ">=", current_angle + 45, "GYRO")
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 1, ">=", 70, "FORWARDS")
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 1, "<=", 30, "FORWARDS")
-        motors.run      (-config.line_base_speed      ,  config.line_base_speed * 1.2, 0.6)
+        motors.run      (-config.line_base_speed * 1.5, -config.line_base_speed * 1.5, 0.4)
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 1, "<=", 20, "FORWARDS")
+        motors.run      ( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, 0.1)
+        motors.run_until(-config.line_base_speed * 1.5,  config.line_base_speed * 1.5, gyroscope.read, 2, ">=", current_angle+70, "GYRO")
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 1, ">=", 60, "[L] ALIGN")
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 4, ">=", 60, "FORWARDS")
 
     elif signal == "+ double":
         print(current_angle, current_angle+180)
-        motors.run      (-config.line_base_speed * 1.2, -config.line_base_speed * 1.2, 0.5)
-        motors.run_until(-config.line_base_speed * 1.2,  config.line_base_speed * 1.2, gyroscope.read, 2, ">=", current_angle + 180, "GYRO")
-        motors.run_until(-config.line_base_speed * 1.2,  config.line_base_speed * 1.2, colour.read, 3, "<=", 45, "[R] ALIGNING")
+        motors.run      (-config.line_base_speed * 1.5, -config.line_base_speed * 1.5, 0.5)
+        motors.run_until(-config.line_base_speed * 1.5,  config.line_base_speed * 1.5, gyroscope.read, 2, ">=", current_angle + 180, "GYRO")
+        motors.run_until(-config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 3, "<=", 45, "[R] ALIGNING")
+        motors.run      ( config.line_base_speed * 1.5, -config.line_base_speed * 1.5, 0.2)
+        
         
     elif signal == "+ pass":
         motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.6)
     
     elif signal == "+ right":
-        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.4)
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 1, "<=", 20, "FORWARDS")
-        motors.run_until( config.line_base_speed * 0.8, -config.line_base_speed * 1.2, gyroscope.read, 2, "<=", current_angle - 45, "GYRO")
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, ">=", 70, "FORWARDS")
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, "<=", 30, "FORWARDS")
-        motors.run      ( config.line_base_speed * 1.2, -config.line_base_speed      , 0.6)
+        motors.run      (-config.line_base_speed * 1.5, -config.line_base_speed * 1.5, 0.4)
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 1, "<=", 20, "FORWARDS")
+        motors.run      ( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, 0.1)
+        motors.run_until( config.line_base_speed * 1.5, -config.line_base_speed * 1.5, gyroscope.read, 2, "<=", current_angle-70, "GYRO")
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 3, ">=", 60, "[R] ALIGN")
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 0, ">=", 60, "FORWARDS")
     
     elif signal == "-| real":
-        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.2)
-        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.2)
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 1, "<=", 20, "[L] FORWARDS <= 10")
-        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.3)
-        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.8)
-        motors.run_until(-config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, "<=", 45, "[R] ALIGNING <= 30")
-        motors.run_until(-config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, ">=", 23, "[R] ALIGNING >= 23")
-        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 0.35)
-  
+        motors.run      (-config.line_base_speed * 1.5, -config.line_base_speed * 1.5, 0.4)
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 0, "<=", 20, "FORWARDS")
+        motors.run_until(-config.line_base_speed * 1.5,  config.line_base_speed * 1.5, gyroscope.read, 2, ">=", current_angle+35, "GYRO")
+        motors.run_until(-config.line_base_speed * 1.5,  config.line_base_speed * 1.2, colour.read, 2, "<=", 30, "[F] ALIGN]")
+        motors.run      ( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, 0.2)
+        
     elif signal == "-| fake":
-        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 3,  ">=", 23, "[R] ALIGNING >= 23")
-        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 0.3)
-        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.7)
+        angle = 35 if abs(current_angle - last_yaw) < 20 else last_yaw
+        motors.run_until( config.line_base_speed      , -config.line_base_speed      , gyroscope.read, 2, "<=", angle, "GYRO")
+        motors.run      ( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, 0.3)
  
     elif signal == "|- real":
-        motors.run      (-config.line_base_speed      , -config.line_base_speed      , 0.2)
-        motors.run_until( config.line_base_speed      ,  config.line_base_speed      , colour.read, 3, "<=", 20, "[R] FORWARDS <= 10")
-        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.3)
-        motors.run      ( config.line_base_speed      , -config.line_base_speed      , 0.8)
-        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 1, ">=", 23, "[L] ALIGNING >= 23")
-        motors.run_until( config.line_base_speed      , -config.line_base_speed      , colour.read, 1, "<=", 45, "[L] ALIGNING <= 30")
-        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.35)
-  
+        motors.run      (-config.line_base_speed * 1.5, -config.line_base_speed * 1.5, 0.4)
+        motors.run_until( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, colour.read, 4, "<=", 20, "FORWARDS")
+        motors.run_until( config.line_base_speed * 1.5, -config.line_base_speed * 1.5, gyroscope.read, 2, "<=", current_angle-35, "GYRO")
+        motors.run_until( config.line_base_speed * 1.2, -config.line_base_speed * 1.5, colour.read, 2, "<=", 30, "[F] ALIGN]")
+        motors.run      ( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, 0.2)
+        
     elif signal == "|- fake":
-        motors.run_until(-config.line_base_speed      ,  config.line_base_speed      , colour.read, 1,  ">=", 23, "[L] ALIGNING >= 23")
-        motors.run      (-config.line_base_speed      ,  config.line_base_speed      , 0.3)
-        motors.run      ( config.line_base_speed      ,  config.line_base_speed      , 0.7)
+        angle = 35 if abs(current_angle - last_yaw) < 20 else last_yaw
+        motors.run_until(-config.line_base_speed * 1.5,  config.line_base_speed * 1.5, gyroscope.read, 2, ">=", angle, "GYRO")
+        motors.run      ( config.line_base_speed * 1.5,  config.line_base_speed * 1.5, 0.3)
     
     else:
         print(signal)
@@ -276,9 +282,10 @@ def acute_check(colour_values: list[int]) -> None:
     
     signal = ""
     
-    if (left_acute or right_acute) and colour_values[2] >= 80: signal = "acute"
+    if (left_acute or right_acute) and colour_values[2] >= 80 and (colour_values[0] >= 80 or colour_values[4] >= 80): signal = "acute"
     
     if len(signal) != 0:
+        print(colour_values[2] >= 80)
         while True:
             colour_values = colour.read()
             
