@@ -41,7 +41,7 @@ def main() -> None:
                 motors.run(0, 0)
 
             elif mode == 1:
-                line.follow_line()
+                line.main()
                 
             elif mode == 2:
                 evacuation_zone.main()
