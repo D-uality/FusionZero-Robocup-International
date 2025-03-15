@@ -6,6 +6,7 @@ import config
 import colour
 import motors
 import camera
+import touch_sensors
 import cv2
 import evacuation_zone
 import gyroscope
@@ -19,7 +20,7 @@ min_integral_reset_count, integral_reset_count = 2, 0
 
 main_loop_count = 0
 last_yaw = 0
-min_green_loop_count = 20
+min_green_loop_count = 50
 gap_loop_count = 0
 
 uphill_trigger  = downhill_trigger = False
@@ -34,6 +35,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     green_signal = ""
     colour_values = colour.read()
     gyroscope_values = gyroscope.read()
+    touch_values = touch_sensors.read()
 
     if not camera_enable:
         acute_check(colour_values)
@@ -58,13 +60,13 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # Finding modifiers
     # ramp detection
     if gyroscope_values[0] is not None:
-        uphill_trigger   = True if gyroscope_values[0] >=  20 else False
-        downhill_trigger = True if gyroscope_values[0] <= -20 else False
+        uphill_trigger   = True if gyroscope_values[0] >=  15 else False
+        downhill_trigger = True if gyroscope_values[0] <= -15 else False
     
     # tilt detection
-    if gyroscope_values[1] is not None:
-        tilt_left_trigger  = True if gyroscope_values[1] >=  15 else False
-        tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
+    # if gyroscope_values[1] is not None:
+    #     tilt_left_trigger  = True if gyroscope_values[1] >=  15 else False
+    #     tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
 
     # acute and gap RESET DETECTION
     if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:
@@ -98,11 +100,11 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     if gap_trigger:         modifiers.append("GAP")
     modifiers = " ".join(modifiers)
 
-    if   uphill_trigger:   kP, kI, kD, v = 0.5 , 0     ,  0  , 30
-    elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 7
+    if   uphill_trigger:   kP, kI, kD, v = 0.7 , 0     ,  0  , 35
+    elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
     elif acute_trigger:    kP, kI, kD, v = 2,    0     ,  0  , 18
     elif gap_trigger:      kP, kI, kD, v = 1,    0     ,  0  , config.line_speed
-    else:                  kP, kI, kD, v = 0.23, 0.0038, -0.5, config.line_speed
+    else:                  kP, kI, kD, v = 0.23, 0.0056,  2  , config.line_speed
 
     # Define input method
     if uphill_trigger or downhill_trigger or acute_trigger or gap_trigger:
@@ -144,12 +146,12 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         inner_error = config.inner_multiplier * (colour_values[1] - colour_values[3])
         error = outer_error + inner_error
                 
-        integral_reset_count = integral_reset_count + 1 if abs(error) <= 15 and colour_values[1] >= 15 and colour_values[3] >= 15 else 0
+        integral_reset_count = integral_reset_count + 1 if abs(error) <= 15 and colour_values[1] + colour_values[3] >= 75 else 0
         
         if integral_reset_count >= min_integral_reset_count: ir_integral = 0
-        elif ir_integral <= -20000: ir_integral = -19999
-        elif ir_integral >=  20000: ir_integral =  19999
-        else: ir_integral += error * 0.8 if abs(error) > 100 else error ** 2 * 0.00005
+        elif ir_integral <= -50000: ir_integral = -49999
+        elif ir_integral >=  50000: ir_integral =  49999
+        else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.3
         ir_derivative = error - ir_last_error
     
         turn = error * kP + ir_integral * kI + ir_derivative * kD
@@ -176,8 +178,8 @@ def green_check(colour_values: list[int]) -> str:
     black_values = [1 if value <= 23 else 0 for value in front_values]
     
     # +, T type
-    if sum(black_values) == 4 and colour_values[2] <= 35 and abs(ir_integral) <= 8000:
-        if colour_values[5] > 35 and colour_values[6] > 35:
+    if sum(black_values) == 4 and colour_values[2] <= 40 and abs(ir_integral) <= 8000:
+        if colour_values[5] > 35 and colour_values[6] > 35 and abs(ir_integral) <= 500:
             signal = "+ pass"
         else: 
             if colour_values[5] <= 35 and colour_values[6] <= 35: signal = "+ double"
@@ -197,14 +199,18 @@ def green_check(colour_values: list[int]) -> str:
             new_colour_values = colour.read()
 
             # determine direction 
-            if new_colour_values[5] <= 25 or new_colour_values[6] <= 25 and abs(new_colour_values[5] - new_colour_values[6]) >= 50:
+            if new_colour_values[5] <= 25 or new_colour_values[6] <= 25 and abs(new_colour_values[5] - new_colour_values[6]) >= 45:
                 # If back sensor is green
                 direction = "|-" if new_colour_values[6] < new_colour_values[5] else "-|"
+            elif abs(ir_integral) > 500:
+                # Unknown case
+                # Determine side based on integral
+                direction = "|-" if ir_integral > 0 else "-|"
             else:
                 # Unknown case
                 # Determine side based on which side is lighter
                 # lighter side is the side with the bar "-" 
-                direction = "|-" if (colour_values[0] + colour_values[1]) <= (colour_values[3] + colour_values[4]) else "-|"
+                direction = "|-" if (colour_values[0] + colour_values[1]) - (colour_values[3] + colour_values[4]) < 0 else "-|"
 
             # determine type of turn depending on the sum of the back sensors
             real_fake = "fake" if colour_values[5] + colour_values[6] >= 120 else "real"
@@ -253,7 +259,6 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 1, ">=", 60, "FORWARDS")
         motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 1, ">=", 40, "[L] ALIGN")
         motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 5, ">=", 20, "[L] ALIGN")
-        motors.pause()
 
     elif signal == "+ right":
         # reset position
@@ -268,7 +273,6 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 3, ">=", 60, "FORWARDS")
         motors.run_until( config.line_speed * 1.5, -config.line_speed * 1.5, colour.read, 3, ">=", 40, "[R] ALIGN")
         motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 6, ">=", 20 , "[R] ALIGN")
-        motors.pause()
     
     elif signal == "+ double":
         # move backwards 
@@ -295,7 +299,7 @@ def intersection_handling(signal: str, colour_values) -> None:
         # align with line
         motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.2, colour.read, 2, "<=", 40, "[F] ALIGN]")
         motors.run_until( config.line_speed * 1.5, -config.line_speed * 1.2, colour.read, 1, ">=", 60, "[L] ALIGN]")
-        motors.pause()        
+        # motors.pause()
         
     elif signal == "|- real":
         # reset position
@@ -309,7 +313,7 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run_until( config.line_speed * 1.2, -config.line_speed * 1.5, colour.read, 2, "<=", 40, "[F] ALIGN]")
         motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.2)
         motors.run_until( config.line_speed * 1.2, -config.line_speed * 1.5, colour.read, 3, ">=", 60, "[R] ALIGN]")
-        motors.pause()
+        # motors.pause()
 
     elif signal == "-| fake":
         angle = current_angle - 35 if abs(current_angle - last_yaw) < 20 else last_yaw
@@ -333,7 +337,7 @@ def acute_check(colour_values: list[int]) -> None:
     if (
         ((colour_values[6] <= 20 and colour_values[5] <= 80) or (colour_values[6] <= 80 and colour_values[5] <= 20))
         and colour_values[2] >= 80
-        and (colour_values[0] >= 80 or colour_values[1] >= 80)
+        and (colour_values[0] >= 80 or colour_values[4] >= 80)
     ): acute_trigger = True
     
     if acute_trigger:

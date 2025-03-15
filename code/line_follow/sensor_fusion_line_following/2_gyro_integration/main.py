@@ -23,7 +23,7 @@ import config
 
 def main() -> None:
     oled_display.initialise()
-    # laser_sensors.initialise()
+    laser_sensors.initialise()
     touch_sensors.initialise()
     motors.initialise()
     camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
@@ -47,7 +47,7 @@ def main() -> None:
                 evacuation_zone.main()
             
             elif mode == 4:
-                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read()))), ", ".join(list(map(str, touch_sensors.read())))], [24, 30, 10])
+                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read()))), ", ".join(list(map(str, touch_sensors.read()))), ", ".join(list(map(str, laser_sensors.read())))], [24, 30, 10, 20])
                 print()
 
             elif mode == 5:
