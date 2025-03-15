@@ -181,8 +181,8 @@ def green_check(colour_values: list[int]) -> str:
     # +, T type
     if sum(black_values) == 4 and colour_values[2] <= 40 and abs(ir_integral) <= 8000:
         colour_values = colour.read()
-        if( (colour_values[5] > 35 and colour_values[6] > 35 and abs(ir_integral) <= 500)
-            or (colour_values[5] > 80 and colour_values[6] > 80) ):
+        if(    (colour_values[5] > 35 and colour_values[6] > 35 and abs(ir_integral) <= 500)
+            or (colour_values[5] > 80 and colour_values[6] > 80 and abs(ir_integral) <= 2000) ):
             signal = "+ pass"
         else: 
             if colour_values[5] <= 35 and colour_values[6] <= 35: signal = "+ double"
@@ -237,8 +237,8 @@ def green_check(colour_values: list[int]) -> str:
     return signal
 
 def intersection_handling(signal: str, colour_values) -> None:
-    global main_loop_count, last_yaw
-    main_loop_count = 0
+    global main_loop_count, last_yaw, ir_integral
+    main_loop_count = ir_integral = 0
     
     config.update_log([f"INTERSECTION HANDLING", f"{signal}"], [24, 16])
     print()
@@ -248,12 +248,12 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "+ left":
-        motors.run      (-config.line_speed      ,  config.line_speed * 1.3, 0.9)
+        motors.run      (-config.line_speed      ,  config.line_speed * 1.3, 1)
         motors.run      (-config.line_speed * 0.8,  config.line_speed * 1.5, 0.4)
         motors.run_until(-config.line_speed * 0.8,  config.line_speed * 1.5, colour.read, 2, "<=", 40, "[R] ALIGNING <= 45")
         
     elif signal == "+ right":
-        motors.run      ( config.line_speed * 1.3, -config.line_speed      , 0.9)
+        motors.run      ( config.line_speed * 1.3, -config.line_speed      , 1)
         motors.run      ( config.line_speed * 1.5, -config.line_speed * 0.8, 0.4)
         motors.run_until( config.line_speed * 1.5, -config.line_speed * 0.8, colour.read, 2, "<=", 40, "[R] ALIGNING <= 45")
     
