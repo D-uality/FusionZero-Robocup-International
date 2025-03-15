@@ -14,6 +14,7 @@ import touch_sensors
 import oled_display
 import motors
 import gyroscope
+import led
 
 import line
 import evacuation_zone
@@ -22,7 +23,7 @@ import config
 
 def main() -> None:
     oled_display.initialise()
-    # laser_sensors.initialise()
+    laser_sensors.initialise()
     touch_sensors.initialise()
     motors.initialise()
     camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
@@ -30,6 +31,7 @@ def main() -> None:
     
     motors.run(0, 0)
     oled_display.reset()
+    led.off()
     
     try:
         while not listener.has_exited():
@@ -39,17 +41,18 @@ def main() -> None:
                 motors.run(0, 0)
 
             elif mode == 1:
-                line.follow_line()
+                line.main()
                 
             elif mode == 2:
                 evacuation_zone.main()
             
             elif mode == 4:
-                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read()))), ", ".join(list(map(str, touch_sensors.read())))], [24, 30, 10])
+                config.update_log(["READING SENSORS", ", ".join(list(map(str, colour.read()))), ", ".join(list(map(str, touch_sensors.read()))), ", ".join(list(map(str, laser_sensors.read())))], [24, 30, 10, 20])
                 print()
 
             elif mode == 5:
                 colour.calibration(auto_calibrate=False)
+                colour.load_calibration_values()
                 listener.mode = 0
 
             elif mode == 6:

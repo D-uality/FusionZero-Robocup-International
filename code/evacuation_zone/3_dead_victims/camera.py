@@ -11,15 +11,18 @@ def initialise():
     try:
         camera = Picamera2()
 
-        camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.WIDTH, config.HEIGHT)}, transform=Transform(vflip=config.FLIP, hflip=config.FLIP))
-        camera.configure(camera_config)
-        camera.start()
+        # camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.WIDTH, config.HEIGHT)}, transform=Transform(vflip=config.FLIP, hflip=config.FLIP))
+        # camera.configure(camera_config)
+        # camera.start()
         
-        print(["Camera", "✓"])
-        oled_display.text("Camera: ✓", 0, 40)
+        # config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 24, 3])
+        # oled_display.text("Camera: ✓", 0, 40)
+        
     except Exception as e:
+        config.update_log(["INITIALISATION", "CAMERA", "X"], [24, 24, 3])
         print(f"Camera failed to initialise: {e}")
         oled_display.text("Camera: X", 0, 40)
+        exit()
 
     if config.X11:
         try:

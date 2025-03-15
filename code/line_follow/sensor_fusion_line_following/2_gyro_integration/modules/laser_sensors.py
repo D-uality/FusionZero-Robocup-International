@@ -10,18 +10,15 @@ tof_sensors = []
 
 def initialise() -> None:
     def change_address(pin_number: int, x_shut_pin: int) -> None:
-        try:
-            GPIO.output(x_shut_pin, GPIO.HIGH)
-            sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
+        GPIO.output(x_shut_pin, GPIO.HIGH)
+        time.sleep(0.1)
+        sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
 
-            tof_sensors.append(sensor_i2c)
-            if pin_number < len(config.x_shut_pins) - 1: sensor_i2c.set_address(pin_number + 0x30)
-            
-            print([f"ToF[{pin_number}]", "✓"])
-            oled_display.text(f"ToF[{pin_number}]: ✓", 0, 0 + 10 * pin_number)
-        except Exception as e:
-            print([f"ToF[{pin_number}]", "X", f"{e}"])
-            oled_display.text(f"ToF[{pin_number}]: x", 0, 0 + 10 * pin_number)
+        tof_sensors.append(sensor_i2c)
+        if pin_number < len(config.x_shut_pins) - 1: sensor_i2c.set_address(pin_number + 0x30)
+        
+        print([f"ToF[{pin_number}]", "✓"])
+        oled_display.text(f"ToF[{pin_number}]: ✓", 0, 0 + 10 * pin_number)
 
     for x_shut_pin in config.x_shut_pins:
         GPIO.setup(x_shut_pin, GPIO.OUT)
