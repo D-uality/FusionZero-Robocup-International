@@ -105,7 +105,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif acute_trigger:    kP, kI, kD, v = 1.5 , 0     ,  0  , 18
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     # else:                  kP, kI, kD, v = 0.23, 0.005,  2  , config.line_speed
-    else:                  kP, kI, kD, v = 0.6 , 0     ,  2  , config.line_speed
+    else:                  kP, kI, kD, v = 0.4 , 0     ,  2  , config.line_speed
 
     # Define input method
     if uphill_trigger or downhill_trigger or acute_trigger or gap_trigger:
@@ -253,7 +253,7 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run_until(-config.line_speed * 0.8,  config.line_speed * 1.5, colour.read, 2, "<=", 40, "[R] ALIGNING <= 45")
         
     elif signal == "+ right":
-        motors.run      ( config.line_speed * 1.3, -config.line_speed      , -0.9)
+        motors.run      ( config.line_speed * 1.3, -config.line_speed      , 0.9)
         motors.run      ( config.line_speed * 1.5, -config.line_speed * 0.8, 0.4)
         motors.run_until( config.line_speed * 1.5, -config.line_speed * 0.8, colour.read, 2, "<=", 40, "[R] ALIGNING <= 45")
     
