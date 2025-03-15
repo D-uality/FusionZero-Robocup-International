@@ -102,9 +102,10 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
 
     if   uphill_trigger:   kP, kI, kD, v = 0.7 , 0     ,  0  , 35
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
-    elif acute_trigger:    kP, kI, kD, v = 2,    0     ,  0  , 18
-    elif gap_trigger:      kP, kI, kD, v = 1,    0     ,  0  , config.line_speed
-    else:                  kP, kI, kD, v = 0.23, 0.0056,  2  , config.line_speed
+    elif acute_trigger:    kP, kI, kD, v = 1.5 , 0     ,  0  , 18
+    elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
+    # else:                  kP, kI, kD, v = 0.23, 0.005,  2  , config.line_speed
+    else:                  kP, kI, kD, v = 0.6 , 0     ,  2  , config.line_speed
 
     # Define input method
     if uphill_trigger or downhill_trigger or acute_trigger or gap_trigger:
@@ -179,7 +180,9 @@ def green_check(colour_values: list[int]) -> str:
     
     # +, T type
     if sum(black_values) == 4 and colour_values[2] <= 40 and abs(ir_integral) <= 8000:
-        if colour_values[5] > 35 and colour_values[6] > 35 and abs(ir_integral) <= 500:
+        colour_values = colour.read()
+        if( (colour_values[5] > 35 and colour_values[6] > 35 and abs(ir_integral) <= 500)
+            or (colour_values[5] > 80 and colour_values[6] > 80) ):
             signal = "+ pass"
         else: 
             if colour_values[5] <= 35 and colour_values[6] <= 35: signal = "+ double"
@@ -187,47 +190,45 @@ def green_check(colour_values: list[int]) -> str:
             elif colour_values[6] <= 35: signal = "+ right"
             else: pass
     
-    else:
-        if (
-            (colour_values[0] < 27 or colour_values[4] < 27 or colour_values[1] < 15 or colour_values[3] < 15) 
-            and colour_values[2] >= 40 
-            and colour_values[0] <= 30 
-            and colour_values[4] <= 30 
-            and abs(ir_integral) <= 18000
-        ):
-            motors.run(0, 0, 0.1)
-            new_colour_values = colour.read()
+    elif( (colour_values[0] < 27 or colour_values[4] < 27 or colour_values[1] < 15 or colour_values[3] < 15) 
+          and colour_values[2] >= 50 
+          and colour_values[0] <= 35
+          and colour_values[4] <= 35
+          and abs(ir_integral) <= 18000 ):
 
-            # determine direction 
-            if new_colour_values[5] <= 25 or new_colour_values[6] <= 25 and abs(new_colour_values[5] - new_colour_values[6]) >= 45:
-                # If back sensor is green
-                direction = "|-" if new_colour_values[6] < new_colour_values[5] else "-|"
-            elif abs(ir_integral) > 500:
-                # Unknown case
-                # Determine side based on integral
-                direction = "|-" if ir_integral > 0 else "-|"
-            else:
-                # Unknown case
-                # Determine side based on which side is lighter
-                # lighter side is the side with the bar "-" 
-                direction = "|-" if (colour_values[0] + colour_values[1]) - (colour_values[3] + colour_values[4]) < 0 else "-|"
+        # determine direction 
+        if colour_values[5] <= 25 or colour_values[6] <= 25 and abs(colour_values[5] - colour_values[6]) >= 45:
+            # If back sensor is green
+            print("Direction by green")
+            direction = "|-" if colour_values[6] < colour_values[5] else "-|"
+        elif abs(ir_integral) > 1000:
+            # Unknown case
+            # Determine side based on integral
+            print("Direction by integral")
+            direction = "|-" if ir_integral > 0 else "-|"
+        else:
+            # Unknown case
+            # Determine side based on which side is lighter
+            # darker side is the side with the bar "-" 
+            print("Direction by darkness")
+            direction = "|-" if (colour_values[0] + colour_values[1]) > (colour_values[3] + colour_values[4]) else "-|"
 
-            # determine type of turn depending on the sum of the back sensors
-            real_fake = "fake" if colour_values[5] + colour_values[6] >= 120 else "real"
+        # determine type of turn depending on the sum of the back sensors
+        real_fake = "fake" if colour_values[5] + colour_values[6] >= 120 else "real"
 
-            # check for false positives
-            # the direction has to have low values for the corresponding back sensor
-            if direction == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
-            if direction == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
+        # check for false positives
+        # the direction has to have low values for the corresponding back sensor
+        if direction == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
+        if direction == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
 
-            # if abs(ir_integral) >= 3000 and real_fake == "fake":
-            #     # swap sides depending on integral
-            #     if direction == "-|" and ir_integral < 3000: direction = "|-"
-            #     if direction == "|-" and ir_integral > 3000: direction = "-|"
-            # elif real_fake == "fake":
-                
+        # if abs(ir_integral) >= 3000 and real_fake == "fake":
+        #     # swap sides depending on integral
+        #     if direction == "-|" and ir_integral < 3000: direction = "|-"
+        #     if direction == "|-" and ir_integral > 3000: direction = "-|"
+        # elif real_fake == "fake":
+            
 
-            signal = f"{direction} {real_fake}"
+        signal = f"{direction} {real_fake}"
 
     if len(signal) > 0:
         config.update_log([f"GREEN CHECK", ", ".join(map(str, colour_values)), signal], [24, 30, 10])
@@ -247,74 +248,41 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "+ left":
-        # reset position
-        motors.run      (-config.line_speed * 1.5, -config.line_speed * 1.5, 0.4)
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 1, "<=", 20, "FORWARDS")
-
-        # turn onto branch
-        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.1)
-        motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.5, gyroscope.read, 2, ">=", current_angle+70, "GYRO")
-
-        # align with line
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 1, ">=", 60, "FORWARDS")
-        motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 1, ">=", 40, "[L] ALIGN")
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 5, ">=", 20, "[L] ALIGN")
-
+        motors.run      (-config.line_speed      ,  config.line_speed * 1.3, 0.9)
+        motors.run      (-config.line_speed * 0.8,  config.line_speed * 1.5, 0.4)
+        motors.run_until(-config.line_speed * 0.8,  config.line_speed * 1.5, colour.read, 2, "<=", 40, "[R] ALIGNING <= 45")
+        
     elif signal == "+ right":
-        # reset position
-        motors.run      (-config.line_speed * 1.5, -config.line_speed * 1.5, 0.4)
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 1, "<=", 20, "FORWARDS")
-
-        # turn onto branch
-        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.1)
-        motors.run_until( config.line_speed * 1.5, -config.line_speed * 1.5, gyroscope.read, 2, "<=", current_angle-70, "GYRO")
-
-        # align with line
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 3, ">=", 60, "FORWARDS")
-        motors.run_until( config.line_speed * 1.5, -config.line_speed * 1.5, colour.read, 3, ">=", 40, "[R] ALIGN")
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 6, ">=", 20 , "[R] ALIGN")
+        motors.run      ( config.line_speed * 1.3, -config.line_speed      , -0.9)
+        motors.run      ( config.line_speed * 1.5, -config.line_speed * 0.8, 0.4)
+        motors.run_until( config.line_speed * 1.5, -config.line_speed * 0.8, colour.read, 2, "<=", 40, "[R] ALIGNING <= 45")
     
     elif signal == "+ double":
         # move backwards 
         motors.run      (-config.line_speed * 1.5, -config.line_speed * 1.5, 0.5)
-
         # u-turn
-        motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.5, gyroscope.read, 2, ">=", current_angle + 180, "GYRO")
-
+        motors.run      (-config.line_speed * 1.4,  config.line_speed * 1.5, 2.3)
         # align with line
-        motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 3, "<=", 45, "[R] ALIGNING")
-        motors.run      ( config.line_speed * 1.5, -config.line_speed * 1.5, 0.2)
+        motors.run_until(-config.line_speed      ,  config.line_speed      , colour.read, 3, "<=", 45, "[R] ALIGNING")
+        motors.run      ( config.line_speed      , -config.line_speed      , 0.3)
         
     elif signal == "+ pass":
         motors.run      ( config.line_speed      ,  config.line_speed      , 0.6)
     
     elif signal == "-| real":
-        # reset position
-        motors.run      (-config.line_speed * 1.5, -config.line_speed * 1.5, 0.2)
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 0, "<=", 20, "FORWARDS")
-
-        # turn onto branch
-        motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.5, gyroscope.read, 2, ">=", current_angle+35, "GYRO")
-
-        # align with line
-        motors.run_until(-config.line_speed * 1.5,  config.line_speed * 1.2, colour.read, 2, "<=", 40, "[F] ALIGN]")
-        motors.run_until( config.line_speed * 1.5, -config.line_speed * 1.2, colour.read, 1, ">=", 60, "[L] ALIGN]")
-        # motors.pause()
-        
+        motors.run      (-config.line_speed      , -config.line_speed      , 0.2)
+        motors.run_until( config.line_speed      ,  config.line_speed      , colour.read, 1, "<=", 20, "[R] FORWARDS <= 10")
+        motors.run      (-config.line_speed * 0.5,  config.line_speed * 1.2, 0.5)
+        motors.run      (-config.line_speed      ,  config.line_speed      , 0.7)
+        motors.run_until(-config.line_speed * 0.6,  config.line_speed * 1.2, colour.read, 2, "<=", 40, "[R] FORWARDS <= 10")
+                
     elif signal == "|- real":
-        # reset position
-        motors.run      (-config.line_speed * 1.5, -config.line_speed * 1.5, 0.2)
-        motors.run_until( config.line_speed * 1.5,  config.line_speed * 1.5, colour.read, 4, "<=", 20, "FORWARDS")
-
-        # turn onto branch
-        motors.run_until( config.line_speed * 1.5, -config.line_speed * 1.5, gyroscope.read, 2, "<=", current_angle-35, "GYRO")
-
-        # align with line
-        motors.run_until( config.line_speed * 1.2, -config.line_speed * 1.5, colour.read, 2, "<=", 40, "[F] ALIGN]")
-        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.2)
-        motors.run_until( config.line_speed * 1.2, -config.line_speed * 1.5, colour.read, 3, ">=", 60, "[R] ALIGN]")
-        # motors.pause()
-
+        motors.run      (-config.line_speed, -config.line_speed, 0.2)
+        motors.run_until( config.line_speed,  config.line_speed, colour.read, 3, "<=", 20, "[R] FORWARDS <= 10")
+        motors.run      ( config.line_speed * 1.2,  -config.line_speed * 0.5, 0.5)
+        motors.run      ( config.line_speed,  -config.line_speed, 0.7)
+        motors.run_until( config.line_speed * 1.2,  -config.line_speed * 0.6, colour.read, 2, "<=", 40, "[R] FORWARDS <= 10")
+    
     elif signal == "-| fake":
         angle = current_angle - 35 if abs(current_angle - last_yaw) < 20 else last_yaw
 
@@ -337,7 +305,7 @@ def acute_check(colour_values: list[int]) -> None:
     if (
         ((colour_values[6] <= 20 and colour_values[5] <= 80) or (colour_values[6] <= 80 and colour_values[5] <= 20))
         and colour_values[2] >= 80
-        and (colour_values[0] >= 80 or colour_values[4] >= 80)
+        and colour_values[0] + colour_values[4] >= 100
     ): acute_trigger = True
     
     if acute_trigger:

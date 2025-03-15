@@ -44,11 +44,14 @@ def run(v1: float, v2: float, delay: float = 0) -> None:
 
         calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
     
-    pca.servo[config.servo_pins[0]].angle = max(min(config.stop_angles[0] + calculated_angles[0], 125), 55)
-    pca.servo[config.servo_pins[1]].angle = max(min(config.stop_angles[1] + calculated_angles[1], 125), 55)
-    pca.servo[config.servo_pins[2]].angle = max(min(config.stop_angles[2] + calculated_angles[2], 125), 55)
-    pca.servo[config.servo_pins[3]].angle = max(min(config.stop_angles[3] + calculated_angles[3], 125), 55)
-
+    try:
+        pca.servo[config.servo_pins[0]].angle = max(min(config.stop_angles[0] + calculated_angles[0], 125), 55)
+        pca.servo[config.servo_pins[1]].angle = max(min(config.stop_angles[1] + calculated_angles[1], 125), 55)
+        pca.servo[config.servo_pins[2]].angle = max(min(config.stop_angles[2] + calculated_angles[2], 125), 55)
+        pca.servo[config.servo_pins[3]].angle = max(min(config.stop_angles[3] + calculated_angles[3], 125), 55)
+    except Exception as e:
+        print("I2C TIMEOUT!")
+    
     if delay > 0: time.sleep(delay)
 
 def run_until(v1: float, v2: float, trigger_function: callable, index: int, comparison: str, target_value: int, text: str = "") -> None:
@@ -66,7 +69,8 @@ def run_until(v1: float, v2: float, trigger_function: callable, index: int, comp
         run(v1, v2)
         
         if value is not None: 
-            print(config.update_log([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10]))
+            config.update_log([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
+            print()
             if comparison_function(value, target_value): break
 
     run(0, 0)
