@@ -24,5 +24,5 @@ approach_distance = 18
 
 # ------------------------------------------
 
-outer_multiplier, inner_multiplier = 1.1, 1
+outer_multiplier, inner_multiplier = 1.2, 0.8
 line_speed = 22

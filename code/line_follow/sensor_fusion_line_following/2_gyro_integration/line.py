@@ -38,14 +38,14 @@ def main(evacuation_zone_enable: bool = False) -> None:
     touch_values = touch_sensors.read()
 
     if not camera_enable:
-        acute_check(colour_values)
-        gap_check(colour_values)
+    #     acute_check(colour_values)
+    #     gap_check(colour_values)
         green_signal = green_check(colour_values)
 
-    if len(green_signal) > 0:
-        intersection_handling(green_signal, colour_values)
-    else:
-        follow_line(colour_values, gyroscope_values)
+    # if len(green_signal) > 0:
+    #     intersection_handling(green_signal, colour_values)
+    # else:
+    follow_line(colour_values, gyroscope_values)
 
     print()
     main_loop_count += 1
@@ -105,7 +105,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif acute_trigger:    kP, kI, kD, v = 1.5 , 0     ,  0  , 18
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     # else:                  kP, kI, kD, v = 0.23, 0.005,  2  , config.line_speed
-    else:                  kP, kI, kD, v = 0.4 , 0     ,  2  , config.line_speed
+    else:                  kP, kI, kD, v = 1.3, 0, 0, config.line_speed
 
     # Define input method
     if uphill_trigger or downhill_trigger or acute_trigger or gap_trigger:
@@ -154,7 +154,9 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         elif ir_integral >=  50000: ir_integral =  49999
         else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.3
         ir_derivative = error - ir_last_error
-    
+
+        middle_multi = 1 + (colour_values[2] - 100)/100
+        turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         turn = error * kP + ir_integral * kI + ir_derivative * kD
         v1, v2 = v + turn, v - turn
 
@@ -170,70 +172,15 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
 def green_check(colour_values: list[int]) -> str:
     global main_loop_count, min_green_loop_count, ir_integral
 
-    # check for minimum green loop count
     signal = ""
-    if main_loop_count < min_green_loop_count: return signal
-
-    # check for black
-    front_values = [colour_values[i] for i in [0, 1, 3, 4]]
-    black_values = [1 if value <= 23 else 0 for value in front_values]
+    # black_values = [1 if colour_values[i] <= 10 else 0 for i in [0, 1, 3, 4]]
     
-    # +, T type
-    if sum(black_values) == 4 and colour_values[2] <= 40 and abs(ir_integral) <= 8000:
-        colour_values = colour.read()
-        if(    (colour_values[5] > 35 and colour_values[6] > 35 and abs(ir_integral) <= 500)
-            or (colour_values[5] > 80 and colour_values[6] > 80 and abs(ir_integral) <= 2000) ):
-            signal = "+ pass"
-        else: 
-            if colour_values[5] <= 35 and colour_values[6] <= 35: signal = "+ double"
-            elif colour_values[5] <= 35: signal = "+ left"
-            elif colour_values[6] <= 35: signal = "+ right"
-            else: pass
+    # if (colour_values[5] <= 20 or colour_values[6] <= 20) and sum(black_values) >= 2:
+    #     motors.pause()
     
-    elif( (colour_values[0] < 27 or colour_values[4] < 27 or colour_values[1] < 15 or colour_values[3] < 15) 
-          and colour_values[2] >= 50 
-          and colour_values[0] <= 35
-          and colour_values[4] <= 35
-          and abs(ir_integral) <= 18000 ):
-
-        # determine direction 
-        if colour_values[5] <= 25 or colour_values[6] <= 25 and abs(colour_values[5] - colour_values[6]) >= 45:
-            # If back sensor is green
-            print("Direction by green")
-            direction = "|-" if colour_values[6] < colour_values[5] else "-|"
-        elif abs(ir_integral) > 1000:
-            # Unknown case
-            # Determine side based on integral
-            print("Direction by integral")
-            direction = "|-" if ir_integral > 0 else "-|"
-        else:
-            # Unknown case
-            # Determine side based on which side is lighter
-            # darker side is the side with the bar "-" 
-            print("Direction by darkness")
-            direction = "|-" if (colour_values[0] + colour_values[1]) > (colour_values[3] + colour_values[4]) else "-|"
-
-        # determine type of turn depending on the sum of the back sensors
-        real_fake = "fake" if colour_values[5] + colour_values[6] >= 120 else "real"
-
-        # check for false positives
-        # the direction has to have low values for the corresponding back sensor
-        if direction == "|-" and colour_values[6] > 70 and real_fake == " real": real_fake = " fake"
-        if direction == "-|" and colour_values[5] > 70 and real_fake == " real": real_fake = " fake"
-
-        # if abs(ir_integral) >= 3000 and real_fake == "fake":
-        #     # swap sides depending on integral
-        #     if direction == "-|" and ir_integral < 3000: direction = "|-"
-        #     if direction == "|-" and ir_integral > 3000: direction = "-|"
-        # elif real_fake == "fake":
-            
-
-        signal = f"{direction} {real_fake}"
-
-    if len(signal) > 0:
-        config.update_log([f"GREEN CHECK", ", ".join(map(str, colour_values)), signal], [24, 30, 10])
-        print()
-
+    # if colour_values[5] <= 10 or colour_values[6] <= 10:
+    #     motors.pause()
+        
     return signal
 
 def intersection_handling(signal: str, colour_values) -> None:
@@ -242,6 +189,8 @@ def intersection_handling(signal: str, colour_values) -> None:
     
     config.update_log([f"INTERSECTION HANDLING", f"{signal}"], [24, 16])
     print()
+    
+    motors.pause()
     
     while True:
         current_angle = gyroscope.read()[2]
