@@ -41,7 +41,7 @@ def read(pins=config.x_shut_pins, display=False) -> list[int]:
     for sensor_number, sensor in enumerate(sensors):
         try:
             start_time = time.time()
-            while not (sensor.data_ready or sensor.distance is None) and time.time() - start_time < 0.1:
+            while not (sensor.data_ready or sensor.distance is None) and time.time() - start_time < 0.001:
                 time.sleep(0.00001)
 
             values.append(sensor.distance if sensor.distance is not None else 1600)
