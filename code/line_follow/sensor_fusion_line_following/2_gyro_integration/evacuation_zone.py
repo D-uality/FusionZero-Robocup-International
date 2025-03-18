@@ -10,7 +10,6 @@ import motors
 import touch_sensors
 import laser_sensors
 import colour
-import testing
 
 from typing import Optional
 import victims
@@ -25,23 +24,13 @@ def main():
     motors.run(config.evacuation_speed, config.evacuation_speed, 0.5)
     motors.run(0, 0)
     
-    image = camera.capture_array()
-    cv2.imshow("image", image)
-    
-    motors.pause()
-
-    print("HSDLFK")
-    
     while True:
-        print("HSDLFK")
         if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
 
-        print("HSDLFK")
         find(search_function=search_type)
-        print("HSDLFK")
 
         if route(search_function=search_type, kP=0.12):
             if align(search_function=search_type, step_time=0.01):
@@ -56,7 +45,7 @@ def main():
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             motors.run(0, 0)
 
-    exit()
+    exit_evacuation_zone()
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -85,7 +74,7 @@ def find(search_function: callable) -> None:
                 exit_entrance_count += 1 if sum(exit_entrance_values) >= 1 else 0
 
                 if exit_entrance_count >= 10:
-                    motors.run(-config,evacuation_speed, -config.evacuation_speed, 0.8)
+                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
                     motors.run( config.evacuation_speed, -config.evacuation_speed, 2)
                     return 0
                 else:
@@ -122,7 +111,7 @@ def route(search_function: callable, kP: float) -> bool:
         if x is None: return False
 
         scalar = 0.5 + (distance[0] - 15) * (0.5 / 85)
-        error = config.WIDTH / 2 - x
+        error = config.EVACUATION_WIDTH / 2 - x
         turn = int(error * kP)
         v1, v2 = scalar * (config.evacuation_speed-turn), scalar * (config.evacuation_speed+turn)
         motors.run(v1, v2)
@@ -152,14 +141,14 @@ def align(search_function: callable, step_time: float) -> bool:
     x = search_function(image)
     if x is None: return False
 
-    error = config.WIDTH / 2 - x
+    error = config.EVACUATION_WIDTH / 2 - x
 
     while error > 2:
         image = camera.capture_array()
         x = search_function(image)
         if x is None: return False
         
-        error = config.WIDTH / 2 - x
+        error = config.EVACUATION_WIDTH / 2 - x
         motors.run(-config.evacuation_speed * 0.62, config.evacuation_speed * 0.62, step_time)
         motors.run(0, 0, step_time)
 
@@ -173,7 +162,7 @@ def align(search_function: callable, step_time: float) -> bool:
         x = search_function(image)
         if x is None: return False
 
-        error = config.WIDTH / 2 - x
+        error = config.EVACUATION_WIDTH / 2 - x
         motors.run(config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, step_time)
         motors.run(0, 0, step_time)
     
@@ -201,7 +190,7 @@ def grab() -> bool:
 
                 cycle_count += 1
 
-                if x < 0 or x >= config.WIDTH or y < 0 or y >= config.HEIGHT: continue
+                if x < 0 or x >= config.EVACUATION_WIDTH or y < 0 or y >= config.EVACUATION_HEIGHT: continue
                 points.append((x, y))
 
             return points
@@ -290,7 +279,7 @@ def dump() -> None:
     motors.run(config.evacuation_speed, -config.evacuation_speed, randint(300, 1600) / 1000)
     motors.run(0, 0)
 
-def exit() -> bool:
+def exit_evacuation_zone() -> bool:
     def validate_exit() -> bool:
         black_count, silver_count = 0, 0
 
