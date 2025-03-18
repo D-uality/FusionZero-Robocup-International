@@ -13,8 +13,11 @@ def initialise(WIDTH, HEIGHT):
     global camera
     try:
         camera = Picamera2()
-        print(camera.sensor_modes)
-        camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=config.FLIP, hflip=config.FLIP))
+        camera_config = camera.create_still_configuration(
+            main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
+            raw={"size": (2304, 1296), "format": "SBGGR10"},
+            transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+        )
         camera.configure(camera_config)
         camera.start()
         
@@ -211,4 +214,8 @@ def close():
 
 def capture_array():
     global camera
-    return camera.capture_array()
+    
+    image = camera.capture_array()
+    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+
+    return image

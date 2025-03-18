@@ -30,14 +30,18 @@ def main():
     
     motors.pause()
 
+    print("HSDLFK")
+    
     while True:
-        if listener.get_mode() != 2: break
+        print("HSDLFK")
         if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
 
+        print("HSDLFK")
         find(search_function=search_type)
+        print("HSDLFK")
 
         if route(search_function=search_type, kP=0.12):
             if align(search_function=search_type, step_time=0.01):
