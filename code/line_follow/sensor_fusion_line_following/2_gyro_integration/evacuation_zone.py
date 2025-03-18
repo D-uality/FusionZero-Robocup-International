@@ -19,11 +19,16 @@ import triangles
 def main():
     camera.close()
     camera.initialise(config.EVACUATION_WIDTH, config.EVACUATION_HEIGHT)
-    motors.run(0, 0, 3)
+    motors.run(0, 0, 2)
     
     start_time = time.time()
     motors.run(config.evacuation_speed, config.evacuation_speed, 0.5)
     motors.run(0, 0)
+    
+    image = camera.capture_array()
+    cv2.imshow("image", image)
+    
+    motors.pause()
 
     while True:
         if listener.get_mode() != 2: break

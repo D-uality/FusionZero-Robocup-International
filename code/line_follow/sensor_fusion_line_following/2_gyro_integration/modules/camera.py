@@ -13,7 +13,7 @@ def initialise(WIDTH, HEIGHT):
     global camera
     try:
         camera = Picamera2()
-
+        print(camera.sensor_modes)
         camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=config.FLIP, hflip=config.FLIP))
         camera.configure(camera_config)
         camera.start()
@@ -29,7 +29,7 @@ def initialise(WIDTH, HEIGHT):
 
     if config.X11:
         try:
-            cv2.startWindowThread()            
+            cv2.startWindowThread()
             config.update_log(["INITIALISATION", "X11", "✓"], [24, 24, 3])
             oled_display.text("X11: ✓", 60, 40)
         except Exception as e:

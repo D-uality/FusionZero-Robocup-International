@@ -45,7 +45,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     touch_values = touch_sensors.read()
     laser_value = laser_sensors.read([config.x_shut_pins[1]])
 
-    laser_close_count = laser_close_count + 1 if laser_value[0] and laser_value[0] != 0 else 0
+    laser_close_count = laser_close_count + 1 if laser_value[0] < 10 and laser_value[0] != 0 else 0
 
     seasaw_check()
     if not camera_enable:
@@ -145,7 +145,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         camera_last_error = error
         
         if config.X11: cv2.imshow("line", line_image)
-        config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}"], [24, 8, 30, 16, 10])
+        config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count}"], [24, 8, 30, 16, 10, 15])
         
     else:
         camera_enable = False
@@ -312,14 +312,14 @@ def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_blac
             motors.run(-25, 25)
 
         colour_values = colour.read()
-        distances = laser_sensors.read(config.x_shut_pins[laser_pin])[0]
+        distance = laser_sensors.read([config.x_shut_pins[laser_pin]])[0]
         touch_values = touch_sensors.read()
-        print(distances)
+        print(distance)
 
         if more_than == ">":
-            laser_condition_met = distances[laser_pin] > 10 and distances[laser_pin] != 0
+            laser_condition_met = distance > 10 and distance != 0
         elif more_than == "<":
-            laser_condition_met = distances[laser_pin] < 10 and distances[laser_pin] != 0
+            laser_condition_met = distance < 10 and distance != 0
 
         if check_black:
             colour_is_black[0] = (colour_values[1] < 50 and not colour_is_black[0]) or colour_is_black[0]
@@ -391,9 +391,7 @@ def avoid_obstacle():
             colour_values = colour.read()
 
 def silver_check(colour_values, silver_count):
-    global silver_min
     silver_values = [1 if value > 110 else 0 for value in colour_values]
-    if sum(silver_values) and colour_values[2] > 30:
-        silver_count += 1
+    silver_count = silver_count + 1 if sum(silver_values) > 2 and colour_values[2] > 30 else 0
     
     return silver_count
