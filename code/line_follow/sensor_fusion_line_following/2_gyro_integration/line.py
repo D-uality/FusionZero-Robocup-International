@@ -304,21 +304,21 @@ def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_blac
     current_time = 0
 
     while (not laser_condition_met or current_time < min_move_time) and (not colour_is_black[0] or not colour_is_black[1]):
-        if turn_type == 'straight':
+        if turn_type == "straight":
             motors.run(30, 30)
-        elif turn_type == 'left':
+        elif turn_type == "left":
             motors.run(25, -25)
-        elif turn_type == 'right':
+        elif turn_type == "right":
             motors.run(-25, 25)
 
         colour_values = colour.read()
-        distances = laser_sensors.read()
+        distances = laser_sensors.read(config.x_shut_pins[laser_pin])[0]
         touch_values = touch_sensors.read()
         print(distances)
 
-        if more_than == '>':
+        if more_than == ">":
             laser_condition_met = distances[laser_pin] > 10 and distances[laser_pin] != 0
-        elif more_than == '<':
+        elif more_than == "<":
             laser_condition_met = distances[laser_pin] < 10 and distances[laser_pin] != 0
 
         if check_black:
@@ -344,48 +344,48 @@ def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_blac
     return colour_is_black
 
 def avoid_obstacle():
+    
     turn_count = 0
-    print("Obstacle Detected")
     colour_is_black = [False, False]
 
     distances = laser_sensors.read()
 
     if distances[0] > distances[2]:
-        print("Going Left")
-        colour_is_black = circle_obstacle(2, 'right', '<', False, colour_is_black, 0.5)
+        config.update_log(["OBSTACLE DETECTED", "left"], [24, 10])
+        colour_is_black = circle_obstacle(2, "right", "<", False, colour_is_black, 0.5)
         motors.run(config.line_speed, -config.line_speed, 0.3)
-        colour_is_black = circle_obstacle(2, 'straight', '>', False, colour_is_black, 0.5)
+        colour_is_black = circle_obstacle(2, "straight", ">", False, colour_is_black, 0.5)
         motors.run(-config.line_speed, -config.line_speed, 0.3)
 
-        print("Left Obstacle Loop Phase")
         while not colour_is_black[0]:
-            colour_is_black = circle_obstacle(2, 'left', '>', True, colour_is_black, 1)
-            # motors.run(config.line_speed, -config.line_speed, 0.3)
-            colour_is_black = circle_obstacle(2, 'straight', '>', True, colour_is_black, 1)
+            colour_is_black = circle_obstacle(2, "left", ">", True, colour_is_black, 1)
+            colour_is_black = circle_obstacle(2, "straight", ">", True, colour_is_black, 1)
             motors.run(-config.line_speed, -config.line_speed, 0.3)
 
         motors.run(-config.line_speed - 5, config.line_speed + 5, 1.2)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
+        
         while colour_values[0] < 40 and turn_count < 500:
             turn_count += 1
             colour_values = colour.read()
+    
     else:
-        print("Going Right")
-        colour_is_black = circle_obstacle(0, 'left', '<', False, colour_is_black, 0.5)
+        config.update_log(["OBSTACLE DETECTED", "right"], [24, 10])
+        colour_is_black = circle_obstacle(0, "left", "<", False, colour_is_black, 0.5)
         motors.run(-config.line_speed, config.line_speed, 0.3)
-        colour_is_black = circle_obstacle(0, 'straight', '>', False, colour_is_black, 0.5)
+        colour_is_black = circle_obstacle(0, "straight", ">", False, colour_is_black, 0.5)
         motors.run(-config.line_speed, -config.line_speed, 0.3)
 
-        print("Right Obstacle Loop Phase")
         while not colour_is_black[1]:
-            colour_is_black = circle_obstacle(0, 'right', '>', True, colour_is_black, 1)
-            colour_is_black = circle_obstacle(0, 'straight', '>', True, colour_is_black, 1)
+            colour_is_black = circle_obstacle(0, "right", ">", True, colour_is_black, 1)
+            colour_is_black = circle_obstacle(0, "straight", ">", True, colour_is_black, 1)
             motors.run(-config.line_speed, -config.line_speed, 0.3)
 
         motors.run(config.line_speed + 5, -config.line_speed - 5, 1.2)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
+        
         while colour_values[4] < 40 and turn_count < 500:
             turn_count += 1
             colour_values = colour.read()
