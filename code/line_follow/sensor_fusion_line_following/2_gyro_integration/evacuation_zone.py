@@ -9,6 +9,7 @@ import camera
 import motors
 import touch_sensors
 import laser_sensors
+import led
 import colour
 
 from typing import Optional
@@ -32,7 +33,7 @@ def main():
 
         find(search_function=search_type)
 
-        if route(search_function=search_type, kP=0.12):
+        if route(search_function=search_type, kP=0.35):
             if align(search_function=search_type, step_time=0.01):
                 if grab():
                     motors.claw_step(210, 0.005)
@@ -56,9 +57,10 @@ def find(search_function: callable) -> None:
         exit_entrance_count = 0
 
         while time.time() - start_time < time_constraint:
-            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6]))
+            config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6])
+            print()
             image = camera.capture_array()
-
+            
             if config.X11: cv2.imshow("image", image)
 
             x = search_function(image)
@@ -128,7 +130,8 @@ def route(search_function: callable, kP: float) -> bool:
             exit_entrance_count = 0
 
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", f"{exit_entrance_count}"], [24, 12, 12, 12]))
+        config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", f"{exit_entrance_count}"], [24, 12, 12, 12])
+        print()
 
     motors.run(0, 0, 0.5)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ROUTE BACK")
@@ -149,11 +152,12 @@ def align(search_function: callable, step_time: float) -> bool:
         if x is None: return False
         
         error = config.EVACUATION_WIDTH / 2 - x
-        motors.run(-config.evacuation_speed * 0.62, config.evacuation_speed * 0.62, step_time)
+        motors.run(-config.evacuation_speed, config.evacuation_speed, step_time)
         motors.run(0, 0, step_time)
 
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12]))
+        config.update_log([f"ALIGN LEFT", f"{error}"], [24, 12])
+        print()
 
     motors.run(0, 0, 0.3)
 
@@ -167,7 +171,8 @@ def align(search_function: callable, step_time: float) -> bool:
         motors.run(0, 0, step_time)
     
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12]))
+        config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12])
+        print()
 
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ALIGN BACK")
@@ -226,12 +231,12 @@ def grab() -> bool:
         image = camera.capture_array()
         black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
         
-        for x, y in points:
-            print(black_mask[y, x], end="   ")
+        for x, y in points: 
             if black_mask[y, x] == 255: black_count += 1
 
-        print(config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}"], [24, 10, 10, 10]))
-            
+        config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}"], [24, 10, 10, 10])
+        print()    
+        
         if average > 0.5:
             if black_count < len(points) * 0.5 and config.victim_count < 2:    return True
             elif black_count > len(points) * 0.5 and config.victim_count == 2: return True
@@ -247,7 +252,7 @@ def grab() -> bool:
     motors.run(0, 0)
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
     print()
-    motors.claw_step(100, 0.004)
+    motors.claw_step(110, 0.004)
     time.sleep(1)
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
     print()
@@ -256,10 +261,10 @@ def grab() -> bool:
     config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
     print()
     motors.claw_step( 85, 0.05)
-    motors.claw_step(100, 0.05)
+    motors.claw_step(110, 0.05)
     config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
     print()
-    motors.claw_step(130, 0.001)
+    motors.claw_step(140, 0.001)
 
     time.sleep(0.3)
     return presence_check(25, 0.01)
@@ -287,7 +292,8 @@ def exit_evacuation_zone() -> bool:
             motors.run(config.evacuation_speed, config.evacuation_speed)
             colour_values = colour.read()
 
-            print(config.update_log(["APPROACHING", f"{colour_values}", f"{black_count}", f"{silver_count}"], [24, 24, 6, 6]))
+            config.update_log(["APPROACHING", f"{colour_values}", f"{black_count}", f"{silver_count}"], [24, 24, 6, 6])
+            print()
 
             for value in colour_values:
                 if   value <= 20:  black_count  += 1
@@ -302,7 +308,8 @@ def exit_evacuation_zone() -> bool:
         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
         laser_values = laser_sensors.read([config.x_shut_pins[0]])
 
-        print(config.update_log(["EXITING", f"{touch_values}", f"{laser_values}"], [24, 10, 6]))
+        config.update_log(["EXITING", f"{touch_values}", f"{laser_values}"], [24, 10, 6])
+        print()
 
         if touch_values[0] == 0 or touch_values[1] == 0:
             motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.2)
