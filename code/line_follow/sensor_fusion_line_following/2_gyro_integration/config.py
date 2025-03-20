@@ -18,8 +18,8 @@ def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|")
 
 status_messages = []
 
-victim_count = 2
-evacuation_speed = 35
+victim_count = 0
+evacuation_speed = 40
 approach_distance = 18
 
 # ------------------------------------------

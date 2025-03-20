@@ -22,8 +22,10 @@ def main():
     motors.run(0, 0, 2)
     
     start_time = time.time()
-    motors.run(config.evacuation_speed, config.evacuation_speed, 0.5)
     motors.run(0, 0)
+    
+    with open("victim_count.txt", "r") as file:
+        config.victim_count = int(file.read())
     
     while True:
         if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
@@ -38,11 +40,16 @@ def main():
                 if grab():
                     motors.claw_step(210, 0.005)
                     triangles.find()
+                    
                     dump()
                     config.victim_count += 1
+
+                    with open("victim_count.txt", "w") as file:
+                        file.write(str(config.victim_count))
                 else:
                     motors.claw_step(0, 0)
                     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+                motors.pause()
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             motors.run(0, 0)
 
@@ -167,7 +174,7 @@ def align(search_function: callable, step_time: float) -> bool:
         if x is None: return False
 
         error = config.EVACUATION_WIDTH / 2 - x
-        motors.run(config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, step_time)
+        motors.run(config.evacuation_speed, -config.evacuation_speed, step_time)
         motors.run(0, 0, step_time)
     
         if config.X11: cv2.imshow("image", image)
@@ -183,7 +190,7 @@ def align(search_function: callable, step_time: float) -> bool:
     return True
 
 def grab() -> bool:
-    def presence_check(trials: int, time_step: float) -> Optional[bool]:
+    def presence_check(trials: int, time_step: float) -> bool:
         def generate_random_points(x_centre: int, y_centre: int, radius: int) -> list[tuple[int, int]]:
             cycle_count = 0
             points = []
@@ -202,7 +209,7 @@ def grab() -> bool:
         
         y_levels = []
 
-        for _ in range(trials):
+        for _ in range(0, trials):
             time.sleep(time_step)
 
             image = camera.capture_array()
@@ -220,8 +227,11 @@ def grab() -> bool:
                 cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
                 cv2.imshow("image", image)
 
-            if y + h/2 > 144: y_levels.append(0)
-            else:             y_levels.append(1)
+            config.update_log(["PRESENCE CHECK", f"{y + h/2}"], [24, 10])
+            print()
+
+            if y + h/2 > 70: y_levels.append(0)
+            else:            y_levels.append(1)
 
         average = sum(y_levels) / trials
 
@@ -234,52 +244,63 @@ def grab() -> bool:
         for x, y in points: 
             if black_mask[y, x] == 255: black_count += 1
 
-        config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}"], [24, 10, 10, 10])
-        print()    
+        success_fail = True
         
         if average > 0.5:
-            if black_count < len(points) * 0.5 and config.victim_count < 2:    return True
-            elif black_count > len(points) * 0.5 and config.victim_count == 2: return True
-            else:                                                              return False
-        else:                                                                  return False
+            if black_count < len(points) * 0.5 and config.victim_count < 2:    success_fail = True
+            elif black_count > len(points) * 0.5 and config.victim_count == 2: success_fail = True
+            else:                                                              success_fail = False
+        else:                                                                  success_fail = False
+        
+        config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}", f"{success_fail=}"], [24, 10, 10, 10, 20])
+        print()    
+        
+        return success_fail
 
     config.update_log(["GRAB", "CLAW DOWN"], [24, 24])
-    print()
     motors.claw_step(0, 0.005)
+    print()
+    
     config.update_log(["GRAB", "MOVE FORWARDS"], [24, 24])
-    print()
-    motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 0.85)
+    motors.run(config.evacuation_speed, config.evacuation_speed, 1)
     motors.run(0, 0)
+    print()
+    
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
-    print()
-    motors.claw_step(110, 0.004)
+    motors.claw_step(120, 0.004)
     time.sleep(1)
+    print()
+    
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
-    print()
-    motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
+    motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
     motors.run(0, 0)
+    print()
+    
     config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
+    motors.claw_step(100, 0.05)
+    motors.claw_step(120, 0.05)
     print()
-    motors.claw_step( 85, 0.05)
-    motors.claw_step(110, 0.05)
+    
     config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
+    motors.claw_step(150, 0.001)
     print()
-    motors.claw_step(140, 0.001)
 
-    time.sleep(0.3)
-    return presence_check(25, 0.01)
+    success_fail = presence_check(50, 0)
+    config.update_log(["GRAB", f"{success_fail}"], [24, 20])
+    print()
+    
+    return success_fail
 
 def dump() -> None:
     motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 0, "==", 0, "FORWARDS")
-    motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS")
+    # motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS")
 
     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.3)
     motors.run(0, 0)
     motors.claw_step(90, 0.005)
     
     time.sleep(1)
-
-    motors.claw_step(270, 0)
+    motors.claw_step(270, 0.001)
 
     motors.run(config.evacuation_speed, -config.evacuation_speed, randint(300, 1600) / 1000)
     motors.run(0, 0)

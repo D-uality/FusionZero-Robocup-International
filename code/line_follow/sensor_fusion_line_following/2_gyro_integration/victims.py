@@ -38,6 +38,11 @@ def dead(image: np.ndarray) -> Optional[int]:
         if circularity > threshold: return True
         return False
     
+    laser_value = laser_sensors.read([x_shut_pins[1]])[0]
+    if laser_value > 120:
+        print("laser check failed")
+        return None
+    
     black_threshold = 40
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     
@@ -64,14 +69,21 @@ def dead(image: np.ndarray) -> Optional[int]:
 
         circularity = (4 * np.pi * area) / (perimeter ** 2)
         print(circularity, cv2.contourArea(contour))
-        
-    circular_contours = [contour for contour in contours if circularity_check(contour, 0.1) and cv2.contourArea(contour) > 100]
+    
+    y_passed_contours = []
+    
+    for contour in contours:
+        _, y, _, h = cv2.boundingRect(contour)
+        if y + h/2 < config.EVACUATION_HEIGHT / 2: y_passed_contours.append(contour)
+    
+    circular_contours = [contour for contour in y_passed_contours if circularity_check(contour, 0.1) and cv2.contourArea(contour) > 100]
 
     if len(circular_contours) == 0: return None
 
     largest_contour = max(circular_contours, key=cv2.contourArea)
 
     x, _, w, _ = cv2.boundingRect(largest_contour)
+    
     if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 
     return int(x + w/2)
