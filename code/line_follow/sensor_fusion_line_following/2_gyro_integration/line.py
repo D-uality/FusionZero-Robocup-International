@@ -32,7 +32,7 @@ last_uphill = 0
 
 uphill_trigger = downhill_trigger = seasaw_trigger = False
 tilt_left_trigger = tilt_right_trigger = False
-acute_trigger = gap_trigger = False
+gap_trigger = False
 
 camera_enable = False
 
@@ -49,7 +49,6 @@ def main(evacuation_zone_enable: bool = False) -> None:
 
     seasaw_check()
     if not camera_enable:
-        acute_check(colour_values)
         gap_check(colour_values)
         green_signal = green_check(colour_values)
         silver_count = silver_check(colour_values, silver_count)
@@ -71,7 +70,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     main_loop_count += 1
 
 def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]]) -> None:
-    global uphill_trigger, downhill_trigger, acute_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger
+    global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger
     global main_loop_count, last_yaw, last_uphill
     global ir_integral, ir_derivative, ir_last_error, integral_reset_count, min_integral_reset_count
     global camera_integral, camera_derivative, camera_last_error, camera_last_angle
@@ -80,17 +79,23 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # Finding modifiers
     # ramp detection
     if gyroscope_values[0] is not None:
-        uphill_trigger   = True if gyroscope_values[0] >=  15 else False
-        downhill_trigger = True if gyroscope_values[0] <= -15 else False
-    
+        if gyroscope_values[0] < -90:
+            # Aidan Gyro
+            uphill_trigger   = True if gyroscope_values[0] <= -195 else False
+            downhill_trigger = True if gyroscope_values[0] >= -165 else False
+
+        else:
+            # Frederick Gyro
+            uphill_trigger   = True if gyroscope_values[0] >=  15 else False
+            downhill_trigger = True if gyroscope_values[0] <= -15 else False
+        
     # tilt detection
     # if gyroscope_values[1] is not None:
     #     tilt_left_trigger  = True if gyroscope_values[1] >=  15 else False
     #     tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
 
     # RESET DETECTION
-    if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:
-        if acute_trigger  and main_loop_count > 150: acute_trigger  = False  
+    if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:  
         if gap_trigger    and main_loop_count > 100: gap_trigger    = False
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
 
@@ -98,7 +103,6 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     modifiers = []
     if uphill_trigger:      modifiers.append("UPHILL")
     if downhill_trigger:    modifiers.append("DOWNHILL")
-    if acute_trigger:       modifiers.append("ACUTE")
     if tilt_left_trigger:   modifiers.append("TILT LEFT")
     if tilt_right_trigger:  modifiers.append("TILT RIGHT")
     if gap_trigger:         modifiers.append("GAP")
@@ -110,13 +114,12 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # PID Values
     if   uphill_trigger:   kP, kI, kD, v = 0.4 , 0     ,  0  , 25
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
-    elif acute_trigger:    kP, kI, kD, v = 1.5 , 0     ,  0  , 18
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
-    else:                  kP, kI, kD, v = 1.5 , 0     ,  0  , config.line_speed
+    else:                  kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
 
     # Input method
-    if uphill_trigger or downhill_trigger or acute_trigger or gap_trigger or seasaw_trigger:
+    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger:
         modifiers += " CAMERA"
         camera_enable = True
         led.on()
@@ -163,10 +166,10 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.3
         ir_derivative = error - ir_last_error
 
-        if colour_values[0] > 70 and colour_values[0] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
+        if colour_values[0] > 70 and colour_values[1] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = 1 + (colour_values[2] - 100)/100
+            middle_multi = max(1 + (colour_values[2] - 120)/100, 0)
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
 
@@ -245,34 +248,6 @@ def intersection_handling(signal: str, colour_values) -> None:
             colour_values = colour.read()
         
     else: print(signal)
-
-def acute_check(colour_values: list[int]) -> None:
-    global main_loop_count, acute_trigger, min_green_loop_count
-
-    if main_loop_count < min_green_loop_count: return None
-    
-    if (
-        ((colour_values[6] <= 20 and colour_values[5] <= 80) or (colour_values[6] <= 80 and colour_values[5] <= 20))
-        and colour_values[2] >= 80
-        and colour_values[0] + colour_values[4] >= 100
-    ): acute_trigger = True
-    
-    if acute_trigger:
-        config.update_log(["ACUTE CHECK", ", ".join(map(str, colour_values))], [24, 30])
-
-        # while True:
-        #     colour_values = colour.read()
-
-        #     # if   colour_values[5] <= 50 and colour_values[6] <= 50: motors.run(-config.line_speed, -config.line_speed)
-        #     # elif colour_values[5] <= 50:                            motors.run(-config.line_speed,  config.line_speed)
-        #     # elif colour_values[6] <= 50:                            motors.run( config.line_speed, -config.line_speed)
-
-        #     if colour_values[2] <= 20: break
-        #     config.update_log(["ACUTE ORIENTATING", ", ".join(map(str, colour_values))], [24, 30])
-        #     print()
-
-        motors.run(-config.line_speed * 1.5, -config.line_speed * 1.5, 1.2)
-        main_loop_count = 0
 
 def gap_check(colour_values: list[int]) -> None:
     global main_loop_count, gap_loop_count, gap_trigger
