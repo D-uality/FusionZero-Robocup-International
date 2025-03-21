@@ -9,8 +9,8 @@ import camera
 import motors
 import touch_sensors
 import laser_sensors
+import led
 import colour
-import testing
 
 from typing import Optional
 import victims
@@ -18,15 +18,16 @@ import triangles
 
 def main():
     camera.close()
-    camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
-    motors.run(0, 0, 4)
+    camera.initialise(config.EVACUATION_WIDTH, config.EVACUATION_HEIGHT)
+    motors.run(0, 0, 2)
     
     start_time = time.time()
-    motors.run(config.evacuation_speed, config.evacuation_speed, 0.5)
     motors.run(0, 0)
-
+    
+    with open("victim_count.txt", "r") as file:
+        config.victim_count = int(file.read())
+    
     while True:
-        if listener.get_mode() != 2: break
         if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
@@ -34,20 +35,25 @@ def main():
 
         find(search_function=search_type)
 
-        if route(search_function=search_type, kP=0.12):
+        if route(search_function=search_type, kP=0.35):
             if align(search_function=search_type, step_time=0.01):
                 if grab():
                     motors.claw_step(210, 0.005)
                     triangles.find()
+                    
                     dump()
                     config.victim_count += 1
+
+                    with open("victim_count.txt", "w") as file:
+                        file.write(str(config.victim_count))
                 else:
                     motors.claw_step(0, 0)
                     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
+                motors.pause()
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             motors.run(0, 0)
 
-    exit()
+    exit_evacuation_zone()
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -58,9 +64,10 @@ def find(search_function: callable) -> None:
         exit_entrance_count = 0
 
         while time.time() - start_time < time_constraint:
-            print(config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6]))
+            config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6])
+            print()
             image = camera.capture_array()
-
+            
             if config.X11: cv2.imshow("image", image)
 
             x = search_function(image)
@@ -76,7 +83,7 @@ def find(search_function: callable) -> None:
                 exit_entrance_count += 1 if sum(exit_entrance_values) >= 1 else 0
 
                 if exit_entrance_count >= 10:
-                    motors.run(-config,evacuation_speed, -config.evacuation_speed, 0.8)
+                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
                     motors.run( config.evacuation_speed, -config.evacuation_speed, 2)
                     return 0
                 else:
@@ -113,7 +120,7 @@ def route(search_function: callable, kP: float) -> bool:
         if x is None: return False
 
         scalar = 0.5 + (distance[0] - 15) * (0.5 / 85)
-        error = config.WIDTH / 2 - x
+        error = config.EVACUATION_WIDTH / 2 - x
         turn = int(error * kP)
         v1, v2 = scalar * (config.evacuation_speed-turn), scalar * (config.evacuation_speed+turn)
         motors.run(v1, v2)
@@ -130,7 +137,8 @@ def route(search_function: callable, kP: float) -> bool:
             exit_entrance_count = 0
 
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", f"{exit_entrance_count}"], [24, 12, 12, 12]))
+        config.update_log([f"ROUTE", f"{error}", f"{scalar:.2f}", f"{turn}", f"{exit_entrance_count}"], [24, 12, 12, 12])
+        print()
 
     motors.run(0, 0, 0.5)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ROUTE BACK")
@@ -143,19 +151,20 @@ def align(search_function: callable, step_time: float) -> bool:
     x = search_function(image)
     if x is None: return False
 
-    error = config.WIDTH / 2 - x
+    error = config.EVACUATION_WIDTH / 2 - x
 
     while error > 2:
         image = camera.capture_array()
         x = search_function(image)
         if x is None: return False
         
-        error = config.WIDTH / 2 - x
-        motors.run(-config.evacuation_speed * 0.62, config.evacuation_speed * 0.62, step_time)
+        error = config.EVACUATION_WIDTH / 2 - x
+        motors.run(-config.evacuation_speed, config.evacuation_speed, step_time)
         motors.run(0, 0, step_time)
 
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12]))
+        config.update_log([f"ALIGN LEFT", f"{error}"], [24, 12])
+        print()
 
     motors.run(0, 0, 0.3)
 
@@ -164,12 +173,13 @@ def align(search_function: callable, step_time: float) -> bool:
         x = search_function(image)
         if x is None: return False
 
-        error = config.WIDTH / 2 - x
-        motors.run(config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, step_time)
+        error = config.EVACUATION_WIDTH / 2 - x
+        motors.run(config.evacuation_speed, -config.evacuation_speed, step_time)
         motors.run(0, 0, step_time)
     
         if config.X11: cv2.imshow("image", image)
-        print(config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12]))
+        config.update_log([f"ALIGN RIGHT", f"{error}"], [24, 12])
+        print()
 
     motors.run(0, 0, 0.3)
     motors.run_until(-config.evacuation_speed * 0.62, -config.evacuation_speed * 0.62, laser_sensors.read, 1, ">=", config.approach_distance, "ALIGN BACK")
@@ -180,7 +190,7 @@ def align(search_function: callable, step_time: float) -> bool:
     return True
 
 def grab() -> bool:
-    def presence_check(trials: int, time_step: float) -> Optional[bool]:
+    def presence_check(trials: int, time_step: float) -> bool:
         def generate_random_points(x_centre: int, y_centre: int, radius: int) -> list[tuple[int, int]]:
             cycle_count = 0
             points = []
@@ -192,14 +202,14 @@ def grab() -> bool:
 
                 cycle_count += 1
 
-                if x < 0 or x >= config.WIDTH or y < 0 or y >= config.HEIGHT: continue
+                if x < 0 or x >= config.EVACUATION_WIDTH or y < 0 or y >= config.EVACUATION_HEIGHT: continue
                 points.append((x, y))
 
             return points
         
         y_levels = []
 
-        for _ in range(trials):
+        for _ in range(0, trials):
             time.sleep(time_step)
 
             image = camera.capture_array()
@@ -217,8 +227,11 @@ def grab() -> bool:
                 cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
                 cv2.imshow("image", image)
 
-            if y + h/2 > 144: y_levels.append(0)
-            else:             y_levels.append(1)
+            config.update_log(["PRESENCE CHECK", f"{y + h/2}"], [24, 10])
+            print()
+
+            if y + h/2 > 70: y_levels.append(0)
+            else:            y_levels.append(1)
 
         average = sum(y_levels) / trials
 
@@ -228,60 +241,71 @@ def grab() -> bool:
         image = camera.capture_array()
         black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
         
-        for x, y in points:
-            print(black_mask[y, x], end="   ")
+        for x, y in points: 
             if black_mask[y, x] == 255: black_count += 1
 
-        print(config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}"], [24, 10, 10, 10]))
-            
+        success_fail = True
+        
         if average > 0.5:
-            if black_count < len(points) * 0.5 and config.victim_count < 2:    return True
-            elif black_count > len(points) * 0.5 and config.victim_count == 2: return True
-            else:                                                              return False
-        else:                                                                  return False
+            if black_count < len(points) * 0.5 and config.victim_count < 2:    success_fail = True
+            elif black_count > len(points) * 0.5 and config.victim_count == 2: success_fail = True
+            else:                                                              success_fail = False
+        else:                                                                  success_fail = False
+        
+        config.update_log([f"PRESENCE CHECK", f"{black_count}", f"{average:.2f}", f"{black_count > len(points) * 0.5}", f"{success_fail=}"], [24, 10, 10, 10, 20])
+        print()    
+        
+        return success_fail
 
     config.update_log(["GRAB", "CLAW DOWN"], [24, 24])
-    print()
     motors.claw_step(0, 0.005)
+    print()
+    
     config.update_log(["GRAB", "MOVE FORWARDS"], [24, 24])
-    print()
-    motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 0.85)
+    motors.run(config.evacuation_speed, config.evacuation_speed, 1)
     motors.run(0, 0)
+    print()
+    
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
-    print()
-    motors.claw_step(100, 0.004)
+    motors.claw_step(120, 0.004)
     time.sleep(1)
+    print()
+    
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
-    print()
-    motors.run(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, 1)
+    motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
     motors.run(0, 0)
+    print()
+    
     config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
-    print()
-    motors.claw_step( 85, 0.05)
     motors.claw_step(100, 0.05)
-    config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
+    motors.claw_step(120, 0.05)
     print()
-    motors.claw_step(130, 0.001)
+    
+    config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
+    motors.claw_step(150, 0.001)
+    print()
 
-    time.sleep(0.3)
-    return presence_check(25, 0.01)
+    success_fail = presence_check(50, 0)
+    config.update_log(["GRAB", f"{success_fail}"], [24, 20])
+    print()
+    
+    return success_fail
 
 def dump() -> None:
     motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 0, "==", 0, "FORWARDS")
-    motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS")
+    # motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS")
 
     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.3)
     motors.run(0, 0)
     motors.claw_step(90, 0.005)
     
     time.sleep(1)
-
-    motors.claw_step(270, 0)
+    motors.claw_step(270, 0.001)
 
     motors.run(config.evacuation_speed, -config.evacuation_speed, randint(300, 1600) / 1000)
     motors.run(0, 0)
 
-def exit() -> bool:
+def exit_evacuation_zone() -> bool:
     def validate_exit() -> bool:
         black_count, silver_count = 0, 0
 
@@ -289,7 +313,8 @@ def exit() -> bool:
             motors.run(config.evacuation_speed, config.evacuation_speed)
             colour_values = colour.read()
 
-            print(config.update_log(["APPROACHING", f"{colour_values}", f"{black_count}", f"{silver_count}"], [24, 24, 6, 6]))
+            config.update_log(["APPROACHING", f"{colour_values}", f"{black_count}", f"{silver_count}"], [24, 24, 6, 6])
+            print()
 
             for value in colour_values:
                 if   value <= 20:  black_count  += 1
@@ -304,7 +329,8 @@ def exit() -> bool:
         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
         laser_values = laser_sensors.read([config.x_shut_pins[0]])
 
-        print(config.update_log(["EXITING", f"{touch_values}", f"{laser_values}"], [24, 10, 6]))
+        config.update_log(["EXITING", f"{touch_values}", f"{laser_values}"], [24, 10, 6])
+        print()
 
         if touch_values[0] == 0 or touch_values[1] == 0:
             motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.2)
