@@ -2,7 +2,7 @@ import time
 from adafruit_servokit import ServoKit
 
 pca = ServoKit(channels=16)
-servo_pins = [15, 14, 13, 12]
+servo_pins = [14, 13, 12, 10]
 stop_angles = [97, 96, 96, 97]
 
 def control_loop(pin_number, servo_pin, angle):

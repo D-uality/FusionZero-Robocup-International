@@ -30,10 +30,10 @@ def run(v1: float, v2: float, delay: float = 0) -> None:
     # positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
 
     # Aidan
-    negative_gradients  = [0.80872, 0.87105, 0.68875, 0.79321]
-    negative_intercepts = [-3.3078, -5.3841, -2.8756, -1.1818]
-    positive_gradients  = [0.81624, 0.80004, 0.68003, 0.67527]
-    positive_intercepts = [2.1236, 5.9884, 2.6411, 2.8736]
+    negative_gradients  = [0.84913, 0.81844, 0.65875, 0.66282]
+    negative_intercepts = [-4.9127, -1.4555, -2.5299, -3.2026]
+    positive_gradients  = [0.82710, 0.78876, 0.64755, 0.65793]
+    positive_intercepts = [4.2989, 3.5638, 2.6239, 2.5256]
     
     for i in range(0, 2):
         if   (v1 < negative_intercepts[i]): calculated_angles[i] = negative_gradients[i] * v1 + negative_intercepts[i]
