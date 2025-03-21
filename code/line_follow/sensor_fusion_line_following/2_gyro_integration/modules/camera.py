@@ -13,8 +13,12 @@ def initialise(WIDTH, HEIGHT):
     global camera
     try:
         camera = Picamera2()
-
-        camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=config.FLIP, hflip=config.FLIP))
+        camera_config = camera.create_still_configuration(
+            main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
+            # raw={"size": (2304, 1296), "format": "SBGGR10"},
+            raw={"size": (2304, 1500), "format": "SBGGR10"},
+            transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+        )
         camera.configure(camera_config)
         camera.start()
         
@@ -29,7 +33,7 @@ def initialise(WIDTH, HEIGHT):
 
     if config.X11:
         try:
-            cv2.startWindowThread()            
+            cv2.startWindowThread()
             config.update_log(["INITIALISATION", "X11", "✓"], [24, 24, 3])
             oled_display.text("X11: ✓", 60, 40)
         except Exception as e:
@@ -211,4 +215,9 @@ def close():
 
 def capture_array():
     global camera
-    return camera.capture_array()
+    
+    image = camera.capture_array()
+    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+    image = image[20:, :]
+
+    return image

@@ -5,17 +5,27 @@ from libcamera import Transform
 
 # Config variables
 TRANSFORM = False
-WIDTH, HEIGHT = 320, 240  # Correct resolution for Pi Camera
+WIDTH, HEIGHT = 320, 200  # Correct resolution for Pi Camera
 FLIP = False
 CROP_MIN, CROP_MAX = 0, HEIGHT
 
-# Initialize Picamera2
+# # Initialize Picamera2
+# camera = Picamera2()
+
+# # Create a correct transform object from libcamera.Transform
+# camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=FLIP, hflip=FLIP))
+
+# # Configure and start the camera
+# camera.configure(camera_config)
+# camera.start()
+
 camera = Picamera2()
-
-# Create a correct transform object from libcamera.Transform
-camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=FLIP, hflip=FLIP))
-
-# Configure and start the camera
+camera_config = camera.create_still_configuration(
+    main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
+    # raw={"size": (2304, 1296), "format": "SBGGR10"},
+    raw={"size": (2304, 1500), "format": "SBGGR10"},
+    transform=Transform(vflip=FLIP, hflip=FLIP)
+)
 camera.configure(camera_config)
 camera.start()
 
@@ -68,6 +78,8 @@ try:
     while True:
         # Capture image
         image = camera.capture_array()
+        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+        image = image[20:, :]
 
         # Apply perspective transform
         if TRANSFORM:

@@ -33,6 +33,9 @@ def main() -> None:
     oled_display.reset()
     led.off()
     
+    with open("victim_count.txt", "w") as file:
+        file.write(str(config.victim_count))
+    
     try:
         while not listener.has_exited():
             mode = listener.get_mode()
