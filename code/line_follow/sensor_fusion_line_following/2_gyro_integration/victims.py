@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional
 import laser_sensors
 
-from config import *
+import config
 
 def live(image: np.ndarray) -> Optional[int]:
     spectral_threshold = 200
@@ -22,7 +22,7 @@ def live(image: np.ndarray) -> Optional[int]:
     
     if y + h/2 > 100: return None
 
-    if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
+    if config.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 
     return int(x + w/2)
 
@@ -38,10 +38,11 @@ def dead(image: np.ndarray) -> Optional[int]:
         if circularity > threshold: return True
         return False
     
-    laser_value = laser_sensors.read([x_shut_pins[1]])[0]
-    if laser_value > 120:
-        print("laser check failed")
-        return None
+    laser_value = laser_sensors.read([config.x_shut_pins[1]])[0]
+    if laser_value is not None:
+        if laser_value > 120:
+            print("laser check failed")
+            return None
     
     black_threshold = 40
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -51,39 +52,27 @@ def dead(image: np.ndarray) -> Optional[int]:
     v_sharp = cv2.addWeighted(v, 1.5, v_blur, -0.5, 0)
     hsv_image = cv2.merge([h, s, v_sharp])
     
-    cv2.imshow("hsv_image", image)
-
-    black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 127, 30))
+    black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 30))
     contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if not contours: return None
     
     cv2.drawContours(image, contours, -1, (0, 0, 255), 1)
-
-    for contour in contours:
-        if cv2.contourArea(contour) < 100: continue
-        perimeter = cv2.arcLength(contour, True)
-        area = cv2.contourArea(contour)
-
-        if perimeter == 0: return False
-
-        circularity = (4 * np.pi * area) / (perimeter ** 2)
-        print(circularity, cv2.contourArea(contour))
     
-    y_passed_contours = []
+    valid_contours = []
     
     for contour in contours:
         _, y, _, h = cv2.boundingRect(contour)
-        if y + h/2 < config.EVACUATION_HEIGHT / 2: y_passed_contours.append(contour)
+        if (y + h/2 < config.EVACUATION_HEIGHT / 2
+            and circularity_check(contour, 0.5)
+            and cv2.contourArea(contour) > 100):
+            valid_contours.append(contour)
     
-    circular_contours = [contour for contour in y_passed_contours if circularity_check(contour, 0.1) and cv2.contourArea(contour) > 100]
-
-    if len(circular_contours) == 0: return None
-
-    largest_contour = max(circular_contours, key=cv2.contourArea)
+    if len(valid_contours) == 0: return None
+    largest_contour = max(valid_contours, key=cv2.contourArea)
 
     x, _, w, _ = cv2.boundingRect(largest_contour)
     
-    if X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
+    if config.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
 
     return int(x + w/2)

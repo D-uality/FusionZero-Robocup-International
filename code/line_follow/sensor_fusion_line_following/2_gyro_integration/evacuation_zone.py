@@ -49,7 +49,6 @@ def main():
                 else:
                     motors.claw_step(0, 0)
                     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
-                motors.pause()
             else: motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
             motors.run(0, 0)
 
@@ -64,31 +63,29 @@ def find(search_function: callable) -> None:
         exit_entrance_count = 0
 
         while time.time() - start_time < time_constraint:
-            config.update_log([f"SEARCH WHILE", f"{v1}", f"{v2}", f"{search_function.__name__}", f"{config.victim_count}", f"{exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 8, 8, 10, 6, 6, 6])
-            print()
             image = camera.capture_array()
             
-            if config.X11: cv2.imshow("image", image)
-
             x = search_function(image)
-
             if x is not None: return 1
             
             if conditional_function is not None:
                 current_condition = conditional_function()
                 if current_condition != initial_condition: return 0
 
-                colour_values = colour.read()
-                exit_entrance_values = [1 if value >= 120 or value <= 30 else 0 for value in colour_values]
-                exit_entrance_count += 1 if sum(exit_entrance_values) >= 1 else 0
+            colour_values = colour.read()
+            exit_entrance_values = [1 if value >= 100 or value <= 30 else 0 for value in colour_values]
+            exit_entrance_count = exit_entrance_count + sum(exit_evacuation_zone) if sum(exit_entrance_values) >= 1 else 0
 
-                if exit_entrance_count >= 10:
-                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.8)
-                    motors.run( config.evacuation_speed, -config.evacuation_speed, 2)
-                    return 0
-                else:
-                    exit_entrance_count = 0
+            if exit_entrance_count >= 5:
+                config.update_log([f"EXIT_ENTRANCE FOUND"], [24])
+                print()
+                motors.pause()
+                return 0
 
+            if config.X11: cv2.imshow("image", image)
+            config.update_log([f"SEARCH WHILE", f"{v1} {v2}", f"searching for: {search_function.__name__}", f"victim_count: {config.victim_count}", ",".join(list(map(str, colour_values))), f"{exit_entrance_count=}", f"{time.time() - start_time:.2f}"], [24, 10, 15, 15, 30, 15, 6])
+            print()
+            
         motors.run(0, 0)
 
         return None
@@ -96,15 +93,17 @@ def find(search_function: callable) -> None:
     found_status = 0
 
     while found_status != 1:
+        # Search while moving forwards
         found_status = search_while(v1=config.evacuation_speed, v2=config.evacuation_speed, time_constraint=3.5, search_function=search_function, conditional_function=touch_sensors.read)
 
         if found_status == 1: continue
         elif found_status == 0: motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.2)
         motors.run(0, 0)
 
+        # Differentiate between wall and blank space
         time_delay = 7 if found_status is None else randint(800, 1600) / 1000
 
-        found_status = search_while(v1=config.evacuation_speed * 0.62, v2=-config.evacuation_speed * 0.62, search_function=search_function, time_constraint=time_delay)
+        found_status = search_while(v1=config.evacuation_speed, v2=-config.evacuation_speed, search_function=search_function, time_constraint=time_delay)
 
     motors.run(0, 0)
 
@@ -215,7 +214,7 @@ def grab() -> bool:
             image = camera.capture_array()
             hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-            blue_mask = cv2.inRange(hsv_image, (100, 0, 0), (160, 255, 60))
+            blue_mask = cv2.inRange(hsv_image, (100, 0, 0), (140, 255, 60))
             contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             if not contours: continue
@@ -236,7 +235,12 @@ def grab() -> bool:
         average = sum(y_levels) / trials
 
         black_count = 0
-        points = generate_random_points(80, 25, 20) + generate_random_points(240, 25, 20)
+        cv2.circle(image, (120, 16), 16, (255, 0, 0), 1)
+        cv2.circle(image, (config.EVACUATION_WIDTH - 120, 16), 16, (255, 0, 0), 1)
+        
+        cv2.imshow("image", image)
+        
+        points = generate_random_points(120, 16, 16) + generate_random_points(config.EVACUATION_WIDTH - 120, 16, 16)
 
         image = camera.capture_array()
         black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
@@ -285,15 +289,15 @@ def grab() -> bool:
     motors.claw_step(150, 0.001)
     print()
 
-    success_fail = presence_check(50, 0)
+    success_fail = presence_check(25, 0)
     config.update_log(["GRAB", f"{success_fail}"], [24, 20])
     print()
     
     return success_fail
 
 def dump() -> None:
-    motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 0, "==", 0, "FORWARDS")
-    # motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS")
+    motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
+    motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
 
     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.3)
     motors.run(0, 0)
