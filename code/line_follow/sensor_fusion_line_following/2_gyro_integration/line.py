@@ -30,14 +30,14 @@ silver_count = 0
 laser_close_count = 0
 last_uphill = 0
 
-uphill_trigger = downhill_trigger = seasaw_trigger = False
+uphill_trigger = downhill_trigger = seasaw_trigger = evac_trigger = False
 tilt_left_trigger = tilt_right_trigger = False
 gap_trigger = False
 
 camera_enable = False
 
 def main(evacuation_zone_enable: bool = False) -> None:
-    global main_loop_count, laser_close_count, silver_count
+    global main_loop_count, laser_close_count, silver_count, evac_trigger
 
     green_signal = ""
     colour_values = colour.read()
@@ -58,6 +58,14 @@ def main(evacuation_zone_enable: bool = False) -> None:
         motors.run(0, 0, 1)
 
         evacuation_zone.main()
+        print("Exited")
+
+        evac_trigger = True
+        for i in range(20):
+            print(i)
+            colour_values = colour.read()
+            follow_line(colour_values, [None, None, None])
+        evac_trigger = False
 
     elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 15:
         avoid_obstacle()
@@ -70,7 +78,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     main_loop_count += 1
 
 def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]]) -> None:
-    global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger
+    global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger, evac_trigger
     global main_loop_count, last_yaw, last_uphill
     global ir_integral, ir_derivative, ir_last_error, integral_reset_count, min_integral_reset_count
     global camera_integral, camera_derivative, camera_last_error, camera_last_angle
@@ -116,10 +124,11 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
+    elif evac_trigger:     kP, kI, kD, v = 1   , 0     ,  0  , 18
     else:                  kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
 
     # Input method
-    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger:
+    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger:
         modifiers += " CAMERA"
         camera_enable = True
         led.on()
@@ -224,7 +233,7 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "left":
-        motors.run(-config.line_speed - 5, config.line_speed + 5, 1.2)
+        motors.run(-config.line_speed - 5, config.line_speed + 5, 0.8)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
         while colour_values[0] < 40 and turn_count < 500:
@@ -232,7 +241,7 @@ def intersection_handling(signal: str, colour_values) -> None:
             colour_values = colour.read()
 
     elif signal == "right":
-        motors.run(config.line_speed + 5, -config.line_speed - 5, 1.2)
+        motors.run(config.line_speed + 5, -config.line_speed - 5, 0.8)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
         while colour_values[4] < 40 and turn_count < 500:

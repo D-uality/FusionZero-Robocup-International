@@ -14,7 +14,7 @@ from adafruit_bno08x import (
 
 i2c = busio.I2C(board.SCL, board.SDA)
 gyroscope = None
-delay_time, last_read = 0.01, 0
+delay_time, last_read = 0.02, 0
 last_angles = unwrapped_angles = None
 
 def initialise():
@@ -28,6 +28,8 @@ def initialise():
         gyroscope.enable_feature(BNO_REPORT_ROTATION_VECTOR)
         
         config.update_log(["INITIALISATION", "GYROSCOPE", "✓"], [24, 24, 3])
+
+        read()
     except Exception as e:
         config.update_log(["INITIALISATION", "GYROSCOPE", "X"], [24, 24, 3])
         print(f"Failed to initialise gyroscope: {e}")

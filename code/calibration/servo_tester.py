@@ -3,18 +3,17 @@ from adafruit_servokit import ServoKit
 
 servos = ServoKit(channels=16)
 servo_pins = [14, 13, 12, 10]
-stop_angles = [89, 88, 89, 88]
-# servo_pins = [15, 14, 13, 12]
-# stop_angles = [97, 96, 96, 97]
+# stop_angles = [89, 88, 89, 88]
+stop_angles = [97, 96, 96, 97]
 
 def run(v1, v2, delay=0):
 
     calculatedAngles = [0, 0, 0, 0]
 
-    negativeGradients  = [0.69106, 0.73440, 0.68426, 0.67425]
-    negativeIntercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-    positiveGradients  = [0.69924, 0.66035, 0.69858, 0.67916]
-    positiveIntercepts = [4.1509, 6.5548, 3.5948, 4.2287]
+    negativeGradients  = [0.84913, 0.81844, 0.65875, 0.66282]
+    negativeIntercepts = [-4.9127, -1.4555, -2.5299, -3.2026]
+    positiveGradients  = [0.82710, 0.78876, 0.64755, 0.65793]
+    positiveIntercepts = [4.2989, 3.5638, 2.6239, 2.5256]
 
     # negativeGradients  = [0.80872, 0.87105, 0.68875, 0.79321]
     # negativeIntercepts = [-3.3078, -5.3841, -2.8756, -1.1818]
