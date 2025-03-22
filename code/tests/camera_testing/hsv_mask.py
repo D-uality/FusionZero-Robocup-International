@@ -19,6 +19,12 @@ CROP_MIN, CROP_MAX = 0, HEIGHT
 # camera.configure(camera_config)
 # camera.start()
 
+from gpiozero import LED
+from time import sleep
+
+led = LED(13)
+led.on()
+
 camera = Picamera2()
 camera_config = camera.create_still_configuration(
     main={"size": (WIDTH, HEIGHT), "format": "YUV420"},

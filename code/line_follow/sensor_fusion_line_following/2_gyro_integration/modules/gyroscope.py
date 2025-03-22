@@ -14,7 +14,7 @@ from adafruit_bno08x import (
 
 i2c = busio.I2C(board.SCL, board.SDA)
 gyroscope = None
-delay_time, last_read = 0.01, 0
+delay_time, last_read = 0.02, 0
 last_angles = unwrapped_angles = None
 
 def initialise():
@@ -29,6 +29,8 @@ def initialise():
         
         config.update_log(["INITIALISATION", "GYROSCOPE", "✓"], [24, 15, 50])
         print()
+
+        read()
     except Exception as e:
         config.update_log(["INITIALISATION", "GYROSCOPE", f"{e}"], [24, 15, 50])
         print()

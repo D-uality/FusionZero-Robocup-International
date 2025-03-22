@@ -14,7 +14,8 @@ import gyroscope
 import led
 
 ir_integral = ir_derivative = ir_last_error = 0
-camera_integral = camera_derivative = camera_last_error = camera_last_angle= 0
+camera_integral = camera_derivative = camera_last_error = 0
+camera_last_angle = 90
 last_angle = 90
 
 min_integral_reset_count, integral_reset_count = 2, 0
@@ -26,18 +27,20 @@ gap_loop_count = 0
 
 silver_min = 110
 silver_count = 0
+red_threshold = [ [45, 75], [35, 65] ]
+red_count = 0
 
 laser_close_count = 0
 last_uphill = 0
 
-uphill_trigger = downhill_trigger = seasaw_trigger = False
+uphill_trigger = downhill_trigger = seasaw_trigger = evac_trigger = False
 tilt_left_trigger = tilt_right_trigger = False
 gap_trigger = False
-
+evac_exited = False
 camera_enable = False
 
 def main(evacuation_zone_enable: bool = False) -> None:
-    global main_loop_count, laser_close_count, silver_count
+    global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, camera_last_angle, evac_exited
 
     green_signal = ""
     colour_values = colour.read()
@@ -52,13 +55,30 @@ def main(evacuation_zone_enable: bool = False) -> None:
         gap_check(colour_values)
         green_signal = green_check(colour_values)
         silver_count = silver_check(colour_values, silver_count)
+        if evac_exited: red_count = red_check(colour_values, red_count)
         
     if silver_count > 10:
+        silver_count = 0
         print("Silver Found")
-        motors.run(0, 0, 1)
-
+        motors.run(0, 0)
         evacuation_zone.main()
+        print("Exited")
+        led.on()
+        motors.run(0, 0, 2)
+        evac_trigger = True
+        camera_last_angle = 90
+        for i in range(25):
+            print(i)
+            colour_values = colour.read()
+            follow_line(colour_values, [None, None, None])
+        evac_trigger = False
+        evac_exited = True
 
+        motors.run(0, 0, 1)
+    elif red_count > 10:
+        red_count = 0
+        print("Red Found")
+        motors.run(0, 0, 10)
     elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 15:
         avoid_obstacle()
     elif len(green_signal) > 0:
@@ -70,7 +90,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     main_loop_count += 1
 
 def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]]) -> None:
-    global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger
+    global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger, evac_trigger
     global main_loop_count, last_yaw, last_uphill
     global ir_integral, ir_derivative, ir_last_error, integral_reset_count, min_integral_reset_count
     global camera_integral, camera_derivative, camera_last_error, camera_last_angle
@@ -116,10 +136,11 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
-    else:                  kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
+    elif evac_trigger:     kP, kI, kD, v = 0.5 , 0     ,  0  , 18
+    else:                  kP, kI, kD, v = 1.3   , 0     ,  0  , config.line_speed
 
     # Input method
-    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger:
+    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger:
         modifiers += " CAMERA"
         camera_enable = True
         led.on()
@@ -169,7 +190,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         if colour_values[0] > 70 and colour_values[1] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = max(1 + (colour_values[2] - 120)/100, 0)
+            middle_multi = max(1 + (colour_values[2] - 70)/100, 0)
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
 
@@ -224,7 +245,7 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "left":
-        motors.run(-config.line_speed - 5, config.line_speed + 5, 1.2)
+        motors.run(-config.line_speed - 5, config.line_speed + 5, 0.8)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
         while colour_values[0] < 40 and turn_count < 500:
@@ -232,7 +253,7 @@ def intersection_handling(signal: str, colour_values) -> None:
             colour_values = colour.read()
 
     elif signal == "right":
-        motors.run(config.line_speed + 5, -config.line_speed - 5, 1.2)
+        motors.run(config.line_speed + 5, -config.line_speed - 5, 0.8)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
         while colour_values[4] < 40 and turn_count < 500:
@@ -366,7 +387,20 @@ def avoid_obstacle():
             colour_values = colour.read()
 
 def silver_check(colour_values, silver_count):
-    silver_values = [1 if value > 110 else 0 for value in colour_values]
-    silver_count = silver_count + 1 if sum(silver_values) > 2 and colour_values[2] > 30 else 0
+    global silver_min
+    if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
+        silver_count += 1
+    else: 
+        silver_count = 0
     
     return silver_count
+
+def red_check(colour_values, red_count):
+    global red_threshold
+    print(red_count)
+    if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 for i in range(5)):
+        red_count += 1
+    else: 
+        red_count = 0
+    
+    return red_count
