@@ -15,6 +15,7 @@ def live(image: np.ndarray) -> Optional[int]:
     contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if not contours: return None
+    if config.X11: cv2.drawContours(image, contours, -1, (0, 0, 255), 1)
 
     valid_contours = []
     
@@ -24,19 +25,15 @@ def live(image: np.ndarray) -> Optional[int]:
         
         # look for contours in the top quarter
         if (y + h/2 < 50
-            and cv2.contourArea(contour) < 200):
+            and cv2.contourArea(contour) < 300):
             valid_contours.append(contour)
     
     if len(valid_contours) == 0: return None
 
     largest_contour = max(valid_contours, key=cv2.contourArea)
-
-    x, y, w, h = cv2.boundingRect(largest_contour)
+    x, _, w, _ = cv2.boundingRect(largest_contour)
     
-    if y + h/2 > 100: return None
-
     if config.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
-
     return int(x + w/2)
 
 def dead(image: np.ndarray) -> Optional[int]:
@@ -70,7 +67,7 @@ def dead(image: np.ndarray) -> Optional[int]:
 
     if not contours: return None
     
-    cv2.drawContours(image, contours, -1, (0, 0, 255), 1)
+    if config.X11: cv2.drawContours(image, contours, -1, (0, 0, 255), 1)
     
     valid_contours = []
     
