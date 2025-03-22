@@ -11,22 +11,30 @@ tof_sensors = []
 def initialise() -> None:
     def change_address(pin_number: int, x_shut_pin: int) -> None:
         attempts = 5
+        
         for attempt in range(1, attempts + 1):
             try:
                 GPIO.output(x_shut_pin, GPIO.HIGH)
                 time.sleep(0.1)
+                
                 sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
                 tof_sensors.append(sensor_i2c)
+                
                 if pin_number < len(config.x_shut_pins) - 1:
                     sensor_i2c.set_address(pin_number + 0x30)
-                print([f"ToF[{pin_number}]", "✓"])
+                
+                config.update_log(["INITIALISATION", f"LASER {pin_number}", "✓"], [24, 15, 50])
+                print()
                 oled_display.text(f"ToF[{pin_number}]: ✓", 0, 0 + 10 * pin_number)
+                
                 break
+            
             except Exception as e:
                 if attempt == attempts:
                     raise e
                 else:
-                    print(f"Attempt {attempt} failed: {e}. Retrying...")
+                    config.update_log(["INITIALISATION", f"LASER {x_shut_pin}", f"{e}"], [24, 15, 50])
+                    print()
                     time.sleep(0.1)
 
 

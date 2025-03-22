@@ -6,8 +6,8 @@ X11 = True
 touch_pins = [6, 26]  # FL, FR
 x_shut_pins = [23, 24, 25]  # Left, Middle, Right
 
-# stop_angles = [88, 89, 88, 89] # Frederick
-stop_angles = [97, 96, 96, 97] # Aidan
+stop_angles = [88, 89, 88, 89] # Frederick
+# stop_angles = [97, 96, 96, 97] # Aidan
 servo_pins = [14, 13, 12, 10]  # FL, FR, BL, BR
 claw_pin = 9
 

@@ -33,6 +33,10 @@ def main():
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0)
 
+        # TODO Fix sequencing
+        # TODO find -> route -> alignment -> grab [FAIL]
+        # TODO MUST return to route again, instead of back into alignemnet
+
         find(search_function=search_type)
 
         if route(search_function=search_type, kP=0.35):
@@ -64,30 +68,33 @@ def find(search_function: callable) -> None:
 
         while time.time() - start_time < time_constraint:
             image = camera.capture_array()
-            
             x = search_function(image)
+            
+            # If victim in image
             if x is not None: return 1
             
+            # Check conditional function and whether it has updated or not
             if conditional_function is not None:
                 current_condition = conditional_function()
                 if current_condition != initial_condition: return 0
 
+            # Ensure we stay within the evacuation_zone
             colour_values = colour.read()
-            exit_entrance_values = [1 if value >= 100 or value <= 30 else 0 for value in colour_values]
-            exit_entrance_count = exit_entrance_count + sum(exit_evacuation_zone) if sum(exit_entrance_values) >= 1 else 0
+            exit_entrance_values = [1 if value >= 120 or value <= 30 else 0 for value in colour_values]
+            exit_entrance_count = exit_entrance_count + sum(exit_entrance_values) if sum(exit_entrance_values) >= 1 else 0
 
-            if exit_entrance_count >= 5:
+            if exit_entrance_count >= 10:
                 config.update_log([f"EXIT_ENTRANCE FOUND"], [24])
                 print()
                 motors.pause()
                 return 0
 
+            # Display debug
             if config.X11: cv2.imshow("image", image)
-            config.update_log([f"SEARCH WHILE", f"{v1} {v2}", f"searching for: {search_function.__name__}", f"victim_count: {config.victim_count}", ",".join(list(map(str, colour_values))), f"{exit_entrance_count=}", f"{time.time() - start_time:.2f}"], [24, 10, 15, 15, 30, 15, 6])
+            config.update_log([f"SEARCH WHILE", f"{v1} {v2}", f"{search_function.__name__}", f"victim_count: {config.victim_count}", ",".join(list(map(str, colour_values))), f"ee_count: {exit_entrance_count}", f"{time.time() - start_time:.2f}"], [24, 10, 10, 15, 30, 15, 6])
             print()
             
         motors.run(0, 0)
-
         return None
 
     found_status = 0
@@ -103,7 +110,7 @@ def find(search_function: callable) -> None:
         # Differentiate between wall and blank space
         time_delay = 7 if found_status is None else randint(800, 1600) / 1000
 
-        found_status = search_while(v1=config.evacuation_speed, v2=-config.evacuation_speed, search_function=search_function, time_constraint=time_delay)
+        found_status = search_while(v1=config.evacuation_speed * 0.65, v2=-config.evacuation_speed * 0.65, search_function=search_function, time_constraint=time_delay)
 
     motors.run(0, 0)
 

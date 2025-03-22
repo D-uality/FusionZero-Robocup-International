@@ -12,11 +12,12 @@ def initialise() -> None:
         oled.fill(0)
         oled.show()
 
-        
-        print(["OLED", "✓"])
+        config.update_log(["INITIALISATION", "OLED", "✓"], [24, 15, 50])
+        print()
 
     except Exception as e:
-        print(["OLED", "X", f"{e}"])
+        config.update_log(["INITIALISATION", "OLED", f"{e}"], [24, 15, 50])
+        print()
 
 def reset() -> None:
     global image

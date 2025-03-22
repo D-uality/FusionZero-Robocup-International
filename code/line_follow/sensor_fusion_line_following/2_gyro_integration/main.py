@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from listener import listener
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,13 +16,13 @@ import oled_display
 import motors
 import gyroscope
 import led
-
 import line
 import evacuation_zone
 import testing
 import config
 
 def main() -> None:
+    start_time = time.time()
     oled_display.initialise()
     laser_sensors.initialise()
     touch_sensors.initialise()
@@ -32,6 +33,9 @@ def main() -> None:
     motors.run(0, 0)
     oled_display.reset()
     led.off()
+    
+    config.update_log(["INITIALISATION", f"({time.time() - start_time:.2f})"], [24, 15])
+    print()
     
     with open("victim_count.txt", "w") as file:
         file.write(str(config.victim_count))

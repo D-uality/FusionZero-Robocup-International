@@ -16,7 +16,20 @@ def live(image: np.ndarray) -> Optional[int]:
 
     if not contours: return None
 
-    largest_contour = max(contours, key=cv2.contourArea)
+    valid_contours = []
+    
+    for contour in contours:
+        _, y, _, h = cv2.boundingRect(contour)
+        print(cv2.contourArea(contour))
+        
+        # look for contours in the top quarter
+        if (y + h/2 < 50
+            and cv2.contourArea(contour) < 200):
+            valid_contours.append(contour)
+    
+    if len(valid_contours) == 0: return None
+
+    largest_contour = max(valid_contours, key=cv2.contourArea)
 
     x, y, w, h = cv2.boundingRect(largest_contour)
     
@@ -69,6 +82,7 @@ def dead(image: np.ndarray) -> Optional[int]:
             valid_contours.append(contour)
     
     if len(valid_contours) == 0: return None
+    
     largest_contour = max(valid_contours, key=cv2.contourArea)
 
     x, _, w, _ = cv2.boundingRect(largest_contour)

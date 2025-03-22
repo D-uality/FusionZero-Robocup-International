@@ -14,11 +14,14 @@ def initialise() -> None:
         pca.servo[config.servo_pins[3]].angle = config.stop_angles[3]
 
         pca.servo[config.claw_pin].angle = 270
-        print("Motors", "✓")
+        config.update_log(["INITIALISATION", "MOTORS", f"✓"], [24, 15, 50])
+        print()
         
     except Exception as e:
-        print("Motors", "X")
-        print(f"Failed to initialise motors: {e}")
+        config.update_log(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
+        print()
+        
+        raise e
 
 def run(v1: float, v2: float, delay: float = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
