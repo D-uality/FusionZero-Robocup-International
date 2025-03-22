@@ -8,7 +8,7 @@ x_shut_pins = [23, 24, 25]  # Left, Middle, Right
 
 # stop_angles = [88, 89, 88, 89] # Frederick
 stop_angles = [97, 96, 96, 97] # Aidan
-servo_pins = [14, 13, 12, 10]  # FL, FR, BL, BR
+servo_pins = [14, 13, 12, 10]  # BL, FL, FR, BR
 claw_pin = 9
 
 def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|"):
