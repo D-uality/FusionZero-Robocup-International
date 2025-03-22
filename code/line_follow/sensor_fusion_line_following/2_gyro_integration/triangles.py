@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import config
 import laser_sensors
+import touch_sensors
 import camera
 import motors
 from tabulate import tabulate
@@ -12,9 +13,9 @@ def find() -> None:
         while True:
 
             if time_step is None: 
-                motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4)
+                motors.run(config.evacuation_speed * direction * 0.5, -config.evacuation_speed * direction * 0.5)
             else:
-                motors.run(config.evacuation_speed * direction * 0.4, -config.evacuation_speed * direction * 0.4, time_step)
+                motors.run(config.evacuation_speed * direction * 0.5, -config.evacuation_speed * direction * 0.5, time_step)
                 motors.run(0, 0, time_step)
 
             image = camera.capture_array()
@@ -47,30 +48,29 @@ def find() -> None:
                 continue
 
             x, y, w, h = cv2.boundingRect(largest_contour)
-
-            direction = -1 if config.EVACUATION_WIDTH/2 - int(x+ w/2) >= 0 else 1
+            offset = 15
+            
+            direction = -1 if config.EVACUATION_WIDTH/2 - int(x+ w/2) + offset >= 0 else 1
 
             if config.X11:
                 cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
                 cv2.circle(image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
                 cv2.imshow("image", image)
 
-            if config.EVACUATION_WIDTH/2 - (x + w / 2) < tolerance and config.EVACUATION_WIDTH/2 - (x + w / 2) > -tolerance: break
+            if config.EVACUATION_WIDTH/2 - (x + w / 2)  + offset < tolerance and config.EVACUATION_WIDTH/2 - (x + w / 2)  + offset > -tolerance: break
 
             print(config.update_log([f"({text})", "green" if config.victim_count < 2 else "red", f"{config.EVACUATION_WIDTH/2 - (x + w / 2)}"], [24, 10, 10]))
 
     config.update_log(["TRIANGLE", "initial alignment"], [24, 24])
     print()
     align(tolerance=10, text="Initial Alignment")
-    motors.run(0, 0)
-
-    motors.run(0, 0, 0.3)
-    motors.run_until(config.evacuation_speed, config.evacuation_speed, laser_sensors.read, 1, "<=", 35)
-    motors.run(0, 0, 0.3)
-    motors.run_until(-config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 1, ">=", 35)
-    motors.run(0, 0)
+    
+    motors.run_until( config.evacuation_speed * 1.5,  config.evacuation_speed * 1.5, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
+    motors.run_until( config.evacuation_speed * 1.5,  config.evacuation_speed * 1.5, touch_sensors.read, 1, "==", 0, "FORWARDS LEFT")
+    motors.run      ( config.evacuation_speed      ,  config.evacuation_speed      , 0.3)
+    motors.run_until(-config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 1, ">=", 30)
 
     print("(TRIANGLE SEARCH) Fine alignment")
-    align(tolerance=3, text="Fine Alignment", time_step=0.1)
-
+    align(tolerance=3, text="Fine Alignment #1", time_step=0.05)
+        
     motors.run(0, 0)

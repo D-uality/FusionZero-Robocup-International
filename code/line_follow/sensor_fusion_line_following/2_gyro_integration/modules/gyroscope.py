@@ -27,13 +27,16 @@ def initialise():
         gyroscope.enable_feature(BNO_REPORT_MAGNETOMETER)
         gyroscope.enable_feature(BNO_REPORT_ROTATION_VECTOR)
         
-        config.update_log(["INITIALISATION", "GYROSCOPE", "✓"], [24, 24, 3])
+        config.update_log(["INITIALISATION", "GYROSCOPE", "✓"], [24, 15, 50])
+        print()
 
         read()
     except Exception as e:
-        config.update_log(["INITIALISATION", "GYROSCOPE", "X"], [24, 24, 3])
-        print(f"Failed to initialise gyroscope: {e}")
-        exit()
+        config.update_log(["INITIALISATION", "GYROSCOPE", f"{e}"], [24, 15, 50])
+        print()
+        
+        raise e
+        
         
 def read():
     global gyroscope, last_read, delay_time, last_angles, unwrapped_angles

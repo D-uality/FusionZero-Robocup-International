@@ -9,10 +9,21 @@ import oled_display
 min_black_area = 50
 camera = None
 
-def initialise(WIDTH, HEIGHT):
+def initialise(mode: str):
     global camera
     try:
         camera = Picamera2()
+        
+        if "evac" in mode:
+            camera_config = camera.create_still_configuration(
+                main={"size": (config.EVACUATION_WIDTH, config.EVACUATION_HEIGHT), "format": "YUV420"},
+                # raw={"size": (2304, 1296), "format": "SBGGR10"},
+                raw={"size": (2304, 1500), "format": "SBGGR10"},
+                transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+            )
+        else:
+            camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.LINE_WIDTH, config.LINE_HEIGHT)})
+            
         camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)})
         # camera_config = camera.create_still_configuration(
         #     main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
@@ -23,25 +34,29 @@ def initialise(WIDTH, HEIGHT):
         camera.configure(camera_config)
         camera.start()
         
-        config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 24, 3])
+        config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
+        print()
         oled_display.text("Camera: ✓", 0, 40)
         
     except Exception as e:
-        config.update_log(["INITIALISATION", "CAMERA", "X"], [24, 24, 3])
-        print(f"Camera failed to initialise: {e}")
+        config.update_log(["INITIALISATION", "CAMERA", f"{e}"], [24, 15, 50])
+        print()
         oled_display.text("Camera: X", 0, 40)
-        exit()
+        raise e
 
     if config.X11:
         try:
             cv2.startWindowThread()
-            config.update_log(["INITIALISATION", "X11", "✓"], [24, 24, 3])
+            
+            config.update_log(["INITIALISATION", "X11", "✓"], [24, 15, 50])
+            print()            
             oled_display.text("X11: ✓", 60, 40)
+            
         except Exception as e:
-            config.update_log(["INITIALISATION", "X11", "X"], [24, 24, 3])
-            print(f"X11 failed to initialise: {e}")
+            config.update_log(["INITIALISATION", "X11", f"{e}"], [24, 15, 50])
+            print()
             oled_display.text("X11: X", 60, 40)
-            exit()
+            raise e
 
 def perspective_transform(image):
     """Apply perspective transform to the image"""
