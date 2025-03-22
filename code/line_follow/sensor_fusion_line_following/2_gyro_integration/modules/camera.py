@@ -13,12 +13,13 @@ def initialise(WIDTH, HEIGHT):
     global camera
     try:
         camera = Picamera2()
-        camera_config = camera.create_still_configuration(
-            main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
-            # raw={"size": (2304, 1296), "format": "SBGGR10"},
-            raw={"size": (2304, 1500), "format": "SBGGR10"},
-            transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
-        )
+        camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)})
+        # camera_config = camera.create_still_configuration(
+        #     main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
+        #     # raw={"size": (2304, 1296), "format": "SBGGR10"},
+        #     raw={"size": (2304, 1500), "format": "SBGGR10"},
+        #     transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+        # )
         camera.configure(camera_config)
         camera.start()
         
@@ -44,9 +45,9 @@ def initialise(WIDTH, HEIGHT):
 
 def perspective_transform(image):
     """Apply perspective transform to the image"""
-    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 2.4))
+    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 1.8))
     bottom_left =   (0, config.LINE_HEIGHT - 1)
-    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 2.4))
+    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 1.8))
     bottom_right =  (config.LINE_WIDTH, config.LINE_HEIGHT- 1 )
     
     # Define points for the perspective transform (source and destination)
@@ -62,7 +63,8 @@ def perspective_transform(image):
     return transformed_image
 
 def find_line_black_mask(image, display_image, prev_angle):
-    black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    black_mask = cv2.inRange(image, (0, 0, 0), (255, 255, 60))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
     black_mask = cv2.erode(black_mask, kernel, iterations=3)
     black_mask = cv2.dilate(black_mask, kernel, iterations=4)
@@ -140,7 +142,7 @@ def calculate_angle(contour, display_image, prev_angle):
 
     if contour is not None:
         # Adjust edge definitions to include a few pixels margin
-        top_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][1] <= 5]
+        top_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][1] <= 10]
         left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
         right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= config.LINE_WIDTH - 10]
 
@@ -217,7 +219,7 @@ def capture_array():
     global camera
     
     image = camera.capture_array()
-    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
-    image = image[20:, :]
+    # image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+    # image = image[20:, :]
 
     return image
