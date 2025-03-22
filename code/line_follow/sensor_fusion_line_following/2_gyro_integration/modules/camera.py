@@ -9,16 +9,21 @@ import oled_display
 min_black_area = 50
 camera = None
 
-def initialise(WIDTH, HEIGHT):
+def initialise(mode: str):
     global camera
     try:
         camera = Picamera2()
-        camera_config = camera.create_still_configuration(
-            main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
-            # raw={"size": (2304, 1296), "format": "SBGGR10"},
-            raw={"size": (2304, 1500), "format": "SBGGR10"},
-            transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
-        )
+        
+        if "evac" in mode:
+            camera_config = camera.create_still_configuration(
+                main={"size": (config.EVACUATION_WIDTH, config.EVACUATION_HEIGHT), "format": "YUV420"},
+                # raw={"size": (2304, 1296), "format": "SBGGR10"},
+                raw={"size": (2304, 1500), "format": "SBGGR10"},
+                transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+            )
+        else:
+            camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.LINE_WIDTH, config.LINE_HEIGHT)})
+            
         camera.configure(camera_config)
         camera.start()
         

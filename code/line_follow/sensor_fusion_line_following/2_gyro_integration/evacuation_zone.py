@@ -21,7 +21,7 @@ black_max = 30
 
 def main():
     camera.close()
-    camera.initialise(config.EVACUATION_WIDTH, config.EVACUATION_HEIGHT)
+    camera.initialise("evac")
     motors.run(0, 0)
     
     # Let camera warm up
@@ -72,7 +72,69 @@ def main():
     config.update_log(["EXIT FOUND!"], [24])
     print()
     
-    motors.pause()
+    entrance_exit_align("black")
+    
+    camera.close()
+    camera.initialise("line")
+
+def entrance_exit_align(align_type: str) -> None:
+    if align_type == "silver":   
+        motors.run(config.evacuation_speed, config.evacuation_speed, 0.4)
+        motors.run(-config.evacuation_speed * 0.5, -config.evacuation_speed * 0.5)
+        left_silver, right_silver = None, None
+        
+        while left_silver is None and right_silver is None:
+            colour_values = colour.read()
+
+            if colour_values[0] > silver_min or colour_values[1] > silver_min:
+                left_silver = True
+                print("Left")
+            elif colour_values[3] > silver_min or colour_values[4] > silver_min:
+                right_silver = True
+                print("Right")
+
+        if(left_silver): 
+            motors.run_until(5, -config.evacuation_speed * 0.5, colour.read, 4, ">=", silver_min, "Right")
+            
+        for i in range(4):
+            motors.run(0, 0, 0.2)
+            motors.run_until(-config.evacuation_speed * 0.5, 5, colour.read, 0, ">=", silver_min, "Left")
+            motors.run(0, 0, 0.2)
+            motors.run_until(5, -config.evacuation_speed * 0.5, colour.read, 4, ">=", silver_min, "Right")
+            motors.run(0, 0, 0.2)
+            motors.run_until(config.evacuation_speed * 0.5, 5, colour.read, 0, "<=", silver_min, "Left")
+            motors.run(0, 0, 0.2)
+            motors.run_until(5, config.evacuation_speed * 0.5, colour.read, 4, "<=", silver_min, "Right")
+                    
+    elif align_type == "black":
+        motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.4)
+        motors.run(config.evacuation_speed * 0.5, config.evacuation_speed * 0.5)
+        left_black, right_black = None, None
+        while left_black is None and right_black is None:
+            colour_values = colour.read()
+
+            if colour_values[0] < 40 or colour_values[1] < 40:
+                left_black = True
+                print("Left")
+            elif colour_values[3] < 40 or colour_values[4] < 40:
+                right_black = True
+                print("Right")
+
+        if(left_black): 
+            motors.run_until(-5, config.evacuation_speed * 0.5, colour.read, 4, "<=", 30, "Right")
+            
+        for i in range(4):
+            motors.run(0, 0, 0.2)
+            motors.run_until(-config.evacuation_speed * 0.5, -5, colour.read, 0, ">=", 60, "Left")
+            motors.run(0, 0, 0.2)
+            motors.run_until(-5, -config.evacuation_speed * 0.5, colour.read, 4, ">=", 60, "Right")
+            motors.run(0, 0, 0.2)
+            motors.run_until(config.evacuation_speed * 0.5, -5, colour.read, 0, "<=", 30, "Left")
+            motors.run(0, 0, 0.2)
+            motors.run_until(-5, config.evacuation_speed * 0.5, colour.read, 4, "<=", 30, "Right")
+
+        for i in range(config.evacuation_speed):
+            motors.run(-config.evacuation_speed+i, -config.evacuation_speed+i, 0.025)
 
 def find(search_function: callable) -> None:
     def search_while(v1: int, v2: int, time_constraint: float, search_function: callable, conditional_function: callable = None) -> Optional[int]:
@@ -347,7 +409,7 @@ def exit_evacuation_zone() -> None:
         print()
         motors.run(config.evacuation_speed * 1.5, config.evacuation_speed * 1.5)
         
-        black_count, silver_count = validate_exit(colour_values, black_count, silver_count)
+        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
         
         if black_count >= 5:
             config.update_log(["EXITING", "FOUND EXIT!"], [24, 30])
@@ -357,16 +419,22 @@ def exit_evacuation_zone() -> None:
         elif silver_count >= 5:
             config.update_log(["EXITING", "FOUND SILVER"], [24, 30])
             print()
-            motors.run      (-config.evacuation_speed, -config.evacuation_speed, 1.5)
-            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 1.3)
-            motors.run_until( config.line_speed      ,  config.line_speed      , laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
+            
+            motors.run(0, 0, 0.3)
+            entrance_exit_align("silver")
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
+            motors.run(0, 0, 0.3)
+            motors.run(22, -22, 2.9)
+            motors.run(0, 0, 0.3)
+            motors.run_until( 22      ,  22      , laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
             break
         
         elif sum(touch_values) != 2:
             config.update_log(["EXITING", "FOUND WALL"], [24, 30])
             print()
             motors.run      (-config.evacuation_speed, -config.evacuation_speed, 0.5)
-            motors.run_until( config.line_speed      , -config.line_speed      , laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
+            motors.run_until( 22      , -22      , laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
+            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.5)
             break
         
     # Follow wall till exit is found
@@ -377,16 +445,19 @@ def exit_evacuation_zone() -> None:
         colour_values = colour.read()
         laser_value = laser_sensors.read([config.x_shut_pins[0]])[0]
         
-        config.update_log(["EXITING", "FINDING GAPS", ",".join(list(map(str, touch_values))), ",".join(list(map(str, colour_values))), f"{laser_value}"], [24, 30, 10, 30, 10])
+        config.update_log(["EXITING", "FINDING GAPS", ",".join(list(map(str, touch_values))), ",".join(list(map(str, colour_values))), f"Laser: {laser_value}", f"Silver: {silver_count}", f"Black: {black_count}"], [24, 30, 10, 30, 10, 6, 6])
         print()
-        motors.run(config.evacuation_speed, config.evacuation_speed * 1.1)
+        motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 1.1)
         
-        black_count, silver_count = validate_exit(colour_values, black_count, silver_count)
+        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
         
-        if laser_value > 30 and not gap_initial:
-            # Turn to face gap
-            motors.run(-config.evacuation_speed, config.evacuation_speed, 1.3)
-            gap_initial = True
+        if laser_value is not None:
+            if laser_value > 30 and not gap_initial:
+                # Turn to face gap
+                motors.run(0, 0, 0.3)
+                motors.run(22, 22, 1.3)
+                motors.run(-22, 22, 2.9)
+                gap_initial = True
         
         if black_count >= 5:
             config.update_log(["EXITING", "FOUND EXIT!"], [24, 30])
@@ -394,18 +465,22 @@ def exit_evacuation_zone() -> None:
             return True
         
         elif silver_count >= 5:
-            gap_initial = False
             config.update_log(["EXITING", "FOUND SILVER"], [24, 30])
             print()
-            motors.run      (-config.evacuation_speed, -config.evacuation_speed, 1.5)
-            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 1.3)
-            motors.run_until( config.line_speed      ,  config.line_speed      , laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
+            
+            motors.run(0, 0, 0.3)
+            entrance_exit_align("silver")
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
+            motors.run(0, 0, 0.3)
+            motors.run(22, -22, 2.9)
+            motors.run(0, 0, 0.3)
+            motors.run_until( 22,  22, laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
             
         elif sum(touch_values) != 2:
             config.update_log(["EXITING", "FOUND WALL"], [24, 30])
             print()
-            motors.run      (-config.evacuation_speed, -config.evacuation_speed, 0.5)
-            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.5)
+            motors.run      (-config.evacuation_speed, -config.evacuation_speed, 0.35)
+            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.35)
             
             
 
