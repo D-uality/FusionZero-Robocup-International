@@ -61,34 +61,27 @@ def main(evacuation_zone_enable: bool = False) -> None:
         
     if silver_count > 10:
         silver_count = 0
-        motors.run(0, 0)
 
         evacuation_zone.main()
+        main_loop_count = 0
 
         led.on()
         motors.run(0, 0, 2)
 
         evac_trigger = True
-        camera_last_angle = 90
-
-        for i in range(25):
-            print(i)
-            colour_values = colour.read()
-            follow_line(colour_values, [None, None, None])
-            
-        evac_trigger = False
-        evac_exited = True
-
-        motors.run(0, 0, 1)
+                    
     elif red_count > 10:
         red_count = 0
         print("Red Found")
         motors.run(0, 0, 10)
+        
     # elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 30:
     # elif laser_close_count > 35:
     #     avoid_obstacle()
+    
     elif len(green_signal) > 0:
         intersection_handling(green_signal, colour_values)
+        
     else:
         follow_line(colour_values, gyroscope_values)
 
@@ -117,6 +110,9 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:  
         if gap_trigger    and main_loop_count > 100: gap_trigger    = False
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
+        
+    if evac_trigger:
+        if main_loop_count > 50: evac_trigger = False
 
     # Modifiers
     modifiers = []
@@ -126,6 +122,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     if tilt_right_trigger:  modifiers.append("TILT RIGHT")
     if gap_trigger:         modifiers.append("GAP")
     if seasaw_trigger:      modifiers.append("SEASAW")
+    if evac_trigger:        modifiers.append("EVAC")
     modifiers = " ".join(modifiers)
 
     # Counting Modifiers

@@ -11,7 +11,7 @@ def find() -> None:
     print()
     align(tolerance=10, text="Initial Alignment")
     
-    move_closer(2)
+    move_closer(1)
     motors.run      ( config.evacuation_speed,  config.evacuation_speed, 0.3)
     motors.run_until(-config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 1, ">=", 25, "STANDARDIZING DISTANCE")
 
