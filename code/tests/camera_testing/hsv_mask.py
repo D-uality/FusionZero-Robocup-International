@@ -23,7 +23,7 @@ from gpiozero import LED
 from time import sleep
 
 led = LED(13)
-led.on()
+# led.on()
 
 camera = Picamera2()
 camera_config = camera.create_still_configuration(

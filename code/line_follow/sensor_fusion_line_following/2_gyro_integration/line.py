@@ -27,7 +27,8 @@ gap_loop_count = 0
 
 silver_min = 110
 silver_count = 0
-red_threshold = [ [45, 75], [35, 65] ]
+# red_threshold = [ [45, 75], [35, 65] ]
+red_threshold = [ [60, 75], [50, 65] ]
 red_count = 0
 
 laser_close_count = 0
@@ -48,9 +49,10 @@ def main(evacuation_zone_enable: bool = False) -> None:
     touch_values = touch_sensors.read()
     laser_value = laser_sensors.read([config.x_shut_pins[1]])
 
-    laser_close_count = laser_close_count + 1 if laser_value[0] < 10 and laser_value[0] != 0 else 0
+    if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
 
     seasaw_check()
+
     if not camera_enable:
         gap_check(colour_values)
         green_signal = green_check(colour_values)
@@ -59,18 +61,21 @@ def main(evacuation_zone_enable: bool = False) -> None:
         
     if silver_count > 10:
         silver_count = 0
-        print("Silver Found")
         motors.run(0, 0)
+
         evacuation_zone.main()
-        print("Exited")
+
         led.on()
         motors.run(0, 0, 2)
+
         evac_trigger = True
         camera_last_angle = 90
+
         for i in range(25):
             print(i)
             colour_values = colour.read()
             follow_line(colour_values, [None, None, None])
+            
         evac_trigger = False
         evac_exited = True
 
@@ -79,8 +84,9 @@ def main(evacuation_zone_enable: bool = False) -> None:
         red_count = 0
         print("Red Found")
         motors.run(0, 0, 10)
-    elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 15:
-        avoid_obstacle()
+    # elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 30:
+    # elif laser_close_count > 35:
+    #     avoid_obstacle()
     elif len(green_signal) > 0:
         intersection_handling(green_signal, colour_values)
     else:
@@ -99,15 +105,8 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # Finding modifiers
     # ramp detection
     if gyroscope_values[0] is not None:
-        if gyroscope_values[0] < -90:
-            # Aidan Gyro
-            uphill_trigger   = True if gyroscope_values[0] <= -195 else False
-            downhill_trigger = True if gyroscope_values[0] >= -165 else False
-
-        else:
-            # Frederick Gyro
-            uphill_trigger   = True if gyroscope_values[0] >=  15 else False
-            downhill_trigger = True if gyroscope_values[0] <= -15 else False
+        uphill_trigger   = True if gyroscope_values[0] >=  15 else False
+        downhill_trigger = True if gyroscope_values[0] <= -15 else False
         
     # tilt detection
     # if gyroscope_values[1] is not None:
@@ -126,13 +125,14 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     if tilt_left_trigger:   modifiers.append("TILT LEFT")
     if tilt_right_trigger:  modifiers.append("TILT RIGHT")
     if gap_trigger:         modifiers.append("GAP")
+    if seasaw_trigger:      modifiers.append("SEASAW")
     modifiers = " ".join(modifiers)
 
     # Counting Modifiers
     last_uphill = 0 if uphill_trigger else last_uphill + 1
 
     # PID Values
-    if   uphill_trigger:   kP, kI, kD, v = 0.4 , 0     ,  0  , 25
+    if   uphill_trigger:   kP, kI, kD, v = 0.2 , 0     ,  0  , 25
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
@@ -174,7 +174,9 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     else:
         camera_enable = False
         led.off()
-    
+        
+        colour_values = [min(value, 100) for value in colour_values]
+
         outer_error = 1 * (colour_values[0] - colour_values[4])
         inner_error = 1 * (colour_values[1] - colour_values[3])
         error = outer_error + inner_error
@@ -190,7 +192,8 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         if colour_values[0] > 70 and colour_values[1] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = max(1 + (colour_values[2] - 70)/100, 0)
+            middle_multi = max(1 + (colour_values[2] - 80)/100, 0)
+
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
 
@@ -211,22 +214,22 @@ def green_check(colour_values: list[int]) -> str:
 
     # Black Types
     # Left Mid
-    left_black = colour_values[0] < 30 and colour_values[1] < 30 and colour_values[2] < 50
+    left_black = colour_values[0] < 25 and colour_values[1] < 25 and colour_values[2] < 50
 
     # Right Mid
-    right_black = colour_values[3] < 30 and colour_values[4] < 30 and colour_values[2] < 50
+    right_black = colour_values[3] < 25 and colour_values[4] < 25 and colour_values[2] < 50
     # Double
     left_double_black = left_black and (colour_values[3] < 40 or colour_values[4] < 40)
     right_double_black = right_black and (colour_values[0] < 40 or colour_values[1] < 40)
 
     # Green
-    if (left_double_black or right_double_black) and colour_values[5] < 40 and colour_values[6] < 40:
+    if (left_double_black or right_double_black) and colour_values[5] < 30 and colour_values[6] < 30:
         signal = "double"
         
-    elif (left_black or left_double_black) and colour_values[5] < 40:
+    elif (left_black or left_double_black) and colour_values[5] < 25:
         signal = "left"
         
-    elif (right_black or right_double_black) and colour_values[6] < 40:
+    elif (right_black or right_double_black) and colour_values[6] < 25:
         signal = "right"
         
     if len(signal) != 0: config.update_log(["GREEN CHECK", ",".join(list(map(str, colour_values))), signal], [24, 30, 10])
@@ -245,18 +248,18 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "left":
-        motors.run(-config.line_speed - 5, config.line_speed + 5, 0.8)
+        motors.run(-config.line_speed - 5, config.line_speed + 5, 1)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
-        while colour_values[0] < 40 and turn_count < 500:
+        while colour_values[0] < 50 and turn_count < 300:
             turn_count += 1
             colour_values = colour.read()
 
     elif signal == "right":
-        motors.run(config.line_speed + 5, -config.line_speed - 5, 0.8)
+        motors.run(config.line_speed + 5, -config.line_speed - 5, 1)
         motors.run(config.line_speed, config.line_speed, 0.3)
         colour_values = colour.read()
-        while colour_values[4] < 40 and turn_count < 500:
+        while colour_values[4] < 50 and turn_count < 300:
             turn_count += 1
             colour_values = colour.read()
     
@@ -273,7 +276,7 @@ def intersection_handling(signal: str, colour_values) -> None:
 def gap_check(colour_values: list[int]) -> None:
     global main_loop_count, gap_loop_count, gap_trigger
 
-    white_values = [1 if value > 90 else 0 for value in colour_values]
+    white_values = [1 if value > 80 else 0 for value in colour_values]
     gap_loop_count = gap_loop_count + 1 if sum(white_values) == 7 else 0
 
     gap_trigger = True if gap_loop_count >= 40 else False
@@ -290,6 +293,7 @@ def seasaw_check():
     global downhill_trigger, last_uphill, seasaw_trigger
     
     if downhill_trigger and last_uphill < 40:
+        last_uphill = 100
         motors.run(0, 0, 2)
         motors.run(-config.line_speed, -config.line_speed, 1)
         seasaw_trigger = True
@@ -311,11 +315,12 @@ def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_blac
         distance = laser_sensors.read([config.x_shut_pins[laser_pin]])[0]
         touch_values = touch_sensors.read()
         print(distance)
-
-        if more_than == ">":
-            laser_condition_met = distance > 10 and distance != 0
-        elif more_than == "<":
-            laser_condition_met = distance < 10 and distance != 0
+        
+        if distance is not None:
+            if more_than == ">":
+                laser_condition_met = distance > 10 and distance != 0
+            elif more_than == "<":
+                laser_condition_met = distance < 10 and distance != 0
 
         if check_black:
             colour_is_black[0] = (colour_values[1] < 50 and not colour_is_black[0]) or colour_is_black[0]

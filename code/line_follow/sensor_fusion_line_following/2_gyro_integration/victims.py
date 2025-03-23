@@ -25,7 +25,7 @@ def live(image: np.ndarray) -> Optional[int]:
         
         # look for contours in the top quarter
         if (y + h/2 < 50
-            and cv2.contourArea(contour) < 300):
+            and cv2.contourArea(contour) < 500):
             valid_contours.append(contour)
     
     if len(valid_contours) == 0: return None
