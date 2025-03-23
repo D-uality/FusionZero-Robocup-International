@@ -31,6 +31,7 @@ silver_count = 0
 red_threshold = [ [60, 75], [50, 65] ]
 red_count = 0
 
+touch_count = 0
 laser_close_count = 0
 last_uphill = 0
 
@@ -41,7 +42,7 @@ evac_exited = False
 camera_enable = False
 
 def main(evacuation_zone_enable: bool = False) -> None:
-    global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, camera_last_angle, evac_exited
+    global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, evac_exited, touch_count
 
     green_signal = ""
     colour_values = colour.read()
@@ -50,6 +51,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     laser_value = laser_sensors.read([config.x_shut_pins[1]])
 
     if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
+    touch_count = touch_count + 1 if sum(touch_values) != 2 else 0
 
     seasaw_check()
 
@@ -74,10 +76,9 @@ def main(evacuation_zone_enable: bool = False) -> None:
         red_count = 0
         print("Red Found")
         motors.run(0, 0, 10)
-        
-    # elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 30:
-    # elif laser_close_count > 35:
-    #     avoid_obstacle()
+
+    elif touch_count > 150:
+        avoid_obstacle()
     
     elif len(green_signal) > 0:
         intersection_handling(green_signal, colour_values)
@@ -90,7 +91,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
 
 def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]]) -> None:
     global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger, evac_trigger
-    global main_loop_count, last_yaw, last_uphill
+    global main_loop_count, last_yaw, last_uphill, touch_count
     global ir_integral, ir_derivative, ir_last_error, integral_reset_count, min_integral_reset_count
     global camera_integral, camera_derivative, camera_last_error, camera_last_angle
     global camera_enable
@@ -201,7 +202,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         ir_last_error = error
         last_yaw = gyroscope_values[2] if ir_integral == 0 and gyroscope_values[2] is not None else last_yaw
                 
-        config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count}"], [24, 8, 30, 16, 10, 15])    
+        config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count}"], [24, 8, 30, 30, 10, 30])    
         
 def green_check(colour_values: list[int]) -> str:
     global main_loop_count
