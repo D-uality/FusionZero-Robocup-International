@@ -28,8 +28,7 @@ gap_loop_count = 0
 
 silver_min = 110
 silver_count = 0
-# red_threshold = [ [45, 75], [35, 65] ]
-red_threshold = [ [60, 75], [50, 65] ]
+red_threshold = [ [60, 80], [45, 65] ]
 red_count = 0
 
 touch_count = 0
@@ -55,11 +54,11 @@ def main(evacuation_zone_enable: bool = False) -> None:
     touch_count = touch_count + 1 if sum(touch_values) != 2 else 0
 
     seasaw_check()
+    silver_count = silver_check(colour_values, silver_count)
 
     if not camera_enable:
         gap_check(colour_values)
         green_signal = green_check(colour_values)
-        silver_count = silver_check(colour_values, silver_count)
         # if evac_exited: red_count = red_check(colour_values, red_count)
         red_count = red_check(colour_values, red_count)
         
@@ -74,7 +73,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
 
         evac_trigger = True
                     
-    elif red_count > 10:
+    elif red_count > 15:
         red_count = 0
         print("Red Found")
         motors.run(0, 0, 10)
@@ -115,7 +114,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
         
     if evac_trigger:
-        if main_loop_count > 50: evac_trigger = False
+        if main_loop_count > 75: evac_trigger = False
 
     # Modifiers
     modifiers = []
@@ -192,7 +191,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         if colour_values[0] > 70 and colour_values[1] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = max(1 + (colour_values[2] - 100)/100, 0)
+            middle_multi = max(1 + (colour_values[2] - 60)/100, 0)
 
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
@@ -210,30 +209,38 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])    
         
 def green_check(colour_values: list[int]) -> str:
-    global main_loop_count
+    global main_loop_count, ir_integral
     signal = ""
 
     if main_loop_count < 20: return signal
 
     # Black Types
     # Left Mid
-    left_black = colour_values[0] < 30 and colour_values[1] < 30 and colour_values[2] < 60
+    left_black = colour_values[0] < 30 and colour_values[1] < 30
 
     # Right Mid
-    right_black = colour_values[3] < 30 and colour_values[4] < 30 and colour_values[2] < 60
+    right_black = colour_values[3] < 30 and colour_values[4] < 30
     # Double
-    left_double_black = left_black and (colour_values[3] < 65 or colour_values[4] < 65)
-    right_double_black = right_black and (colour_values[0] < 65 or colour_values[1] < 65)
+    left_double_black  = left_black  and (colour_values[3] < 45 or colour_values[4] < 60)
+    right_double_black = right_black and (colour_values[0] < 45 or colour_values[1] < 60)
 
     # Green
-    if (left_double_black or right_double_black) and colour_values[5] < 30 and colour_values[6] < 30:
-        signal = "double"
+    
+
+    if left_black and right_black and colour_values[2] > 40 and colour_values[5] + colour_values[6] >= 120:
+        if colour_values[0] + colour_values[1] < colour_values[3] + colour_values[4]:
+            signal = "fake left"
+        else:
+            signal = "fake right"
+    elif colour_values[2] < 80 and abs(ir_integral) <= 1000:
+        if (left_double_black or right_double_black) and ((colour_values[5] < 30 and colour_values[6] < 40) or (colour_values[5] < 40 and colour_values[6] < 30)):
+            signal = "double"
+            
+        elif (left_black or left_double_black) and colour_values[5] < 30:
+            signal = "left"
         
-    elif (left_black or left_double_black) and colour_values[5] < 30:
-        signal = "left"
-        
-    elif (right_black or right_double_black) and colour_values[6] < 30:
-        signal = "right"
+        elif (right_black or right_double_black) and colour_values[6] < 30:
+            signal = "right"
         
     if len(signal) != 0: config.update_log(["GREEN CHECK", ",".join(list(map(str, colour_values))), signal], [24, 30, 10])
 
@@ -263,20 +270,6 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run(config.line_speed, config.line_speed, 0.3)
         motors.run(0, 0, 0.15)
 
-        # motors.run(config.line_speed * 0.8, config.line_speed * 1.2, 0.2)
-        # motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 0, "<=", 30, "FIRST ALIGN")
-        # motors.run(0, 0, 0.1)
-        # motors.run(-config.line_speed, config.line_speed * 1.1, 0.8)
-        # motors.run(0, 0, 0.1)
-        # motors.run_until(-config.line_speed, config.line_speed, colour.read, 3, "<=", 50, "SECOND ALIGN")
-
-        # motors.run(-config.line_speed - 5, config.line_speed + 5, 1)
-        # motors.run(config.line_speed, config.line_speed, 0.3)
-        # colour_values = colour.read()
-        # while colour_values[0] < 50 and turn_count < 300:
-        #     turn_count += 1
-        #     colour_values = colour.read()
-
     elif signal == "right":
         motors.run(config.line_speed * 1, config.line_speed * 1, 0.3)
         motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 40, "FIRST ALIGN")
@@ -289,14 +282,6 @@ def intersection_handling(signal: str, colour_values) -> None:
         motors.run(0, 0, 0.15)
         motors.run(config.line_speed, config.line_speed, 0.3)
         motors.run(0, 0, 0.15)
-
-
-        # motors.run(config.line_speed + 5, -config.line_speed - 5, 1)
-        # motors.run(config.line_speed, config.line_speed, 0.3)
-        # colour_values = colour.read()
-        # while colour_values[4] < 50 and turn_count < 300:
-        #     turn_count += 1
-        #     colour_values = colour.read()
     
     elif signal == "double":
         motors.run(-config.line_speed - 10, config.line_speed + 10, 3)
@@ -304,6 +289,16 @@ def intersection_handling(signal: str, colour_values) -> None:
         while colour_values[3] > 60 and turn_count < 1000:
             turn_count += 1
             colour_values = colour.read()
+
+    elif signal == "fake left":
+        angle = current_angle - 35 if abs(current_angle - last_yaw) < 20 else last_yaw
+        motors.run_until( config.line_speed      , -config.line_speed      , gyroscope.read, 2, "<=", angle, "GYRO")
+        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.3)
+                
+    elif signal == "fake right":
+        angle = current_angle + 35 if abs(current_angle - last_yaw) < 20 else last_yaw
+        motors.run_until(-config.line_speed      ,  config.line_speed      , gyroscope.read, 2, ">=", angle, "GYRO")
+        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.3)
         
     else: print(signal)
 
@@ -328,8 +323,9 @@ def seasaw_check():
     
     if downhill_trigger and last_uphill < 40:
         last_uphill = 100
+        main_loop_count = 0
         motors.run(0, 0, 2)
-        motors.run(-config.line_speed, -config.line_speed, 1)
+        motors.run(-config.line_speed, -config.line_speed, 1.5)
         seasaw_trigger = True
 
 def avoid_obstacle() -> None:
@@ -357,12 +353,21 @@ def avoid_obstacle() -> None:
     motors.run(-config.line_speed, -config.line_speed, 0.5)
 
     # Over turn passed obstacle
-    motors.run(v1, v2, 4.5)
-    motors.run(0, 0, 0.3)
+    for i in range(20):
+        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
+        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+
+    for i in range(35):
+        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
+        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+
+    motors.run(1.2 * v1, 1.2*v2, 0.5)
+
+    motors.run(0, 0, 1)
 
     # Turn back onto obstacle
     motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
-    motors.run(-v1, -v2, 1.9)
+    motors.run(-1.2 * v1, -1.2 * v2, 1.8)
 
     # Circle obstacle
     v1 = v2 = laser_pin = colour_align_pin = 0
@@ -382,28 +387,28 @@ def avoid_obstacle() -> None:
 
     initial_sequence = True
     
-    circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 18, "FORWARDS TILL OBSTACLE")
+    circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
     motors.run(config.line_speed, config.line_speed, 0.5)
 
     while True:
         if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(-config.line_speed, -config.line_speed, 0.5)
-        motors.run(0, 0, 0.3)
+        motors.run(-config.line_speed, -config.line_speed, 0.4)
+        motors.run(0, 0, 0.15)
 
         
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, "<=", 15, "TURNING TILL OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(0, 0, 0.3)
+        motors.run(0, 0, 0.15)
 
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(v1, v2, 0.5)
-        motors.run(0, 0, 0.3)
+        motors.run(v1, v2, 0.4)
+        motors.run(0, 0, 0.15)
 
         if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 18, "FORWARDS TILL OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(0, 0, 0.3)
+        motors.run(0, 0, 0.15)
 
         initial_sequence = False
 
@@ -414,15 +419,6 @@ def avoid_obstacle() -> None:
     motors.run(config.line_speed, config.line_speed, 0.5)
     motors.run_until(config.line_speed, config.line_speed, colour.read, colour_align_pin, ">=", 60, "FORWARDS TILL WHITE")
     motors.run_until(-v1, -v2, colour.read, colour_align_pin, "<=", 50, "TURNING TILL BLACK")
-
-    # motors.run_until(config.line_speed, config.line_speed, laser_sensors.read, laser_pin, ">=", 25, "FORWARDS TILL NOT OBSTACLE")
-    # motors.pause()
-    # motors.run_until(v1, v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
-    # motors.pause()
-    # motors.run_until(v1, v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING TILL NOT OBSTACLE")
-    # motors.run(v1, v2, 0.3)
-    # motors.pause()
-    # motors.run_until(config.line_speed, config.line_speed, laser_sensors.read, laser_pin, "<=", 20, "FORWARDS TILL OBSTACLE")
 
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
     if   comparison == "<=": comparison_function = operator.le
@@ -442,149 +438,6 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         if colour_values[colour_pin] <= 30:
             return False
 
-# def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_black, min_move_time):
-#     laser_condition_met = False
-#     starting_time = time.time()
-#     current_time = 0
-#     exit_loop = False
-
-#     while (not exit_loop) and (not colour_is_black[0] or not colour_is_black[1]):
-#         if turn_type == "straight":
-#             motors.run(30, 30)
-#         elif turn_type == "left":
-#             motors.run(25, -25)
-#         elif turn_type == "right":
-#             motors.run(-25, 25)
-
-#         colour_values = colour.read()
-#         distance = laser_sensors.read([config.x_shut_pins[laser_pin]])[0]
-#         touch_values = touch_sensors.read()
-#         print(distance)
-        
-#         if distance is not None:
-#             if more_than == ">":
-#                 laser_condition_met = distance > 15 and distance != 0 and distance is not None
-#             elif more_than == "<":
-#                 laser_condition_met = distance < 25 and distance != 0 and distance is not None
-
-#         if turn_type != "straight":
-#             exit_loop = current_time > min_move_time or laser_condition_met
-#         else:
-#             exit_loop = laser_condition_met
-
-#         if check_black:
-#             colour_is_black[0] = (colour_values[1] < 50 and not colour_is_black[0]) or colour_is_black[0]
-#             colour_is_black[1] = (colour_values[3] < 50 and not colour_is_black[1]) or colour_is_black[1]
-
-#         for touch_side in range(1):
-#             if touch_values[touch_side] == 0 and turn_type == 'straight':
-#                 if touch_side == 0:
-#                     motors.run(config.line_speed, -config.line_speed)
-#                 if touch_side == 1:
-#                     motors.run(-config.line_speed, config.line_speed)
-
-#                 colour.read()
-#                 laser_sensors.read()
-#                 touch_sensors.read()
-#                 print()
-
-#         # print(f"Laser Condition Met: {laser_condition_met}")
-
-#         current_time = time.time() - starting_time
-
-#     return colour_is_black
-
-# def avoid_obstacle():
-#     turn_count = 0
-#     colour_is_black = [False, False]
-
-#     distances = laser_sensors.read()
-#     motors.run(-config.line_speed, -config.line_speed, 0.6)
-
-#     if distances[0] > distances[2]:
-#         config.update_log(["OBSTACLE DETECTED", "left"], [24, 10])
-#         colour_is_black = circle_obstacle(2, "right", ">", False, colour_is_black, 0.5)
-#         motors.run(0, 0, 0.6)
-#         colour_is_black = circle_obstacle(2, "right", "<", False, colour_is_black, 0.5)
-#         motors.run(config.line_speed, -config.line_speed, 0.3)
-#         colour_is_black = circle_obstacle(2, "straight", ">", False, colour_is_black, 1)
-#         motors.run(0, 0, 0.6)
-
-#         while not colour_is_black[0]:
-#             colour_is_black = circle_obstacle(2, "left", "<", True, colour_is_black, 0.4)
-#             motors.run(0, 0, 0.6)
-#             colour_is_black = circle_obstacle(2, "left", ">", True, colour_is_black, 0.4)
-#             motors.run(0, 0, 0.6)
-#             colour_is_black = circle_obstacle(2, "straight", "<", True, colour_is_black, 0.5)
-#             motors.run(0, 0, 0.6)
-#             colour_is_black = circle_obstacle(2, "straight", ">", True, colour_is_black, 0.5)
-#             motors.run(0, 0, 0.6)
-
-#         motors.run(config.line_speed, config.line_speed)
-#         colour_values = colour.read()
-#         while colour_values[0] < 30 and turn_count < 500:
-#             turn_count += 1
-#             colour_values = colour.read()
-        
-#         motors.run(config.line_speed, config.line_speed, 0.2)
-#         motors.run(-config.line_speed, config.line_speed)
-
-#         print("Aligning")
-#         turn_count = 0
-
-#         while True:
-#             colour_values = colour.read()
-
-#             print(turn_count, ", ".join(list(map(str, colour_values))))
-
-#             turn_count += 1
-#             if colour_values[3] < 30 or turn_count > 1000: break
-
-#         motors.run(0, 0, 1)
-    
-#     else:
-#         config.update_log(["OBSTACLE DETECTED", "right"], [24, 10])
-#         colour_is_black = circle_obstacle(0, "left", ">", False, colour_is_black, 0.5)
-#         motors.run(0, 0, 0.6)
-#         colour_is_black = circle_obstacle(0, "left", "<", False, colour_is_black, 0.5)
-#         motors.run(-config.line_speed, config.line_speed, 0.3)
-#         colour_is_black = circle_obstacle(0, "straight", ">", False, colour_is_black, 1)
-#         motors.run(0, 0, 0.6)
-
-
-#         while not colour_is_black[1]:
-#             colour_is_black = circle_obstacle(0, "right", "<", True, colour_is_black, 0.4)
-#             motors.run(0, 0, 0.6)
-#             colour_is_black = circle_obstacle(0, "right", ">", True, colour_is_black, 0.4)
-#             motors.run(-config.line_speed, config.line_speed, 0.2)
-#             motors.run(0, 0, 0.6)
-#             colour_is_black = circle_obstacle(0, "straight", "<", True, colour_is_black, 0)
-#             motors.run(0, 0, 0.6)
-#             colour_is_black = circle_obstacle(0, "straight", ">", True, colour_is_black, 0)
-#             motors.run(0, 0, 0.6)
-
-#         motors.run(config.line_speed, config.line_speed)
-#         colour_values = colour.read()
-#         while colour_values[4] < 30 and turn_count < 500:
-#             turn_count += 1
-#             colour_values = colour.read()
-        
-#         motors.run(config.line_speed, config.line_speed, 0.2)
-#         motors.run(config.line_speed, -config.line_speed)
-
-#         print("Aligning")
-#         turn_count = 0
-
-#         while True:
-#             colour_values = colour.read()
-
-#             print(turn_count, ", ".join(list(map(str, colour_values))))
-
-#             turn_count += 1
-#             if colour_values[1] < 30 or turn_count > 1000: break
-
-#         motors.run(0, 0, 1)
-
 def silver_check(colour_values, silver_count):
     global silver_min
     if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
@@ -597,7 +450,7 @@ def silver_check(colour_values, silver_count):
 def red_check(colour_values, red_count):
     global red_threshold
 
-    if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 for i in range(5)):
+    if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 and colour_values[i] < 120 for i in range(5)):
         red_count += 1
     else: 
         red_count = 0

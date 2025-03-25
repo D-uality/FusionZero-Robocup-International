@@ -48,14 +48,7 @@ def dead(image: np.ndarray) -> Optional[int]:
         if circularity > threshold: return True
         return False
     
-    black_threshold = 40
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    
-    # sharpen image
-    h, s, v = cv2.split(hsv_image)
-    v_blur = cv2.GaussianBlur(v, (5, 5), 0)
-    v_sharp = cv2.addWeighted(v, 1.5, v_blur, -0.5, 0)
-    hsv_image = cv2.merge([h, s, v_sharp])
     
     black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 30))
     contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -69,7 +62,7 @@ def dead(image: np.ndarray) -> Optional[int]:
     
     for contour in contours:
         _, y, _, h = cv2.boundingRect(contour)
-        if (y + h/2 < config.EVACUATION_HEIGHT / 2
+        if (y + h/2 < config.EVACUATION_HEIGHT / 2 + 30
             and circularity_check(contour, 0.5)
             and cv2.contourArea(contour) > 100):
             valid_contours.append(contour)

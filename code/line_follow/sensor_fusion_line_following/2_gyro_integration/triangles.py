@@ -12,8 +12,8 @@ def find() -> None:
     align(tolerance=10, text="Initial Alignment")
     
     move_closer(1)
-    motors.run      ( config.evacuation_speed,  config.evacuation_speed, 0.3)
-    motors.run_until(-config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 1, ">=", 25, "STANDARDIZING DISTANCE")
+    motors.run      ( config.evacuation_speed * 0.8,  config.evacuation_speed * 0.8, 0.3)
+    motors.run_until(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, laser_sensors.read, 1, ">=", 25, "STANDARDIZING DISTANCE")
 
     config.update_log(["TRIANGLE", "fine alignment"], [24, 24])
     print()
@@ -46,7 +46,7 @@ def locate(image: np.ndarray) -> tuple[int, int, int, int]:
     largest_contour = max(contours, key=cv2.contourArea)
 
     # If the largest contour is too small, return None
-    if cv2.contourArea(largest_contour) < 1500: return None, None, None, None
+    if cv2.contourArea(largest_contour) < 1200: return None, None, None, None
 
     # Get the bounding rectangle of the largest contour
     x, y, w, h = cv2.boundingRect(largest_contour)
@@ -101,8 +101,15 @@ def move_closer(kP: float) -> None:
 
         x, _, w, _ = locate(image)
 
-        if x is not None and w is not None:
-            error = int(config.EVACUATION_WIDTH/2 - (x + w/2))
+        print(x, w)
+        print(x is None, w is None)
+
+        if x is None and w is None:
+            print("X IS NONE!")
+            motors.run(0, 0)
+            continue
+        
+        error = int(config.EVACUATION_WIDTH/2 - (x + w/2))
         turn = error * kP
 
         v1, v2 = config.evacuation_speed - turn, config.evacuation_speed + turn

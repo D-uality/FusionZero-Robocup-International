@@ -19,7 +19,12 @@ import triangles
 silver_min = 110
 black_max = 20
 
+align_failures = 0
+last_align_attempt = 0
+
 def main():
+    global align_failures, last_align_attempt
+
     motors.run(0, 0)
     camera.close()
     camera.initialise("evac")
@@ -33,7 +38,8 @@ def main():
         # if config.X11: cv2.imshow("image", image)
 
     motors.run(0, 0)
-                
+    motors.run(30, 30, 1)            
+    
     start_time = time.time()
     
     while True:
@@ -42,10 +48,6 @@ def main():
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0.00001)
 
-        # TODO Fix sequencing
-        # TODO find -> route -> alignment -> grab [FAIL]
-        # TODO MUST return to route again, instead of back into alignemnet
-
         find(search_function=search_type)
         
         route_success = route(search_function=search_type, kP=0.35)
@@ -53,23 +55,36 @@ def main():
         if not route_success:
             config.update_log(["ROUTE FAILED"], [24])            
             continue
-            
-        align_success = align(search_function=search_type, step_time=0.01)
         
-        if not align_success:
+        align_success = align(search_function=search_type, step_time=0.01)
+        last_align_attempt = time.time()
+        
+        if not align_success and align_failures < 3:
             config.update_log(["ALIGN FAILED"], [24])
             
             # Warmup camera again
             for _ in range(0, 3):
                 image = camera.capture_array()
                 motors.run(0, 0)
+
+            align_failures = align_failures + 1 if time.time() - last_align_attempt < 2 else 0
             continue
-        
+
+        if align_failures == 3:
+            print("FAILED TOO MANY TIMES!")
+
+        align_failures = 0
+
         grab_success = grab()
         
         if not grab_success:
             config.update_log(["GRAB FAILED"], [24])
+            motors.claw_step(270, 0)
             motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
+            
+            direction = 1 if randint(0, 1) == 1 else -1
+
+            motors.run(config.evacuation_speed * direction, -config.evacuation_speed * direction, randint(5, 10) / 10)
             continue
 
         motors.claw_step(230, 0.005)
@@ -376,7 +391,7 @@ def grab() -> bool:
     
     config.update_log(["GRAB", "MOVE FORWARDS"], [24, 24])
     print()
-    motors.run(config.evacuation_speed, config.evacuation_speed, 0.7)
+    motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 0.8, 0.73)
     motors.run(0, 0)
     
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
@@ -398,7 +413,7 @@ def grab() -> bool:
     print()
     motors.claw_step(150, 0.001)
 
-    success_fail = presence_check(25, 0)
+    success_fail = presence_check(20, 0)
     config.update_log(["GRAB", f"{success_fail}"], [24, 20])
     print()
     
@@ -417,79 +432,6 @@ def dump() -> None:
 
     motors.run(config.evacuation_speed, -config.evacuation_speed, randint(300, 1600) / 1000)
     motors.run(0, 0)
-
-# def exit_evacuation_zone() -> bool:
-#     global black_count
-#     black_count = 0
-
-#     laser_values = laser_sensors.read()
-#     touch_values = touch_sensors.read()
-
-#     print(config.update_log(["EXITING", f"{touch_values}", f"{laser_values}"], [24, 10, 6]))
-
-#     def validate_exit() -> bool:
-#         global black_count
-#         colour_values = colour.read()
-
-#         for value in colour_values[:5]:
-#             if value <= 20:  
-#                 black_count += 1
-#                 return True
-#             elif value >= 130: 
-#                 return False
-#             else:
-#                 black_count = 0
-
-#         return None
-
-#     # Forwards until wall or line reached
-#     motors.run(config.evacuation_speed, config.evacuation_speed)
-#     while True:
-#         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
-#         laser_values = laser_sensors.read()
-
-#         if (laser_values[1] < 5 and laser_values[1] is not None and laser_values[1] != 0) or touch_values[0] == 0 or touch_values[1] == 0:
-#             print("Initial Wall Touched")
-#             break
-#         elif validate_exit() is not None:
-#             print("Line Found")
-#             break
-
-#     # Wall until sees black line
-#     while black_count < 1:
-#         print(f"Black: {black_count}")
-#         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
-#         laser_values = laser_sensors.read()
-
-#         # Wall Touched
-#         if (laser_values[1] < 5 and laser_values[1] is not None and laser_values[1] != 0) or touch_values[0] == 0 or touch_values[1] == 0:
-#             print("Wall Touched")
-#             motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.5)
-#             motors.run(config.evacuation_speed, -config.evacuation_speed, 0.6)
-#             motors.run(config.evacuation_speed, config.evacuation_speed, 0.6)
-
-#         # Line Found
-#         if validate_exit() is True:
-#             print("BLACK LINE")
-#         elif validate_exit() is False:
-#             print("SILVER LINE")
-#             motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.6)
-#             motors.run(config.evacuation_speed, -config.evacuation_speed, 0.7)
-#             motors.run(config.evacuation_speed, config.evacuation_speed, 0.9)
-
-#         # Wall Follow
-#         kP = 5
-#         wall_distance = 10
-#         if laser_values[0] != 0:
-#             print(laser_values[0])
-#             turn = max(min(kP * (wall_distance - laser_values[0]), config.evacuation_speed*1.3), -config.evacuation_speed*1.3)
-#             motors.run(config.evacuation_speed+turn, config.evacuation_speed-turn)
-    
-#     entry_exit_align("black")
-
-#     motors.run(0, 0)
-#     camera.close()
-#     camera.initialise("line")
 
 def exit_evacuation_zone() -> None:
     # Move towards a wall
@@ -520,7 +462,23 @@ def exit_evacuation_zone() -> None:
             motors.run(0, 0, 0.3)
             motors.run(22, -22, 2.9)
             motors.run(0, 0, 0.3)
-            motors.run_until( 22      ,  22      , laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
+
+            while True:
+                distance = laser_sensors.read([config.x_shut_pins[0]])[0]
+                touch_values = touch_sensors.read()
+                
+                config.update_log(["MOVING TILL WALL", f"{distance}", f"{touch_values}"], [24, 10, 10])
+                motors.run(22, 22)
+
+                if distance <= 20:
+                    break
+                
+                if sum(touch_values) != 2:
+                    motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
+                    motors.run(config.evacuation_speed, -config.evacuation_speed, 0.5)
+                    break
+
+            motors.run_until( 22,  22, laser_sensors.read, 0, "<=", 20, )
             break
         
         elif sum(touch_values) != 2:
@@ -566,92 +524,22 @@ def exit_evacuation_zone() -> None:
             entrance_exit_align("silver")
             motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.2)
             motors.run(0, 0, 0.3)
-            motors.run(22, -22, 2.9)
+            motors.run(22, -22, 3.3)
             motors.run(0, 0, 0.3)
             motors.run_until( 22,  22, laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
+
+            gap_initial = False
             
         elif sum(touch_values) != 2:
             config.update_log(["EXITING", "FOUND WALL"], [24, 30])
             print()
             motors.run      (-config.evacuation_speed, -config.evacuation_speed, 0.35)
             motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.35)
-
-# def exit_evacuation_zone() -> None:
-#     # Move towards a wall
-#     black_count = silver_count = 0
-
-#     motors.run(config.evacuation_speed * 0.7, config.evacuation_speed * 0.7)
-#     while True:
-#         colour_values = colour.read()
-#         touch_values = touch_sensors.read([config.touch_pins[0], config.touch_pins[1]])
-#         laser_values = laser_sensors.read()
-
-#         silver_count, black_count = validate_exit(colour_values, black_count,silver_count)
-
-#         if (laser_values[1] < 5 and laser_values[1] != 0) or touch_values[0] == 0 or touch_values[1] == 0:
-#             print("Initial Wall Touched")
-#             break
-#         elif silver_count != 0 or black_count != 0:
-#             print("Line Found") 
-#             break
-        
-#     # Follow wall till exit is found
-#     while True:
-#         touch_values = touch_sensors.read()
-#         colour_values = colour.read()
-#         laser_values = laser_sensors.read()
-        
-#         config.update_log(["EXITING", "FINDING GAPS", ",".join(list(map(str, touch_values))), ",".join(list(map(str, colour_values))), f"Laser: {laser_values}", f"Silver: {silver_count}", f"Black: {black_count}"], [24, 30, 10, 30, 10, 6, 6])
-#         print()
-#         motors.run(config.evacuation_speed * 0.5, config.evacuation_speed * 0.8)
-        
-#         silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
-        
-#         if laser_values[0] is not None:
-#             if laser_values[0] > 30:
-#                 # Turn to face gap
-#                 motors.run(0, 0, 0.3)
-#                 motors.run(22, 22, 1.3)
-#                 motors.run(-22, 22, 2.9)
-        
-#         if black_count >= 5:
-#             config.update_log(["EXITING", "FOUND EXIT!"], [24, 30])
-#             print()
-#             break
-        
-#         elif silver_count >= 5:
-#             config.update_log(["EXITING", "FOUND SILVER"], [24, 30])
-#             print()
-            
-#             motors.run(0, 0, 0.3)
-#             entrance_exit_align("silver")
-#             motors.run(-config.evacuation_speed*0.7, -config.evacuation_speed*0.7, 1.6)
-#             motors.run(0, 0, 0.3)
-#             motors.run(22, -22, 2.9)
-#             motors.run(0, 0, 0.3)
-#             motors.run(22, 22, 1)
-#             motors.run(0, 0, 1)
-            
-#         elif sum(touch_values) != 2 or (laser_values[1] < 5 and laser_values[1] is not None):
-#             config.update_log(["EXITING", "FOUND WALL"], [24, 30])
-#             print()
-#             motors.run      (-config.evacuation_speed*0.7, -config.evacuation_speed*0.7, 0.5)
-#             motors.run      ( config.evacuation_speed*0.7, -config.evacuation_speed*0.7, 0.5)
-#             config.update_log(["EXIT FOUND!"], [24]) 
-    
-#     print()
-    
-#     entrance_exit_align("black")
-    
-#     motors.run(0, 0)
-
-#     camera.close()
-#     camera.initialise("line")
-
-            
+   
 def validate_exit(colour_values: list[int], black_count: int, silver_count: int) -> bool:
-    silver_values = [1 if value >= silver_min else 0 for value in colour_values[:5]]
-    black_values  = [1 if value <= black_max  else 0 for value in colour_values[:5]]
+    valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
+    silver_values = [1 if value >= silver_min else 0 for value in valid_values]
+    black_values  = [1 if value <= black_max  else 0 for value in valid_values]
     
     silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else 0
     black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
