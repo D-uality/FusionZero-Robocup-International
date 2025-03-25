@@ -8,9 +8,10 @@ import oled_display
     
 min_black_area = 50
 camera = None
+camera_mode = ""
 
 def initialise(mode: str):
-    global camera
+    global camera, camera_mode
     try:
         camera = Picamera2()
         
@@ -21,16 +22,11 @@ def initialise(mode: str):
                 raw={"size": (2304, 1500), "format": "SBGGR10"},
                 transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
             )
+            camera_mode = "evac"
         else:
             camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.LINE_WIDTH, config.LINE_HEIGHT)})
-            
-        camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)})
-        # camera_config = camera.create_still_configuration(
-        #     main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
-        #     # raw={"size": (2304, 1296), "format": "SBGGR10"},
-        #     raw={"size": (2304, 1500), "format": "SBGGR10"},
-        #     transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
-        # )
+            camera_mode = "line"
+        
         camera.configure(camera_config)
         camera.start()
         
@@ -58,11 +54,16 @@ def initialise(mode: str):
             oled_display.text("X11: X", 60, 40)
             raise e
 
-def perspective_transform(image):
+def perspective_transform(image, mode):
     """Apply perspective transform to the image"""
-    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 1.8))
+    if "UPHILL" in mode or "DOWNHILL" in mode:
+        view_multi = 1.2
+    else:
+        view_multi = 2.2
+
+    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_multi))
     bottom_left =   (0, config.LINE_HEIGHT - 1)
-    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 1.8))
+    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_multi))
     bottom_right =  (config.LINE_WIDTH, config.LINE_HEIGHT- 1 )
     
     # Define points for the perspective transform (source and destination)
@@ -231,10 +232,11 @@ def close():
     camera.close()
 
 def capture_array():
-    global camera
-    
+    global camera, camera_mode
     image = camera.capture_array()
-    # image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
-    # image = image[20:, :]
+    
+    if camera_mode == "evac":
+        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+        image = image[20:, :]
 
     return image

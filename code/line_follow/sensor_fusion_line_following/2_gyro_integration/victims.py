@@ -25,7 +25,7 @@ def live(image: np.ndarray) -> Optional[int]:
         
         # look for contours in the top quarter
         if (y + h/2 < 50
-            and cv2.contourArea(contour) < 300):
+            and cv2.contourArea(contour) < 500):
             valid_contours.append(contour)
     
     if len(valid_contours) == 0: return None
@@ -48,15 +48,10 @@ def dead(image: np.ndarray) -> Optional[int]:
         if circularity > threshold: return True
         return False
     
-    laser_value = laser_sensors.read([config.x_shut_pins[1]])[0]
-    if laser_value is not None:
-        if laser_value > 120:
-            print("laser check failed")
-            return None
-    
     black_threshold = 40
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     
+    # sharpen image
     h, s, v = cv2.split(hsv_image)
     v_blur = cv2.GaussianBlur(v, (5, 5), 0)
     v_sharp = cv2.addWeighted(v, 1.5, v_blur, -0.5, 0)
@@ -64,8 +59,9 @@ def dead(image: np.ndarray) -> Optional[int]:
     
     black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 30))
     contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if not contours: return None
+    
+    # If there are no contours, or there are many, return None
+    if not contours or len(contours) > 5: return None
     
     if config.X11: cv2.drawContours(image, contours, -1, (0, 0, 255), 1)
     

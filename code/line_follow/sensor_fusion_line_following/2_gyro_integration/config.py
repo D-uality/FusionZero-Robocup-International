@@ -1,7 +1,7 @@
 EVACUATION_WIDTH, EVACUATION_HEIGHT, FLIP = 320, 200, False
 LINE_WIDTH, LINE_HEIGHT = 120, 90
 SCREEN_WIDTH, SCREEN_HEIGHT = 128, 64
-X11 = True
+X11 = False
 
 touch_pins = [6, 26]  # FL, FR
 x_shut_pins = [23, 24, 25]  # Left, Middle, Right
@@ -19,7 +19,7 @@ def update_log(data: list[str], coloumn_widths: list[int], separator: str = "|")
 
 status_messages = []
 
-victim_count = 3
+victim_count = 0
 evacuation_speed = 40
 approach_distance = 12
 

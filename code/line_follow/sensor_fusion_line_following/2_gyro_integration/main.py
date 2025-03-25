@@ -27,7 +27,7 @@ def main() -> None:
     laser_sensors.initialise()
     touch_sensors.initialise()
     motors.initialise()
-    camera.initialise(config.LINE_WIDTH, config.LINE_HEIGHT)
+    camera.initialise("line")
     gyroscope.initialise()
     
     motors.run(0, 0)
