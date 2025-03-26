@@ -37,9 +37,6 @@ def main() -> None:
     config.update_log(["INITIALISATION", f"({time.time() - start_time:.2f})"], [24, 15])
     print()
     
-    with open("victim_count.txt", "w") as file:
-        file.write(str(config.victim_count))
-    
     try:
         while not listener.has_exited():
             mode = listener.get_mode()
