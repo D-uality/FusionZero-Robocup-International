@@ -34,7 +34,8 @@ def main() -> None:
     print()
     
     try:
-        line.main()
+        while True:
+            line.main()
 
     finally:
         camera.close()

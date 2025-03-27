@@ -2,15 +2,17 @@ import RPi.GPIO as GPIO
 import time
 import subprocess
 
+switch_pin = 22
+
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(27, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 running = False
 main_process = None
 
 try:
     while True:
-        running = True if GPIO.input(27) == GPIO.LOW else False
+        running = True if GPIO.input(switch_pin) == GPIO.LOW else False
 
         # If running is True and the competition script is not running, start it.
         if running and main_process is None:
