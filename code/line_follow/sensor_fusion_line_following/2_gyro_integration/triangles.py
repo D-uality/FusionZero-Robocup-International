@@ -101,12 +101,8 @@ def move_closer(kP: float) -> None:
 
         x, _, w, _ = locate(image)
 
-        print(x, w)
-        print(x is None, w is None)
-
         if x is None and w is None:
             print("X IS NONE!")
-            motors.run(0, 0)
             continue
         
         error = int(config.EVACUATION_WIDTH/2 - (x + w/2))
