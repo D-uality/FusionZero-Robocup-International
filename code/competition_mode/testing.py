@@ -72,4 +72,4 @@ def camera_line_follow():
         motors.run(0, 0)
         led.off()
 
-if __name__ == "__main__": gyro_test()
+if __name__ == "__main__": run_input()

@@ -32,8 +32,8 @@ def locate(image: np.ndarray) -> tuple[int, int, int, int]:
 
     # Determine filter
     if config.victim_count < 2:
-        # Adjusting: H_max | H_min=35, H_max=100, S_min=100, S_max=255, V_min=10, V_max=255
-        mask = cv2.inRange(hsv_image, (35, 100, 10), (100, 255, 255))
+        # Adjusting: H_max | H_min=35, H_max=120, S_min=100, S_max=255, V_min=20, V_max=255
+        mask = cv2.inRange(hsv_image, (35, 120, 20), (100, 255, 255))
         mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
     else:
         # Adjusting: V_min | H_min=0, H_max=10, S_min=230, S_max=255, V_min=46, V_max=255
@@ -107,6 +107,7 @@ def move_closer(kP: float) -> None:
         colour_values = colour.read()
         image = camera.capture_array()
         touch_values = touch_sensors.read()
+        front_distance = laser_sensors.read([config.x_shut_pins[1]])[0]
 
         silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
         x, _, w, _ = locate(image)
@@ -126,7 +127,7 @@ def move_closer(kP: float) -> None:
         v1, v2 = config.evacuation_speed - turn, config.evacuation_speed + turn
         motors.run(v1, v2)
 
-        if sum(touch_values) != 2:
+        if sum(touch_values) != 2 and front_distance < 10:
             break
 
         config.update_log([f"MOVING CLOSER", "green" if config.victim_count < 2 else "red", f"{error}"], [24, 10, 10])

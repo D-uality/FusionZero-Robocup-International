@@ -59,8 +59,8 @@ def main(evacuation_zone_enable: bool = False) -> None:
     if not camera_enable:
         gap_check(colour_values)
         green_signal = green_check(colour_values)
-        # if evac_exited: red_count = red_check(colour_values, red_count)
-        red_count = red_check(colour_values, red_count)
+        if evac_exited: red_count = red_check(colour_values, red_count)
+        # red_count = red_check(colour_values, red_count)
         
     if silver_count > 20:
         silver_count = 0
@@ -136,7 +136,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif evac_trigger:     kP, kI, kD, v = 0.5 , 0     ,  0  , 18
-    else:                  kP, kI, kD, v = 1.3   , 0     ,  0  , config.line_speed
+    else:                  kP, kI, kD, v = 1.45, 0     ,  0  , config.line_speed
 
     # Input method
     if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger:
@@ -450,7 +450,9 @@ def silver_check(colour_values, silver_count):
     return silver_count
 
 def red_check(colour_values, red_count):
-    global red_threshold
+    global red_threshold, main_loop_count
+    
+    if main_loop_count < 50: return red_count
 
     if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 and colour_values[i] < 120 for i in range(5)):
         red_count += 1
