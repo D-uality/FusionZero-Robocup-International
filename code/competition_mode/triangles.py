@@ -5,6 +5,10 @@ import laser_sensors
 import touch_sensors
 import camera
 import motors
+import colour
+
+silver_min = 110
+black_max = 20
 
 def find() -> None:
     config.update_log(["TRIANGLE", "initial alignment"], [24, 24])
@@ -50,6 +54,8 @@ def locate(image: np.ndarray) -> tuple[int, int, int, int]:
 
     # Get the bounding rectangle of the largest contour
     x, y, w, h = cv2.boundingRect(largest_contour)
+    
+    if h > w: return None, None, None, None
 
     # Display debug information
     if config.X11:
@@ -95,11 +101,20 @@ def align(tolerance: int, text: str, time_step: float = None) -> None:
         print()
 
 def move_closer(kP: float) -> None:
+    silver_count = black_count = 0
+    
     while True:
+        colour_values = colour.read()
         image = camera.capture_array()
         touch_values = touch_sensors.read()
 
+        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
         x, _, w, _ = locate(image)
+        
+        if silver_count > 20 or black_count > 20:
+            silver_count = black_count = 0
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 2)
+            motors.run( config.evacuation_speed,  config.evacuation_speed, 1)
 
         if x is None and w is None:
             print("X IS NONE!")
@@ -116,3 +131,13 @@ def move_closer(kP: float) -> None:
 
         config.update_log([f"MOVING CLOSER", "green" if config.victim_count < 2 else "red", f"{error}"], [24, 10, 10])
         print()
+
+def validate_exit(colour_values: list[int], black_count: int, silver_count: int) -> bool:
+    valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
+    silver_values = [1 if value >= silver_min else 0 for value in valid_values]
+    black_values  = [1 if value <= black_max  else 0 for value in valid_values]
+    
+    silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else 0
+    black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
+    
+    return silver_count, black_count

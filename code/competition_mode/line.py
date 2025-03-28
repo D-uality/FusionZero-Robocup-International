@@ -26,7 +26,7 @@ last_yaw = 0
 min_green_loop_count = 50
 gap_loop_count = 0
 
-silver_min = 110
+silver_min = 140
 silver_count = 0
 red_threshold = [ [60, 80], [45, 65] ]
 red_count = 0
@@ -62,7 +62,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
         # if evac_exited: red_count = red_check(colour_values, red_count)
         red_count = red_check(colour_values, red_count)
         
-    if silver_count > 10:
+    if silver_count > 20:
         silver_count = 0
 
         evacuation_zone.main()
@@ -174,13 +174,13 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         camera_enable = False
         led.off()
         
-        colour_values = [min(value, 100) for value in colour_values]
+        updated_colour_values = [min(value, 100) for value in colour_values]
 
-        outer_error = 1 * (colour_values[0] - colour_values[4])
-        inner_error = 1 * (colour_values[1] - colour_values[3])
+        outer_error = 1 * (updated_colour_values[0] - updated_colour_values[4])
+        inner_error = 1 * (updated_colour_values[1] - updated_colour_values[3])
         error = outer_error + inner_error
                 
-        integral_reset_count = integral_reset_count + 1 if abs(error) <= 15 and colour_values[1] + colour_values[3] >= 75 else 0
+        integral_reset_count = integral_reset_count + 1 if abs(error) <= 15 and updated_colour_values[1] + updated_colour_values[3] >= 75 else 0
         
         if integral_reset_count >= min_integral_reset_count: ir_integral = 0
         elif ir_integral <= -50000: ir_integral = -49999
@@ -188,10 +188,10 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.3
         ir_derivative = error - ir_last_error
 
-        if colour_values[0] > 70 and colour_values[1] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
+        if updated_colour_values[0] > 70 and updated_colour_values[1] > 70 and updated_colour_values[3] > 70 and updated_colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = max(1 + (colour_values[2] - 60)/100, 0)
+            middle_multi = max(1 + (updated_colour_values[2] - 60)/100, 0)
 
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
@@ -439,7 +439,9 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
             return False
 
 def silver_check(colour_values, silver_count):
-    global silver_min
+    global silver_min, ir_integral
+    if ir_integral >= 1000: return silver_count
+    
     if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
         silver_count += 1
     else: 

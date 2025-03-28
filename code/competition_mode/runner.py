@@ -2,9 +2,11 @@ import RPi.GPIO as GPIO
 import time
 import subprocess
 import os
+import sys
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
+if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
 import motors
 

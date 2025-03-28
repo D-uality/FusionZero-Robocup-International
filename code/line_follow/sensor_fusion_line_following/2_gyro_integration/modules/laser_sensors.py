@@ -28,7 +28,7 @@ def change_address(pin_number: int, x_shut_pin: int) -> None:
     for attempt in range(1, attempts + 1):
         try:
             GPIO.output(x_shut_pin, GPIO.HIGH)
-            time.sleep(0.1)
+            time.sleep(0.3)
             
             sensor_i2c = adafruit_vl53l1x.VL53L1X(i2c)
             tof_sensors.append(sensor_i2c)

@@ -271,8 +271,12 @@ def route(search_function: callable, kP: float) -> bool:
 
 def align(search_function: callable, step_time: float) -> bool:
     image = camera.capture_array()
+    front_distance = laser_sensors.read([config.x_shut_pins[1]])[0]
+    
+    if front_distance > config.approach_distance: return False
 
     x = search_function(image)
+    
     if x is None: return False
 
     error = config.EVACUATION_WIDTH / 2 - x
@@ -396,7 +400,7 @@ def grab() -> bool:
     
     config.update_log(["GRAB", "CLAW CLOSE"], [24, 24])
     print()
-    motors.claw_step(120, 0.004)
+    motors.claw_step(150, 0.002)
     time.sleep(1)
     
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
@@ -404,10 +408,10 @@ def grab() -> bool:
     motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.7)
     motors.run(0, 0)
     
-    config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
-    print()
-    motors.claw_step(100, 0.03)
-    motors.claw_step(120, 0.03)
+    # config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
+    # print()
+    # motors.claw_step(105, 0.03)
+    # motors.claw_step(125, 0.03)
     
     config.update_log(["GRAB", "CLAW CHECK"], [24, 24])
     print()
