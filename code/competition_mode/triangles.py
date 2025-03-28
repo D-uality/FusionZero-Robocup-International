@@ -6,19 +6,24 @@ import touch_sensors
 import camera
 import motors
 import colour
+import oled_display
 
 silver_min = 110
 black_max = 20
 
 def find() -> None:
+    oled_display.reset()
+    oled_display.text(f"Triangle initial align", 0, 0, size=10)
     config.update_log(["TRIANGLE", "initial alignment"], [24, 24])
     print()
     align(tolerance=10, text="Initial Alignment")
     
+    oled_display.text(f"Triangle moving closer", 0, 10, size=10)
     move_closer(1)
     motors.run      ( config.evacuation_speed * 0.8,  config.evacuation_speed * 0.8, 0.3)
     motors.run_until(-config.evacuation_speed * 0.8, -config.evacuation_speed * 0.8, laser_sensors.read, 1, ">=", 25, "STANDARDIZING DISTANCE")
 
+    oled_display.text(f"Triangle initial align", 0, 20, size=10)
     config.update_log(["TRIANGLE", "fine alignment"], [24, 24])
     print()
     align(tolerance=3, text="Fine Alignment", time_step=0.05)

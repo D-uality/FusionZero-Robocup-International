@@ -13,6 +13,7 @@ import cv2
 import evacuation_zone
 import gyroscope
 import led
+import oled_display
 
 ir_integral = ir_derivative = ir_last_error = 0
 camera_integral = camera_derivative = camera_last_error = 0
@@ -65,6 +66,9 @@ def main(evacuation_zone_enable: bool = False) -> None:
     if silver_count > 20:
         silver_count = 0
 
+        oled_display.reset()
+        oled_display.text("Silver Found", 0, 0, size=10)
+        oled_display.text(",".join(map(str, colour_values)), 0, 12, size=10)
         evacuation_zone.main()
         main_loop_count = 0
 
@@ -75,6 +79,10 @@ def main(evacuation_zone_enable: bool = False) -> None:
                     
     elif red_count > 15:
         red_count = 0
+        oled_display.reset()
+        oled_display.text("Red Found", 0, 0, size=10)
+        oled_display.text(",".join(map(str, colour_values)), 0, 12, size=10)
+        
         print("Red Found")
         motors.run(0, 0, 10)
 
@@ -250,6 +258,11 @@ def intersection_handling(signal: str, colour_values) -> None:
     global main_loop_count, last_yaw, ir_integral
     main_loop_count = ir_integral = turn_count = 0
     
+    # OLED update for green signal:
+    oled_display.reset()
+    oled_display.text(f"Green: {signal}", 0, 0, size=10)
+    oled_display.text(f"{','.join(map(str, colour_values))}", 0, 10, size=10)
+
     config.update_log([f"INTERSECTION HANDLING", f"{signal}"], [24, 16])
     print()
     
@@ -328,8 +341,13 @@ def seasaw_check():
         motors.run(-config.line_speed, -config.line_speed, 1.5)
         seasaw_trigger = True
 
-def avoid_obstacle() -> None:
+def avoid_obstacle() -> None:    
     side_values = laser_sensors.read([config.x_shut_pins[0], config.x_shut_pins[2]])
+
+
+    # Immediately update OLED for obstacle detection
+    oled_display.reset()
+    oled_display.text("Obstacle Detected", 0, 0, size=10)
 
     config.update_log(["OBSTACLE", "FINDING SIDE", ", ".join(list(map(str, side_values)))], [24, 50, 14])
     print()
@@ -353,10 +371,12 @@ def avoid_obstacle() -> None:
     motors.run(-config.line_speed, -config.line_speed, 0.5)
 
     # Over turn passed obstacle
+    oled_display.text("Turning till obstacle", 0, 10, size=10)
     for i in range(20):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
-
+    
+    oled_display.text("Turning past obstacle", 0, 20, size=10)
     for i in range(35):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
@@ -366,6 +386,7 @@ def avoid_obstacle() -> None:
     motors.run(0, 0, 1)
 
     # Turn back onto obstacle
+    oled_display.text("Turning till obstacle", 0, 30, size=10)
     motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
     motors.run(-1.2 * v1, -1.2 * v2, 1.8)
 
@@ -386,31 +407,39 @@ def avoid_obstacle() -> None:
         colour_black_pin = 3
 
     initial_sequence = True
-    
+    oled_display.text("Circle Obstacle: Starting", 0, 40, size=10)
     circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
     motors.run(config.line_speed, config.line_speed, 0.5)
 
     while True:
+        oled_display.reset()
+        oled_display.text("Circle: Forwards till not", 0, 0, size=10)
         if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
         motors.run(-config.line_speed, -config.line_speed, 0.4)
         motors.run(0, 0, 0.15)
 
-        
+        oled_display.text("Turning till obstacle", 0, 10, size=10)
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, "<=", 15, "TURNING TILL OBSTACLE"): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
+        oled_display.text("Turning till not", 0, 20, size=10)
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.4)
         motors.run(0, 0, 0.15)
 
+        oled_display.text("Forwards till obstacle", 0, 30, size=10)
         if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 18, "FORWARDS TILL OBSTACLE"): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
         initial_sequence = False
+    
+    oled_display.reset()
+    oled_display.text("Black Found", 0, 0, size=10)
+
 
     config.update_log(["OBSTACLE", "FOUND BLACK"], [24, 50])
     print()
