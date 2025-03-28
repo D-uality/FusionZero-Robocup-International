@@ -11,6 +11,7 @@ import touch_sensors
 import laser_sensors
 import led
 import colour
+import oled_display
 
 from typing import Optional
 import victims
@@ -28,6 +29,10 @@ def main():
     motors.run(0, 0)
     camera.close()
     camera.initialise("evac")
+
+    # For entry alignment, update OLED before starting
+    oled_display.reset()
+    oled_display.text("Align: Silver", 0, 0, size=10)
     
     entrance_exit_align("silver")
     
@@ -41,25 +46,41 @@ def main():
     motors.run(30, 30, 1)            
     
     start_time = time.time()
+
+    oled_display.text("Starting Search", 0, 10, size=10)
+    oled_display.text(f"Victims: {config.victim_count}", 0, 20, size=10)
     
     while True:
-        if config.victim_count == 3 or time.time() - start_time > 5 * 60: break
+        elapsed = time.time() - start_time
+        remaining = int(5*60 - elapsed)
+        # Update OLED with victim count and remaining time (update periodically)
+        oled_display.reset()
+        oled_display.text(f"Victims: {config.victim_count}", 0, 0, size=10)
+        oled_display.text(f"Time: {remaining}s", 0, 10, size=10)
+
+        if config.victim_count == 3 or time.time() -  elapsed > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0.00001)
 
         find(search_function=search_type)
+
+        oled_display.text(f"Victim Found", 0, 20, size=10)
         
         route_success = route(search_function=search_type, kP=0.35)
         
         if not route_success:
+            oled_display.text(f"Route Failed", 0, 30, size=10)
             config.update_log(["ROUTE FAILED"], [24])            
             continue
+        else:
+            oled_display.text(f"Route Success", 0, 30, size=10)
         
         align_success = align(search_function=search_type, step_time=0.01)
         last_align_attempt = time.time()
         
         if not align_success and align_failures < 3:
+            oled_display.text(f"Align Failed", 0, 40, size=10)
             config.update_log(["ALIGN FAILED"], [24])
             
             # Warmup camera again
@@ -69,8 +90,11 @@ def main():
 
             align_failures = align_failures + 1 if time.time() - last_align_attempt < 2 else 0
             continue
+        else: 
+            oled_display.text(f"Align Success", 0, 40, size=10)
 
         if align_failures == 3:
+            oled_display.text(f"Failed To Much", 0, 50, size=10)
             print("FAILED TOO MANY TIMES!")
 
         align_failures = 0
@@ -78,6 +102,8 @@ def main():
         grab_success = grab()
         
         if not grab_success:
+            oled_display.reset()
+            oled_display.text(f"Grab Failed", 0, 0, size=10)
             config.update_log(["GRAB FAILED"], [24])
             motors.claw_step(270, 0)
             motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
@@ -86,17 +112,27 @@ def main():
 
             motors.run(config.evacuation_speed * direction, -config.evacuation_speed * direction, randint(5, 10) / 10)
             continue
+        else:
+            oled_display.reset()
+            oled_display.text(f"Grab Success", 0, 0, size=10)
 
         motors.claw_step(230, 0.005)
         triangles.find()
+        
+        oled_display.text(f"Dumping", 0, 30, size=10)
         dump()
         
         config.victim_count += 1
 
+    oled_display.reset()
+    oled_display.text(f"Exiting", 0, 0, size=10)
     exit_evacuation_zone()
     
+    oled_display.reset()
+    oled_display.text(f"Aligning", 0, 0, size=10)
     entrance_exit_align("black")
     
+    oled_display.reset()
     motors.run(0, 0)
     camera.close()
     camera.initialise("line")

@@ -261,7 +261,7 @@ def intersection_handling(signal: str, colour_values) -> None:
     # OLED update for green signal:
     oled_display.reset()
     oled_display.text(f"Green: {signal}", 0, 0, size=10)
-    oled_display.text(f"{','.join(map(str, colour_values))}", 0, 12, size=10)
+    oled_display.text(f"{','.join(map(str, colour_values))}", 0, 10, size=10)
 
     config.update_log([f"INTERSECTION HANDLING", f"{signal}"], [24, 16])
     print()
