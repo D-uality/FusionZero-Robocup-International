@@ -1,6 +1,12 @@
 import RPi.GPIO as GPIO
 import time
 import subprocess
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
+
+import motors
 
 switch_pin = 22
 
@@ -11,6 +17,7 @@ running = False
 main_process = None
 
 try:
+    print("Ready to begin!\n\n")
     while True:
         running = True if GPIO.input(switch_pin) == GPIO.LOW else False
 
@@ -22,6 +29,8 @@ try:
         
         # If running is False and the competition script is running, kill it.
         elif not running and main_process is not None:
+            motors.run(0, 0)
+            
             print("Terminating competition_main.py...")
             subprocess.call(["sudo", "kill", "-9", str(main_process.pid)])
             main_process = None
