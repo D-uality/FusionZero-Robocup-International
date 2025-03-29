@@ -116,7 +116,13 @@ def main():
             oled_display.text(f"Grab Failed", 0, 0, size=10)
             config.update_log(["GRAB FAILED"], [24])
             motors.claw_step(270, 0)
-            motors.run(-config.evacuation_speed, -config.evacuation_speed, 1)
+
+            # Shake if victim is actually on the bot
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.3)
+            motors.run(config.evacuation_speed, config.evacuation_speed, 0.3)
+            motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.3)
+            motors.run(config.evacuation_speed, config.evacuation_speed, 0.3)
+            motors.run(0, 0)
             
             direction = 1 if randint(0, 1) == 1 else -1
 
