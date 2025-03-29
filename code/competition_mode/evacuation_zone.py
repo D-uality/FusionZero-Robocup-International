@@ -8,12 +8,10 @@ modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
-import time
 import cv2
 import numpy as np
 from random import randint
 
-from listener import listener
 import config
 import camera
 import motors
@@ -22,6 +20,7 @@ import laser_sensors
 import led
 import colour
 import oled_display
+import gyroscope
 
 from typing import Optional
 import victims
@@ -62,13 +61,14 @@ def main():
     
     while True:
         elapsed = time.time() - start_time
-        remaining = int(5*60 - elapsed)
+        print(elapsed)
+        remaining = int(5 * 60 - elapsed)
         # Update OLED with victim count and remaining time (update periodically)
         oled_display.reset()
         oled_display.text(f"Victims: {config.victim_count}", 0, 0, size=10)
         oled_display.text(f"Time: {remaining}s", 0, 10, size=10)
 
-        if config.victim_count == 3 or time.time() -  elapsed > 5 * 60: break
+        if config.victim_count == 3 or elapsed > 5 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0.00001)
@@ -596,4 +596,18 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     
     return silver_count, black_count
 
-if __name__ == "__main__": triangles.find()
+if __name__ == "__main__": 
+    oled_display.initialise()
+    laser_sensors.initialise()
+    touch_sensors.initialise()
+    motors.initialise()
+    gyroscope.initialise()
+    camera.initialise("evac")
+    
+    motors.run(0, 0)
+    oled_display.reset()
+    led.off()
+    
+    config.victim_count =0
+    
+    main()

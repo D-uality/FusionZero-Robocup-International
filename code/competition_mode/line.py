@@ -33,6 +33,7 @@ silver_count = 0
 red_threshold = [ [60, 80], [45, 65] ]
 red_count = 0
 
+# uphill_count = downhill_count = 0
 touch_count = 0
 laser_close_count = 0
 last_uphill = 0
@@ -63,7 +64,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
         green_signal = green_check(colour_values)
         if evac_exited: red_count = red_check(colour_values, red_count)
         # red_count = red_check(colour_values, red_count)
-        
+            
     if silver_count > 20:
         silver_count = 0
 
@@ -109,6 +110,8 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # Finding modifiers
     # ramp detection
     if gyroscope_values[0] is not None:
+        # uphill_count = uphill_count + 1 if gyroscope_values[0] >= 15 else 0
+        # uphill_count = uphill_count + 1 if gyroscope_values[0] >= 15 else 0
         uphill_trigger   = True if gyroscope_values[0] >=  15 else False
         downhill_trigger = True if gyroscope_values[0] <= -15 else False
         
@@ -392,7 +395,7 @@ def avoid_obstacle() -> None:
     # Turn back onto obstacle
     oled_display.text("Turning till obstacle", 0, 30, size=10)
     motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
-    motors.run(-1.2 * v1, -1.2 * v2, 1.8)
+    motors.run(-1.2 * v1, -1.2 * v2, 1)
 
     # Circle obstacle
     v1 = v2 = laser_pin = colour_align_pin = 0
@@ -431,7 +434,7 @@ def avoid_obstacle() -> None:
         oled_display.text("Turning till not", 0, 20, size=10)
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(v1, v2, 0.4)
+        motors.run(v1, v2, 0.6)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Forwards till obstacle", 0, 30, size=10)
