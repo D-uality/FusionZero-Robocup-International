@@ -14,6 +14,7 @@ import evacuation_zone
 import gyroscope
 import led
 import oled_display
+import random
 
 ir_integral = ir_derivative = ir_last_error = 0
 camera_integral = camera_derivative = camera_last_error = 0
@@ -353,7 +354,10 @@ def avoid_obstacle() -> None:
     print()
 
     # Clockwise if left > right
-    direction = "cw" if side_values[0] > side_values[1] else "ccw"
+    if side_values[0] + side_values[1] > 60:
+        direction = "cw" if random.randint(0, 1) == 0 else "ccw"
+    else:
+        direction = "cw" if side_values[0] > side_values[1] else "ccw"
 
     # Turn until appropriate laser sees obstacle
     v1 = v2 = laser_pin = 0
@@ -377,11 +381,11 @@ def avoid_obstacle() -> None:
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
     
     oled_display.text("Turning past obstacle", 0, 20, size=10)
-    for i in range(35):
+    for i in range(20):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
 
-    motors.run(1.2 * v1, 1.2*v2, 0.5)
+    motors.run(1.2 * v1, 1.2*v2, 0.1)
 
     motors.run(0, 0, 1)
 

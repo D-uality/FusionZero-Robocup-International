@@ -1,3 +1,13 @@
+import os
+import sys
+import time
+from listener import listener
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
+
+if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
+
 import time
 import cv2
 import numpy as np
@@ -586,4 +596,4 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     
     return silver_count, black_count
 
-if __name__ == "__main__": main()
+if __name__ == "__main__": triangles.find()

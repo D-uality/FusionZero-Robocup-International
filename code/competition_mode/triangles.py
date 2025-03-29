@@ -1,10 +1,25 @@
+import os
+import sys
+import time
+from listener import listener
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
+
+if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
+
+import time
 import cv2
 import numpy as np
+from random import randint
+
+from listener import listener
 import config
-import laser_sensors
-import touch_sensors
 import camera
 import motors
+import touch_sensors
+import laser_sensors
+import led
 import colour
 import oled_display
 
@@ -38,7 +53,7 @@ def locate(image: np.ndarray) -> tuple[int, int, int, int]:
     # Determine filter
     if config.victim_count < 2:
         # Adjusting: H_max | H_min=35, H_max=120, S_min=100, S_max=255, V_min=20, V_max=255
-        mask = cv2.inRange(hsv_image, (35, 120, 20), (100, 255, 255))
+        mask = cv2.inRange(hsv_image, (50, 120, 15), (70, 255, 255))
         mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
     else:
         # Adjusting: V_min | H_min=0, H_max=10, S_min=230, S_max=255, V_min=46, V_max=255
@@ -147,3 +162,13 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
     
     return silver_count, black_count
+
+if __name__ == "__main__":
+    camera.initialise("evac")
+    config.victim_count = 0
+    
+    while True:
+        image = camera.capture_array()
+        locate(image)
+        
+        if config.X11: cv2.imshow("image", image)
