@@ -418,30 +418,30 @@ def avoid_obstacle() -> None:
 
     initial_sequence = True
     oled_display.text("Circle Obstacle: Starting", 0, 40, size=10)
-    circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
+    circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 13, "FORWARDS TILL OBSTACLE", direction)
     motors.run(config.line_speed, config.line_speed, 0.5)
 
     while True:
         oled_display.reset()
         oled_display.text("Circle: Forwards till not", 0, 0, size=10)
-        if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
+        if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE", direction): pass
         elif not initial_sequence: break
         motors.run(-config.line_speed, -config.line_speed, 0.3)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Turning till obstacle", 0, 10, size=10)
-        if circle_obstacle(v1, v2, laser_pin, colour_black_pin, "<=", 15, "TURNING TILL OBSTACLE"): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_black_pin, "<=", 15, "TURNING TILL OBSTACLE", direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
         oled_display.text("Turning till not", 0, 20, size=10)
-        if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE", direction): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.35)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Forwards till obstacle", 0, 30, size=10)
-        if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 18, "FORWARDS TILL OBSTACLE"): pass
+        if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 18, "FORWARDS TILL OBSTACLE",direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
@@ -459,13 +459,14 @@ def avoid_obstacle() -> None:
     motors.run_until(config.line_speed, config.line_speed, colour.read, colour_align_pin, ">=", 60, "FORWARDS TILL WHITE")
     motors.run_until(-v1, -v2, colour.read, colour_align_pin, "<=", 50, "TURNING TILL BLACK")
 
-def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
+def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", direction: str = "") -> bool:
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
 
     while True:
         laser_value = laser_sensors.read([config.x_shut_pins[laser_pin]])[0]
         colour_values = colour.read()
+        touch_values = touch_sensors.read()
 
         config.update_log(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
         print()
@@ -476,6 +477,9 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
 
         if colour_values[colour_pin] <= 30:
             return False
+
+        if (direction == "cw" and touch_values[1] == 0) or (direction == "ccw" and touch_values[0] == 0):
+            motors.run(-v1, -v2, 0.05)
 
 def silver_check(colour_values, silver_count):
     global silver_min, ir_integral
