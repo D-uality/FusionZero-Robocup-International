@@ -72,4 +72,9 @@ def camera_line_follow():
         motors.run(0, 0)
         led.off()
 
-if __name__ == "__main__": run_input()
+def motor_run_thing():
+    print("RUNNING")
+    motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.8)
+    motors.pause()
+
+if __name__ == "__main__": motor_test()

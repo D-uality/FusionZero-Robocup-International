@@ -62,13 +62,13 @@ def main():
     while True:
         elapsed = time.time() - start_time
         print(elapsed)
-        remaining = int(5 * 60 - elapsed)
+        remaining = int(4 * 60 - elapsed)
         # Update OLED with victim count and remaining time (update periodically)
         oled_display.reset()
         oled_display.text(f"Victims: {config.victim_count}", 0, 0, size=10)
         oled_display.text(f"Time: {remaining}s", 0, 10, size=10)
 
-        if config.victim_count == 3 or elapsed > 5 * 60: break
+        if config.victim_count == 3 or elapsed > 4 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0.00001)
@@ -120,7 +120,7 @@ def main():
             
             direction = 1 if randint(0, 1) == 1 else -1
 
-            motors.run(config.evacuation_speed * direction, -config.evacuation_speed * direction, randint(5, 10) / 10)
+            motors.run(config.evacuation_speed, -config.evacuation_speed, randint(5, 10) / 10)
             continue
         else:
             oled_display.reset()
@@ -403,7 +403,7 @@ def grab() -> bool:
             config.update_log(["PRESENCE CHECK", f"{y + h/2}"], [24, 10])
             print()
 
-            if y + h/2 > 75: y_levels.append(0)
+            if y + h/2 > 85: y_levels.append(0)
             else:            y_levels.append(1)
 
         average = sum(y_levels) / trials
@@ -451,7 +451,7 @@ def grab() -> bool:
     
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
     print()
-    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.7)
+    motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.3)
     motors.run(0, 0)
     
     # config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
@@ -536,7 +536,7 @@ def exit_evacuation_zone() -> None:
             print()
             motors.run      (-config.evacuation_speed, -config.evacuation_speed, 0.5)
             motors.run_until( config.evacuation_speed, -config.evacuation_speed, laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
-            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.8)
+            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.2)
             break
         
     # Follow wall till exit is found
@@ -549,7 +549,7 @@ def exit_evacuation_zone() -> None:
         
         config.update_log(["EXITING", "FINDING GAPS", ",".join(list(map(str, touch_values))), ",".join(list(map(str, colour_values))), f"Laser: {laser_value}", f"Silver: {silver_count}", f"Black: {black_count}"], [24, 30, 10, 30, 10, 6, 6])
         print()
-        motors.run(config.evacuation_speed * 0.8, config.evacuation_speed * 1.1)
+        motors.run(config.evacuation_speed * 0.7, config.evacuation_speed * 1.1)
         
         silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
         
@@ -558,7 +558,7 @@ def exit_evacuation_zone() -> None:
                 # Turn to face gap
                 motors.run(0, 0, 0.3)
                 motors.run(22, 22, 1.3)
-                motors.run(-22, 22, 2.9)
+                motors.run(-22, 22, 2.6)
                 gap_initial = True
         
         if black_count >= 5:
@@ -574,7 +574,7 @@ def exit_evacuation_zone() -> None:
             entrance_exit_align("silver")
             motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.2)
             motors.run(0, 0, 0.3)
-            motors.run(22, -22, 3.3)
+            motors.run(22, -22, 2.6)
             motors.run(0, 0, 0.3)
             motors.run_until( 22,  22, laser_sensors.read, 0, "<=", 20, "MOVING TILL WALL")
 
@@ -584,7 +584,7 @@ def exit_evacuation_zone() -> None:
             config.update_log(["EXITING", "FOUND WALL"], [24, 30])
             print()
             motors.run      (-config.evacuation_speed, -config.evacuation_speed, 0.35)
-            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.35)
+            motors.run      ( config.evacuation_speed, -config.evacuation_speed, 0.2)
    
 def validate_exit(colour_values: list[int], black_count: int, silver_count: int) -> bool:
     valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
@@ -608,6 +608,6 @@ if __name__ == "__main__":
     oled_display.reset()
     led.off()
     
-    config.victim_count =0
+    # config.victim_count =0
     
     main()

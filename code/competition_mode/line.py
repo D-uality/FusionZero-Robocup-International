@@ -30,7 +30,7 @@ gap_loop_count = 0
 
 silver_min = 140
 silver_count = 0
-red_threshold = [ [50, 70], [30, 50] ]
+red_threshold = [ [50, 70], [20, 50] ]
 red_count = 0
 
 # uphill_count = downhill_count = 0
@@ -51,9 +51,9 @@ def main(evacuation_zone_enable: bool = False) -> None:
     colour_values = colour.read()
     gyroscope_values = gyroscope.read()
     touch_values = touch_sensors.read()
-    laser_value = laser_sensors.read([config.x_shut_pins[1]])
+    # laser_value = laser_sensors.read([config.x_shut_pins[1]])
 
-    if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
+    # if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
     touch_count = touch_count + 1 if sum(touch_values) != 2 else 0
 
     seasaw_check()
@@ -125,10 +125,13 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     #     tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
 
     # RESET DETECTION
-    if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:  
+    if colour_values[2] <= 40 and abs(camera_last_error) <= 20 and abs(camera_integral) <= 20:  
         if gap_trigger    and main_loop_count > 80: gap_trigger    = False
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
-        
+    
+    if gap_trigger and main_loop_count > 120:
+        gap_trigger = False
+    
     if evac_trigger:
         if main_loop_count > 75: evac_trigger = False
 
@@ -322,12 +325,12 @@ def intersection_handling(signal: str, colour_values) -> None:
     else: print(signal)
 
 def gap_check(colour_values: list[int]) -> None:
-    global main_loop_count, gap_loop_count, gap_trigger
+    global main_loop_count, gap_loop_count, gap_trigger, last_uphill
 
     white_values = [1 if value >= 70 and value <= silver_min else 0 for value in colour_values]
     gap_loop_count = gap_loop_count + 1 if sum(white_values) >= 5 and colour_values[2] >= 60 else 0
 
-    gap_trigger = True if gap_loop_count >= 80 else False
+    gap_trigger = True if gap_loop_count >= 60 else False
     
     if gap_trigger:
         main_loop_count = 0
@@ -359,11 +362,11 @@ def avoid_obstacle() -> None:
     config.update_log(["OBSTACLE", "FINDING SIDE", ", ".join(list(map(str, side_values)))], [24, 50, 14])
     print()
 
-    # Clockwise if left > right
-    if side_values[0] + side_values[1] > 60:
-        direction = "cw" if random.randint(0, 1) == 0 else "ccw"
-    else:
+    # Clockwise if left > right, else random
+    if side_values[0] <= 30 or side_values[1] <= 30:
         direction = "cw" if side_values[0] > side_values[1] else "ccw"
+    else:
+        direction = "cw" if random.randint(0, 1) == 0 else "ccw"
 
     # Turn until appropriate laser sees obstacle
     v1 = v2 = laser_pin = 0
@@ -426,7 +429,7 @@ def avoid_obstacle() -> None:
         oled_display.text("Circle: Forwards till not", 0, 0, size=10)
         if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(-config.line_speed, -config.line_speed, 0.3)
+        # motors.run(-config.line_speed, -config.line_speed, 0.25)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Turning till obstacle", 0, 10, size=10)
@@ -437,7 +440,7 @@ def avoid_obstacle() -> None:
         oled_display.text("Turning till not", 0, 20, size=10)
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(v1, v2, 0.35)
+        motors.run(v1, v2, 0.1)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Forwards till obstacle", 0, 30, size=10)
