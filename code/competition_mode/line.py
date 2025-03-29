@@ -165,8 +165,16 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         line_image = transformed_image.copy()
         
         black_contour, _ = camera.find_line_black_mask(transformed_image, line_image, camera_last_angle)
-        angle = camera.calculate_angle(black_contour, line_image, camera_last_angle)
-        
+        # Call calculate_angle, which now returns (angle, line_found)
+        angle, line_found = camera.calculate_angle(black_contour, line_image, camera_last_angle)
+        if main_loop_count > 50 and gap_trigger and not line_found:
+            print("No line found, attempting to regain line")
+            oled_display.reset()
+            oled_display.text("Regaining Line", 0, 0, size=10)
+            motors.run(-config.line_speed, -config.line_speed, 1.5)
+            main_loop_count = -150
+            return  # Exit follow_line early
+
         error = angle - 90
         
         if abs(error) < 10: camera_integral = 0
@@ -222,7 +230,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         ir_last_error = error
         last_yaw = gyroscope_values[2] if ir_integral == 0 and gyroscope_values[2] is not None else last_yaw
                 
-        config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])    
+        config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
         
 def green_check(colour_values: list[int]) -> str:
     global main_loop_count, ir_integral
@@ -449,7 +457,6 @@ def avoid_obstacle() -> None:
     
     oled_display.reset()
     oled_display.text("Black Found", 0, 0, size=10)
-
 
     config.update_log(["OBSTACLE", "FOUND BLACK"], [24, 50])
     print()

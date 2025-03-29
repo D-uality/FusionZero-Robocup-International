@@ -156,6 +156,9 @@ def calculate_top_contour(contour):
 def calculate_angle(contour, display_image, prev_angle):
     angle = 90
 
+    if contour is None:
+        return angle, False
+
     if contour is not None:
         # Adjust edge definitions to include a few pixels margin
         top_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][1] <= 10]
@@ -225,7 +228,7 @@ def calculate_angle(contour, display_image, prev_angle):
             if display_image is not None:
                 cv2.line(display_image, ref_point, bottom_center, (0, 0, 255), 2)
 
-    return angle
+    return angle, True
 
 def close():
     global camera
