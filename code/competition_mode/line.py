@@ -30,7 +30,7 @@ gap_loop_count = 0
 
 silver_min = 140
 silver_count = 0
-red_threshold = [ [60, 80], [45, 65] ]
+red_threshold = [ [50, 70], [30, 50] ]
 red_count = 0
 
 # uphill_count = downhill_count = 0
@@ -45,7 +45,7 @@ evac_exited = False
 camera_enable = False
 
 def main(evacuation_zone_enable: bool = False) -> None:
-    global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, evac_exited, touch_count
+    global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, evac_exited, touch_count, last_uphill
 
     green_signal = ""
     colour_values = colour.read()
@@ -62,8 +62,8 @@ def main(evacuation_zone_enable: bool = False) -> None:
     if not camera_enable:
         gap_check(colour_values)
         green_signal = green_check(colour_values)
-        if evac_exited: red_count = red_check(colour_values, red_count)
-        # red_count = red_check(colour_values, red_count)
+        # if evac_exited: red_count = red_check(colour_values, red_count)
+        red_count = red_check(colour_values, red_count)
             
     if silver_count > 20:
         silver_count = 0
@@ -88,8 +88,9 @@ def main(evacuation_zone_enable: bool = False) -> None:
         print("Red Found")
         motors.run(0, 0, 10)
 
-    elif touch_count > 150:
+    elif touch_count >= 200:
         avoid_obstacle()
+        touch_count = 0
     
     elif len(green_signal) > 0:
         intersection_handling(green_signal, colour_values)
@@ -110,9 +111,12 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # Finding modifiers
     # ramp detection
     if gyroscope_values[0] is not None:
-        # uphill_count = uphill_count + 1 if gyroscope_values[0] >= 15 else 0
-        # uphill_count = uphill_count + 1 if gyroscope_values[0] >= 15 else 0
-        uphill_trigger   = True if gyroscope_values[0] >=  15 else False
+        
+        if uphill_trigger == True and not gyroscope_values[0] >= 15:
+            print("reseting main loop")
+            main_loop_count = -200
+        
+        uphill_trigger   = True if gyroscope_values[0] >=  15 and main_loop_count >= 100 else False
         downhill_trigger = True if gyroscope_values[0] <= -15 else False
         
     # tilt detection
@@ -122,7 +126,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
 
     # RESET DETECTION
     if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:  
-        if gap_trigger    and main_loop_count > 100: gap_trigger    = False
+        if gap_trigger    and main_loop_count > 80: gap_trigger    = False
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
         
     if evac_trigger:
@@ -148,7 +152,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif evac_trigger:     kP, kI, kD, v = 0.5 , 0     ,  0  , 18
-    else:                  kP, kI, kD, v = 1.45, 0     ,  0  , config.line_speed
+    else:                  kP, kI, kD, v = 1.35, 0     ,  0  , config.line_speed
 
     # Input method
     if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger:
@@ -203,7 +207,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         if updated_colour_values[0] > 70 and updated_colour_values[1] > 70 and updated_colour_values[3] > 70 and updated_colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = max(1 + (updated_colour_values[2] - 60)/100, 0)
+            middle_multi = max(1 + (updated_colour_values[2] - 85)/100, 0)
 
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
@@ -237,21 +241,19 @@ def green_check(colour_values: list[int]) -> str:
     right_double_black = right_black and (colour_values[0] < 45 or colour_values[1] < 60)
 
     # Green
-    
-
     if left_black and right_black and colour_values[2] > 40 and colour_values[5] + colour_values[6] >= 120:
         if colour_values[0] + colour_values[1] < colour_values[3] + colour_values[4]:
             signal = "fake left"
         else:
             signal = "fake right"
-    elif colour_values[2] < 80 and abs(ir_integral) <= 1000:
-        if (left_double_black or right_double_black) and ((colour_values[5] < 30 and colour_values[6] < 40) or (colour_values[5] < 40 and colour_values[6] < 30)):
+    elif colour_values[2] < 80 and abs(ir_integral) <= 900:
+        if (left_double_black or right_double_black) and ((colour_values[5] <= 32 and colour_values[6] <= 42) or (colour_values[5] <= 42 and colour_values[6] <= 32)):
             signal = "double"
             
-        elif (left_black or left_double_black) and colour_values[5] < 30:
+        elif (left_black or left_double_black) and colour_values[5] < 35:
             signal = "left"
         
-        elif (right_black or right_double_black) and colour_values[6] < 30:
+        elif (right_black or right_double_black) and colour_values[6] < 35:
             signal = "right"
         
     if len(signal) != 0: config.update_log(["GREEN CHECK", ",".join(list(map(str, colour_values))), signal], [24, 30, 10])
@@ -322,14 +324,14 @@ def intersection_handling(signal: str, colour_values) -> None:
 def gap_check(colour_values: list[int]) -> None:
     global main_loop_count, gap_loop_count, gap_trigger
 
-    white_values = [1 if value > 80 else 0 for value in colour_values]
-    gap_loop_count = gap_loop_count + 1 if sum(white_values) == 7 else 0
+    white_values = [1 if value >= 70 and value <= silver_min else 0 for value in colour_values]
+    gap_loop_count = gap_loop_count + 1 if sum(white_values) >= 5 and colour_values[2] >= 60 else 0
 
-    gap_trigger = True if gap_loop_count >= 40 else False
+    gap_trigger = True if gap_loop_count >= 80 else False
     
     if gap_trigger:
         main_loop_count = 0
-        motors.run(-config.line_speed * 1.5, -config.line_speed * 1.5, 1)
+        motors.run(-config.line_speed * 1.5, -config.line_speed * 1.5, 0.5 if last_uphill < 100 else 0.2)
         motors.run(0, 0, 0.3)
         
         image = camera.capture_array()
@@ -342,7 +344,8 @@ def seasaw_check():
         last_uphill = 100
         main_loop_count = 0
         motors.run(0, 0, 2)
-        motors.run(-config.line_speed, -config.line_speed, 1.5)
+        motors.run_until(-config.line_speed, -config.line_speed, colour.read, 2, "<=", 50, "MOVING BACK TILL BLACK")
+        motors.run(-config.line_speed, -config.line_speed, 0.3)
         seasaw_trigger = True
 
 def avoid_obstacle() -> None:    
@@ -379,12 +382,12 @@ def avoid_obstacle() -> None:
 
     # Over turn passed obstacle
     oled_display.text("Turning till obstacle", 0, 10, size=10)
-    for i in range(20):
+    for i in range(25):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
     
     oled_display.text("Turning past obstacle", 0, 20, size=10)
-    for i in range(20):
+    for i in range(25):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
 
@@ -423,7 +426,7 @@ def avoid_obstacle() -> None:
         oled_display.text("Circle: Forwards till not", 0, 0, size=10)
         if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(-config.line_speed, -config.line_speed, 0.4)
+        motors.run(-config.line_speed, -config.line_speed, 0.3)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Turning till obstacle", 0, 10, size=10)
@@ -434,7 +437,7 @@ def avoid_obstacle() -> None:
         oled_display.text("Turning till not", 0, 20, size=10)
         if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
         elif not initial_sequence: break
-        motors.run(v1, v2, 0.6)
+        motors.run(v1, v2, 0.35)
         motors.run(0, 0, 0.15)
 
         oled_display.text("Forwards till obstacle", 0, 30, size=10)
