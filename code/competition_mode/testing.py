@@ -29,7 +29,7 @@ def run_input() -> None:
         
 def motor_test() -> None:
     while True:
-        motors.run(18, 18)
+        motors.run(-18, -18)
 
 def gyro_test() -> None:
     gyroscope.initialise()

@@ -1,3 +1,13 @@
+import os
+import sys
+import time
+from listener import listener
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
+
+if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
+
 import time
 from listener import listener
 from typing import Optional
@@ -15,6 +25,7 @@ import gyroscope
 import led
 import oled_display
 import random
+import green_functions
 
 ir_integral = ir_derivative = ir_last_error = 0
 camera_integral = camera_derivative = camera_last_error = 0
@@ -30,7 +41,7 @@ gap_loop_count = 0
 
 silver_min = 140
 silver_count = 0
-red_threshold = [ [50, 70], [20, 50] ]
+red_threshold = [ [55, 75], [35, 65] ]
 red_count = 0
 
 # uphill_count = downhill_count = 0
@@ -54,12 +65,12 @@ def main(evacuation_zone_enable: bool = False) -> None:
     # laser_value = laser_sensors.read([config.x_shut_pins[1]])
 
     # if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
-    touch_count = touch_count + 1 if sum(touch_values) != 2 else 0
 
     seasaw_check()
     silver_count = silver_check(colour_values, silver_count)
 
     if not camera_enable:
+        touch_count = touch_count + 1 if sum(touch_values) != 2 else 0
         gap_check(colour_values)
         green_signal = green_check(colour_values)
         # if evac_exited: red_count = red_check(colour_values, red_count)
@@ -112,17 +123,29 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     # ramp detection
     if gyroscope_values[0] is not None:
         
-        if uphill_trigger == True and not gyroscope_values[0] >= 15:
+        if uphill_trigger == True and not gyroscope_values[0] >= 15 and main_loop_count >= 100:
             print("reseting main loop")
             main_loop_count = -200
+            uphill_trigger = False
+            
+        if not uphill_trigger and gyroscope_values[0] >= 15 and main_loop_count >= 100:
+            print("moving back!")
+            motors.run(-config.line_speed, -config.line_speed, 2)
+            uphill_trigger = True
+            main_loop_count = -100
         
-        uphill_trigger   = True if gyroscope_values[0] >=  15 and main_loop_count >= 100 else False
+        if downhill_trigger == True and not gyroscope_values[0] <= -15 and main_loop_count >= 100:
+            print("reseting main loop")
+            main_loop_count = -200
+            downhill_trigger = False
+            
+        # uphill_trigger   = True if gyroscope_values[0] >=  15 and main_loop_count >= 100 else False
         downhill_trigger = True if gyroscope_values[0] <= -15 else False
         
     # tilt detection
-    # if gyroscope_values[1] is not None:
-    #     tilt_left_trigger  = True if gyroscope_values[1] >=  15 else False
-    #     tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
+    if gyroscope_values[1] is not None:
+        tilt_left_trigger  = True if gyroscope_values[1] >=  15 else False
+        tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
 
     # RESET DETECTION
     if colour_values[2] <= 40 and abs(camera_last_error) <= 20 and abs(camera_integral) <= 20:  
@@ -134,6 +157,12 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     
     if evac_trigger:
         if main_loop_count > 75: evac_trigger = False
+        
+    if tilt_left_trigger or tilt_right_trigger:
+        uphill_trigger = False
+        
+    if seasaw_trigger:
+        uphill_trigger = downhill_trigger = False
 
     # Modifiers
     modifiers = []
@@ -150,7 +179,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     last_uphill = 0 if uphill_trigger else last_uphill + 1
 
     # PID Values
-    if   uphill_trigger:   kP, kI, kD, v = 0.2 , 0     ,  0  , 25
+    if   uphill_trigger:   kP, kI, kD, v = 1 , 0     ,  0  , 25
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
@@ -158,7 +187,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     else:                  kP, kI, kD, v = 1.35, 0     ,  0  , config.line_speed
 
     # Input method
-    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger:
+    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger or tilt_left_trigger or tilt_right_trigger:
         modifiers += " CAMERA"
         camera_enable = True
         led.on()
@@ -167,27 +196,82 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         transformed_image = camera.perspective_transform(image, modifiers)
         line_image = transformed_image.copy()
         
-        black_contour, _ = camera.find_line_black_mask(transformed_image, line_image, camera_last_angle)
+        black_contour, black_image = camera.find_line_black_mask(transformed_image, line_image, camera_last_angle)
+        green_contours, green_image = green_functions.green_mask(transformed_image, line_image)
+
+        valid_corners = []
+        if len(green_contours) == 1:
+            valid_rect, line_image = green_functions.validate_green_contour(green_contours[0], black_image, line_image)
+            if valid_rect is not None:
+                valid_corners.append(valid_rect)
+        elif len(green_contours) > 1:
+            valid_corners, line_image = green_functions.validate_multiple_contours(green_contours, black_image, line_image)
+
+        if valid_corners is not None:
+            green = green_functions.green_sign(valid_corners, black_image, line_image)
+        else:
+            green = "None"
+
         angle = camera.calculate_angle(black_contour, line_image, camera_last_angle)
-        
-        error = angle - 90
-        
-        if abs(error) < 10: camera_integral = 0
-        camera_integral += error if abs(error) > 5 else 0
-        camera_derivative = error - camera_last_error
+                
+        if green == "Left":
+            if tilt_left_trigger:
+                motors.run( config.line_speed,  config.line_speed, 2)
+                motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
+                motors.run(0, 0, 0.15)
+                motors.run(-config.line_speed, config.line_speed, 1.2)
+                motors.run(0, 0, 0.15)
+                motors.run_until(-config.line_speed, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+                motors.run(0, 0, 0.15)
+                motors.run(-config.line_speed, config.line_speed, 0.4)
+                motors.run(0, 0, 0.15)   
+            else:
+                motors.run( config.line_speed,  config.line_speed, 1.7)
+                motors.run_until(0, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
+                motors.run(0, 0, 0.15)
+                motors.run(0, config.line_speed, 1.2)
+                motors.run(0, 0, 0.15)
+                motors.run_until(0, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+                motors.run(0, 0, 0.15)
+            
+        elif green == "Right":
+            if tilt_right_trigger:
+                motors.run( config.line_speed,  config.line_speed, 2)
+                motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 40, "FIRST ALIGN")
+                motors.run(0, 0, 0.15)
+                motors.run(config.line_speed, -config.line_speed, 1.2)
+                motors.run(0, 0, 0.15)
+                motors.run_until(config.line_speed, -config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+                motors.run(0, 0, 0.15)
+                motors.run(config.line_speed, -config.line_speed, 0.4)
+                motors.run(0, 0, 0.15)   
+            else:
+                motors.run( config.line_speed,  config.line_speed, 1.7)
+                motors.run_until(config.line_speed * 1.1, 0, colour.read, 2, ">=", 40, "FIRST ALIGN")
+                motors.run(0, 0, 0.15)
+                motors.run(config.line_speed, 0, 1.2)
+                motors.run(0, 0, 0.15)
+                motors.run_until(config.line_speed, 0, colour.read, 2, "<=", 30, "SECOND ALIGN")
+                motors.run(0, 0, 0.15)
+                
+                
+            
+        else:
+            error = angle - 90
 
-        turn = error * kP + camera_integral * kI + camera_derivative * kD
-        v1, v2 = v + turn, v - turn
+            if abs(error) < 10: camera_integral = 0
+            camera_integral += error if abs(error) > 5 else 0
+            camera_derivative = error - camera_last_error
 
-        if   tilt_left_trigger:  v1, v2 = v1 + 5, v2 - 5
-        elif tilt_right_trigger: v1, v2 = v1 - 5, v2 + 5
+            turn = error * kP + camera_integral * kI + camera_derivative * kD
+            v1, v2 = v + turn, v - turn
 
-        motors.run(v1, v2)
-        camera_last_angle = angle
-        camera_last_error = error
+            motors.run(v1, v2)
+            camera_last_angle = angle
+            camera_last_error = error
+            config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
         
         if config.X11: cv2.imshow("line", line_image)
-        config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
         
     else:
         camera_enable = False
@@ -215,8 +299,8 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
 
-        if   tilt_left_trigger:  v1, v2 = v1 + 5, v2 - 5
-        elif tilt_right_trigger: v1, v2 = v1 - 5, v2 + 5
+        # if   tilt_left_trigger:  v1, v2 = v1 + 5, v2 - 5
+        # elif tilt_right_trigger: v1, v2 = v1 - 5, v2 + 5
     
         # Run slower if touching
         if touch_count > 20: v1, v2 = 0.7 * v1, 0.7 * v2
@@ -347,8 +431,25 @@ def seasaw_check():
         last_uphill = 100
         main_loop_count = 0
         motors.run(0, 0, 2)
-        motors.run_until(-config.line_speed, -config.line_speed, colour.read, 2, "<=", 50, "MOVING BACK TILL BLACK")
-        motors.run(-config.line_speed, -config.line_speed, 0.3)
+        
+        start_time = time.time()
+        while True:
+            colour_values = colour.read()
+            
+            motors.run(-config.line_speed, -config.line_speed)
+            
+            if colour_values[2] <= 50:
+                motors.run(-config.line_speed, -config.line_speed, 0.3)
+                break
+            
+            if time.time() - start_time > 2:
+                break
+            
+            config.update_log(["SEASAW", "MOVING BACK TILL BLACK"], [24, 30])
+            print()
+            
+        # motors.run_until(-config.line_speed, -config.line_speed, colour.read, 2, "<=", 50, "MOVING BACK TILL BLACK")
+        # motors.run(-config.line_speed, -config.line_speed, 0.3)
         seasaw_trigger = True
 
 def avoid_obstacle() -> None:    
