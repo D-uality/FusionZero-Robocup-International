@@ -43,7 +43,7 @@ def main():
     oled_display.reset()
     oled_display.text("Align: Silver", 0, 0, size=10)
     
-    entrance_exit_align("silver")
+    # entrance_exit_align("silver")
     
     motors.run(0, 0)
     # Let camera warm up
@@ -63,6 +63,7 @@ def main():
         elapsed = time.time() - start_time
         print(elapsed)
         remaining = int(4 * 60 - elapsed)
+        
         # Update OLED with victim count and remaining time (update periodically)
         oled_display.reset()
         oled_display.text(f"Victims: {config.victim_count}", 0, 0, size=10)
@@ -608,6 +609,6 @@ if __name__ == "__main__":
     oled_display.reset()
     led.off()
     
-    # config.victim_count =0
-    
+    # config.victim_count = 0
+     
     main()

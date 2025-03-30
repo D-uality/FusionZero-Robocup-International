@@ -99,7 +99,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
         print("Red Found")
         motors.run(0, 0, 10)
 
-    elif touch_count >= 200:
+    elif touch_count >= 300:
         avoid_obstacle()
         touch_count = 0
     
@@ -130,7 +130,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
             
         if not uphill_trigger and gyroscope_values[0] >= 15 and main_loop_count >= 100:
             print("moving back!")
-            motors.run(-config.line_speed, -config.line_speed, 2)
+            motors.run(-config.line_speed, -config.line_speed, 1.5)
             uphill_trigger = True
             main_loop_count = -100
         
@@ -153,6 +153,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
     
     if gap_trigger and main_loop_count > 120:
+        main_loop_count = 0
         gap_trigger = False
     
     if evac_trigger:

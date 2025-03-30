@@ -31,6 +31,7 @@ def find() -> None:
     oled_display.text(f"Triangle initial align", 0, 0, size=10)
     config.update_log(["TRIANGLE", "initial alignment"], [24, 24])
     print()
+    
     align(tolerance=10, text="Initial Alignment")
     
     oled_display.text(f"Triangle moving closer", 0, 10, size=10)
@@ -88,8 +89,14 @@ def locate(image: np.ndarray) -> tuple[int, int, int, int]:
 def align(tolerance: int, text: str, time_step: float = None) -> None:
     # Initialise directin to clockwise
     direction = 1
-
+    start_time = time.time()
+    
     while True:
+        print(time.time() - start_time)
+        if time.time() - start_time > 15:
+            start_time = time.time()
+            motors.run_until(config.evacuation_speed, config.evacuation_speed, touch_sensors.read, 0, "==", 0, "MOVING TO NEW LOCATION")
+        
         image = camera.capture_array()
         distance = laser_sensors.read([config.x_shut_pins[1]])[0]
 
@@ -138,7 +145,10 @@ def move_closer(kP: float) -> None:
             motors.run( config.evacuation_speed,  config.evacuation_speed, 1)
 
         if x is None and w is None:
+            if sum(touch_values) != 2:
+                motors.run(-config.evacuation_speed, -config.evacuation_speed, 2)
             print("X IS NONE!")
+            align(tolerance=10, text="FAILED MOVING CLOSER")
             continue
         
         error = int(config.EVACUATION_WIDTH/2 - (x + w/2))
@@ -165,10 +175,12 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
 
 if __name__ == "__main__":
     camera.initialise("evac")
+    laser_sensors.initialise()
+    touch_sensors.initialise()
     config.victim_count = 0
     
     while True:
         image = camera.capture_array()
-        locate(image)
+        find()
         
         if config.X11: cv2.imshow("image", image)
