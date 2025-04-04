@@ -57,7 +57,7 @@ def initialise(mode: str):
 def perspective_transform(image, mode):
     """Apply perspective transform to the image"""
     if "UPHILL" in mode or "DOWNHILL" in mode:
-        view_multi = 1.5
+        view_multi = 1.2
     else:
         view_multi = 2.2
 

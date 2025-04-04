@@ -103,7 +103,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
         avoid_obstacle()
         touch_count = 0
     
-    elif len(green_signal) > 0:
+    elif len(green_signal) > 0 and not camera_enable:
         intersection_handling(green_signal, colour_values)
         
     else:
@@ -284,12 +284,12 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         inner_error = 1 * (updated_colour_values[1] - updated_colour_values[3])
         error = outer_error + inner_error
                 
-        integral_reset_count = integral_reset_count + 1 if abs(error) <= 15 and updated_colour_values[1] + updated_colour_values[3] >= 75 else 0
+        integral_reset_count = integral_reset_count + 1 if abs(error) <= 15 and updated_colour_values[1] + updated_colour_values[3] >= 60 else 0
         
         if integral_reset_count >= min_integral_reset_count: ir_integral = 0
         elif ir_integral <= -50000: ir_integral = -49999
         elif ir_integral >=  50000: ir_integral =  49999
-        else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.3
+        else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.2
         ir_derivative = error - ir_last_error
 
         if updated_colour_values[0] > 70 and updated_colour_values[1] > 70 and updated_colour_values[3] > 70 and updated_colour_values[4] > 70:
@@ -320,29 +320,59 @@ def green_check(colour_values: list[int]) -> str:
 
     # Black Types
     # Left Mid
-    left_black = colour_values[0] < 30 and colour_values[1] < 30
+    left_black = colour_values[0] < 20 and colour_values[1] < 20
 
     # Right Mid
-    right_black = colour_values[3] < 30 and colour_values[4] < 30
+    right_black = colour_values[3] < 20 and colour_values[4] < 20
     # Double
-    left_double_black  = left_black  and (colour_values[3] < 45 or colour_values[4] < 60)
-    right_double_black = right_black and (colour_values[0] < 45 or colour_values[1] < 60)
+    left_double_black  = left_black  and (colour_values[3] < 35 or colour_values[4] < 50)
+    right_double_black = right_black and (colour_values[0] < 35 or colour_values[1] < 50)
 
     # Green
-    if left_black and right_black and colour_values[2] > 40 and colour_values[5] + colour_values[6] >= 120:
+    if colour_values[0] < 30 and colour_values[1] < 30 and colour_values[3] < 30 and colour_values[4] < 30 and colour_values[2] > 40 and colour_values[5] + colour_values[6] >= 120:
         if colour_values[0] + colour_values[1] < colour_values[3] + colour_values[4]:
             signal = "fake left"
         else:
             signal = "fake right"
-    elif colour_values[2] < 80 and abs(ir_integral) <= 900:
-        if (left_double_black or right_double_black) and ((colour_values[5] <= 32 and colour_values[6] <= 42) or (colour_values[5] <= 42 and colour_values[6] <= 32)):
+    elif colour_values[2] <= 80 and abs(ir_integral) <= 1300:
+        if (left_double_black or right_double_black) and ((colour_values[5] <= 42 and colour_values[6] <= 52) or (colour_values[5] <= 52 and colour_values[6] <= 42)):
             signal = "double"
             
-        elif (left_black or left_double_black) and colour_values[5] < 35:
+        elif (left_black or left_double_black) and colour_values[5] <= 55:
             signal = "left"
         
-        elif (right_black or right_double_black) and colour_values[6] < 35:
+        elif (right_black or right_double_black) and colour_values[6] <= 55:
             signal = "right"
+    
+    # if colour_values[5] <= 5 and colour_values[6] <= 5 and ir_integral <= 1000:
+    #     motors.run(-config.line_speed, -config.line_speed, 0.1)
+        
+    #     new_colour_values = colour.read()
+    #     main_loop_count = 0
+    #     config.update_log(["GREEN NEW VALUES", ",".join(list(map(str, new_colour_values)))], [24, 30])
+        
+    #     if new_colour_values[0] <= 30 and new_colour_values[1] <= 30 and new_colour_values[3] <= 30 and new_colour_values[4] <= 30:
+    #         signal = "double"
+        
+    # else:             
+    #     if colour_values[5] <= 0:
+            
+    #         motors.run(-config.line_speed, -config.line_speed, 0.1)
+            
+    #         # new_colour_values = colour.read()
+    #         # config.update_log(["GREEN NEW VALUES", ",".join(list(map(str, new_colour_values)))], [24, 30])
+            
+    #         # if new_colour_values[0] <= 30 and new_colour_values[1] <= 30:
+    #         signal = "left"
+                    
+    #     elif colour_values[6] <= 0:
+    #         motors.run(-config.line_speed, -config.line_speed, 0.1)
+            
+    #         # new_colour_values = colour.read()
+    #         # config.update_log(["GREEN NEW VALUES", ",".join(list(map(str, new_colour_values)))], [24, 30])
+            
+    #         # if new_colour_values[3] <= 30 and new_colour_values[4] <= 30:
+    #         signal = "right"
         
     if len(signal) != 0: config.update_log(["GREEN CHECK", ",".join(list(map(str, colour_values))), signal], [24, 30, 10])
 
@@ -365,27 +395,27 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "left":
-        motors.run(config.line_speed * 1, config.line_speed * 1, 0.3)
-        motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
+        motors.run(config.line_speed * 1, config.line_speed * 1, 0.1)
+        motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 2, ">=", 50, "FIRST ALIGN")
         motors.run(0, 0, 0.15)
-        motors.run(-config.line_speed, config.line_speed, 0.2)
+        motors.run(-config.line_speed, config.line_speed, 0.15)
         motors.run(0, 0, 0.15)
-        motors.run_until(-config.line_speed, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+        motors.run_until(-config.line_speed, config.line_speed, colour.read, 2, "<=", 40, "SECOND ALIGN")
         motors.run(0, 0, 0.15)
-        motors.run(-config.line_speed, config.line_speed, 0.4)
+        motors.run(-config.line_speed, config.line_speed, 0.35)
         motors.run(0, 0, 0.15)
         motors.run(config.line_speed, config.line_speed, 0.3)
         motors.run(0, 0, 0.15)
 
     elif signal == "right":
-        motors.run(config.line_speed * 1, config.line_speed * 1, 0.3)
-        motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 40, "FIRST ALIGN")
+        motors.run(config.line_speed * 1, config.line_speed * 1, 0.1)
+        motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 50, "FIRST ALIGN")
         motors.run(0, 0, 0.15)
-        motors.run(config.line_speed, -config.line_speed, 0.2)
+        motors.run(config.line_speed, -config.line_speed, 0.15)
         motors.run(0, 0, 0.15)
-        motors.run_until(config.line_speed, -config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+        motors.run_until(config.line_speed, -config.line_speed, colour.read, 2, "<=", 40, "SECOND ALIGN")
         motors.run(0, 0, 0.15)
-        motors.run(config.line_speed, -config.line_speed, 0.4)
+        motors.run(config.line_speed, -config.line_speed, 0.35)
         motors.run(0, 0, 0.15)
         motors.run(config.line_speed, config.line_speed, 0.3)
         motors.run(0, 0, 0.15)
@@ -427,6 +457,9 @@ def gap_check(colour_values: list[int]) -> None:
 
 def seasaw_check():
     global downhill_trigger, last_uphill, seasaw_trigger
+    global main_loop_count
+    
+    if main_loop_count <= 20: return None
     
     if downhill_trigger and last_uphill < 40:
         last_uphill = 100
