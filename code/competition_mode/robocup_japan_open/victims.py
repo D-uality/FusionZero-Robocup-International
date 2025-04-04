@@ -20,12 +20,12 @@ def live(image: np.ndarray) -> Optional[int]:
     valid_contours = []
     
     for contour in contours:
-        _, y, _, h = cv2.boundingRect(contour)
+        _, y, w, h = cv2.boundingRect(contour)
         print(cv2.contourArea(contour))
         
         # look for contours in the top quarter
         if (y + h/2 < 50
-            and cv2.contourArea(contour) < 500):
+            and cv2.contourArea(contour) < 700):
             valid_contours.append(contour)
     
     if len(valid_contours) == 0: return None
@@ -64,7 +64,8 @@ def dead(image: np.ndarray) -> Optional[int]:
         _, y, _, h = cv2.boundingRect(contour)
         if (y + h/2 < config.EVACUATION_HEIGHT / 2 + 30
             and circularity_check(contour, 0.5)
-            and cv2.contourArea(contour) > 100):
+            and cv2.contourArea(contour) > 100
+            and cv2.contourArea(contour) < 10000):
             valid_contours.append(contour)
     
     if len(valid_contours) == 0: return None

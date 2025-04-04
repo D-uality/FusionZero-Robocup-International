@@ -26,6 +26,7 @@ import led
 import oled_display
 import random
 import green_functions
+import numpy as np
 
 ir_integral = ir_derivative = ir_last_error = 0
 camera_integral = camera_derivative = camera_last_error = 0
@@ -67,6 +68,7 @@ def main(evacuation_zone_enable: bool = False) -> None:
     # if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
 
     seasaw_check()
+    red_check()
     silver_count = silver_check(colour_values, silver_count)
 
     if not camera_enable:
@@ -74,7 +76,6 @@ def main(evacuation_zone_enable: bool = False) -> None:
         gap_check(colour_values)
         green_signal = green_check(colour_values)
         # if evac_exited: red_count = red_check(colour_values, red_count)
-        red_count = red_check(colour_values, red_count)
             
     if silver_count > 20:
         silver_count = 0
@@ -90,7 +91,8 @@ def main(evacuation_zone_enable: bool = False) -> None:
 
         evac_trigger = True
                     
-    elif red_count > 15:
+    elif red_count > 2:
+        motors.run(config.line_speed, config.line_speed, 1)
         red_count = 0
         oled_display.reset()
         oled_display.text("Red Found", 0, 0, size=10)
@@ -276,7 +278,7 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         
     else:
         camera_enable = False
-        led.off()
+        led.on()
         
         updated_colour_values = [min(value, 100) for value in colour_values]
 
@@ -626,14 +628,69 @@ def silver_check(colour_values, silver_count):
     
     return silver_count
 
-def red_check(colour_values, red_count):
-    global red_threshold, main_loop_count
+# def red_check(colour_values, red_count):
+#     global red_threshold, main_loop_count
     
-    if main_loop_count < 50: return red_count
+#     if main_loop_count < 50: return red_count
 
-    if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 and colour_values[i] < 120 for i in range(5)):
-        red_count += 1
-    else: 
-        red_count = 0
+#     if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 and colour_values[i] < 120 for i in range(5)):
+#         red_count += 1
+#     else: 
+#         red_count = 0
     
-    return red_count
+#     return red_count
+
+def red_check() -> None:
+    global main_loop_count
+    global camera_enable
+    global red_count
+
+    # Only process images every 10 loops
+    
+    if main_loop_count % 10 != 0:
+        return None
+    
+    image = camera.capture_array()
+    image = camera.perspective_transform(image, "LINE")
+    if config.X11: cv2.imshow("image", image)
+    
+    # mask = cv2.inRange(image, (150, 0, 0), (255, 40, 40))
+    mask = cv2.inRange(image, (0, 0, 120), (40, 40, 255))
+    mask = cv2.dilate(mask, np.ones((5, 5), np.uint8), iterations=1)
+    
+    if config.X11: cv2.imshow("mask", mask)
+    
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if not contours:
+        red_count = 0
+        return None
+    
+    # Find valid contours based on criteria
+    valid_contours = []
+    
+    for contour in contours:
+        _, _, w, h = cv2.boundingRect(contour)
+
+        if (   cv2.contourArea(contour) >= 100
+            and w > h                         ):
+            valid_contours.append(contour)
+    
+    if not valid_contours:
+        red_count = 0
+        return None
+    
+    red_count += 1
+        
+if __name__ == "__main__":
+    camera.initialise("line")
+    led.on()
+        
+    while True:
+        camera_enable = False
+        # camera.capture_array()
+        red_check()
+        
+        print(main_loop_count, red_count)
+        
+        main_loop_count += 1

@@ -23,7 +23,7 @@ import led
 import colour
 import oled_display
 
-silver_min = 110
+silver_min = 130
 black_max = 20
 
 def find() -> None:
@@ -145,11 +145,12 @@ def move_closer(kP: float) -> None:
             motors.run( config.evacuation_speed,  config.evacuation_speed, 1)
 
         if x is None and w is None:
-            if sum(touch_values) != 2:
-                motors.run(-config.evacuation_speed, -config.evacuation_speed, 2)
             print("X IS NONE!")
-            align(tolerance=10, text="FAILED MOVING CLOSER")
             continue
+            # if sum(touch_values) != 2:
+            #     motors.run(-config.evacuation_speed, -config.evacuation_speed, 2)
+            # align(tolerance=10, text="FAILED MOVING CLOSER")
+            # continue
         
         error = int(config.EVACUATION_WIDTH/2 - (x + w/2))
         turn = error * kP
