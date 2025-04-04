@@ -70,7 +70,8 @@ def main():
         oled_display.text(f"Victims: {config.victim_count}", 0, 0, size=10)
         oled_display.text(f"Time: {remaining}s", 0, 10, size=10)
 
-        if config.victim_count == 3 or elapsed > 4 * 60: break
+        # if config.victim_count == 3 or elapsed > 4 * 60: break
+        if config.victim_count == 2 or elapsed > 4 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0.00001)
@@ -82,7 +83,6 @@ def main():
         route_success = route(search_function=search_type, kP=0.35)
         
         if not route_success:
-            if config.victim_count == 2: motors.run(config.evacuation_speed, -config.evacuation_speed, 1)
             oled_display.text(f"Route Failed", 0, 30, size=10)
             config.update_log(["ROUTE FAILED"], [24])            
             continue

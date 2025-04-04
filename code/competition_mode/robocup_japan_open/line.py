@@ -257,8 +257,6 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
                 motors.run_until(config.line_speed, 0, colour.read, 2, "<=", 30, "SECOND ALIGN")
                 motors.run(0, 0, 0.15)
                 
-                
-            
         else:
             error = angle - 90
 
@@ -274,7 +272,9 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
             camera_last_error = error
             config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
         
-        if config.X11: cv2.imshow("line", line_image)
+        if config.X11:
+            line_image = np.uint8(line_image)
+            cv2.imshow("line", line_image)
         
     else:
         camera_enable = False
