@@ -8,45 +8,62 @@ import oled_display
     
 min_black_area = 50
 camera = None
+camera_mode = ""
 
-def initialise(WIDTH, HEIGHT):
-    global camera
+def initialise(mode: str):
+    global camera, camera_mode
     try:
         camera = Picamera2()
-        camera_config = camera.create_still_configuration(
-            main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
-            # raw={"size": (2304, 1296), "format": "SBGGR10"},
-            raw={"size": (2304, 1500), "format": "SBGGR10"},
-            transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
-        )
+        
+        if "evac" in mode:
+            camera_config = camera.create_still_configuration(
+                main={"size": (config.EVACUATION_WIDTH, config.EVACUATION_HEIGHT), "format": "YUV420"},
+                # raw={"size": (2304, 1296), "format": "SBGGR10"},
+                raw={"size": (2304, 1500), "format": "SBGGR10"},
+                transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+            )
+            camera_mode = "evac"
+        else:
+            camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.LINE_WIDTH, config.LINE_HEIGHT)})
+            camera_mode = "line"
+        
         camera.configure(camera_config)
         camera.start()
         
-        config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 24, 3])
+        config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
+        print()
         oled_display.text("Camera: ✓", 0, 40)
         
     except Exception as e:
-        config.update_log(["INITIALISATION", "CAMERA", "X"], [24, 24, 3])
-        print(f"Camera failed to initialise: {e}")
+        config.update_log(["INITIALISATION", "CAMERA", f"{e}"], [24, 15, 50])
+        print()
         oled_display.text("Camera: X", 0, 40)
-        exit()
+        raise e
 
     if config.X11:
         try:
             cv2.startWindowThread()
-            config.update_log(["INITIALISATION", "X11", "✓"], [24, 24, 3])
+            
+            config.update_log(["INITIALISATION", "X11", "✓"], [24, 15, 50])
+            print()            
             oled_display.text("X11: ✓", 60, 40)
+            
         except Exception as e:
-            config.update_log(["INITIALISATION", "X11", "X"], [24, 24, 3])
-            print(f"X11 failed to initialise: {e}")
+            config.update_log(["INITIALISATION", "X11", f"{e}"], [24, 15, 50])
+            print()
             oled_display.text("X11: X", 60, 40)
-            exit()
+            raise e
 
-def perspective_transform(image):
+def perspective_transform(image, mode):
     """Apply perspective transform to the image"""
-    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 2.4))
+    if "UPHILL" in mode or "DOWNHILL" in mode:
+        view_multi = 1.2
+    else:
+        view_multi = 2.2
+
+    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_multi))
     bottom_left =   (0, config.LINE_HEIGHT - 1)
-    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / 2.4))
+    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_multi))
     bottom_right =  (config.LINE_WIDTH, config.LINE_HEIGHT- 1 )
     
     # Define points for the perspective transform (source and destination)
@@ -62,7 +79,8 @@ def perspective_transform(image):
     return transformed_image
 
 def find_line_black_mask(image, display_image, prev_angle):
-    black_mask = cv2.inRange(image, (0, 0, 0), (40, 40, 40))
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    black_mask = cv2.inRange(image, (0, 0, 0), (255, 255, 60))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
     black_mask = cv2.erode(black_mask, kernel, iterations=3)
     black_mask = cv2.dilate(black_mask, kernel, iterations=4)
@@ -140,7 +158,7 @@ def calculate_angle(contour, display_image, prev_angle):
 
     if contour is not None:
         # Adjust edge definitions to include a few pixels margin
-        top_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][1] <= 5]
+        top_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][1] <= 10]
         left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
         right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= config.LINE_WIDTH - 10]
 
@@ -214,10 +232,11 @@ def close():
     camera.close()
 
 def capture_array():
-    global camera
-    
+    global camera, camera_mode
     image = camera.capture_array()
-    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
-    image = image[20:, :]
+    
+    if camera_mode == "evac":
+        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+        image = image[20:, :]
 
     return image

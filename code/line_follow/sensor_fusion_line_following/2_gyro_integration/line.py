@@ -1,6 +1,7 @@
 import time
 from listener import listener
 from typing import Optional
+import operator
 
 import config
 import colour
@@ -14,7 +15,8 @@ import gyroscope
 import led
 
 ir_integral = ir_derivative = ir_last_error = 0
-camera_integral = camera_derivative = camera_last_error = camera_last_angle= 0
+camera_integral = camera_derivative = camera_last_error = 0
+camera_last_angle = 90
 last_angle = 90
 
 min_integral_reset_count, integral_reset_count = 2, 0
@@ -26,18 +28,21 @@ gap_loop_count = 0
 
 silver_min = 110
 silver_count = 0
+red_threshold = [ [60, 80], [45, 65] ]
+red_count = 0
 
+touch_count = 0
 laser_close_count = 0
 last_uphill = 0
 
-uphill_trigger = downhill_trigger = seasaw_trigger = False
+uphill_trigger = downhill_trigger = seasaw_trigger = evac_trigger = False
 tilt_left_trigger = tilt_right_trigger = False
-acute_trigger = gap_trigger = False
-
+gap_trigger = False
+evac_exited = False
 camera_enable = False
 
 def main(evacuation_zone_enable: bool = False) -> None:
-    global main_loop_count, laser_close_count, silver_count
+    global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, evac_exited, touch_count
 
     green_signal = ""
     colour_values = colour.read()
@@ -45,25 +50,40 @@ def main(evacuation_zone_enable: bool = False) -> None:
     touch_values = touch_sensors.read()
     laser_value = laser_sensors.read([config.x_shut_pins[1]])
 
-    laser_close_count = laser_close_count + 1 if laser_value[0] < 10 and laser_value[0] != 0 else 0
+    if laser_value[0] is not None: laser_close_count = laser_close_count + 1 if laser_value[0] < 8 and laser_value[0] != 0 else 0
+    touch_count = touch_count + 1 if sum(touch_values) != 2 else 0
 
     seasaw_check()
+    silver_count = silver_check(colour_values, silver_count)
+
     if not camera_enable:
-        acute_check(colour_values)
         gap_check(colour_values)
         green_signal = green_check(colour_values)
-        silver_count = silver_check(colour_values, silver_count)
+        # if evac_exited: red_count = red_check(colour_values, red_count)
+        red_count = red_check(colour_values, red_count)
         
     if silver_count > 10:
-        print("Silver Found")
-        motors.run(0, 0, 1)
+        silver_count = 0
 
         evacuation_zone.main()
+        main_loop_count = 0
 
-    elif touch_values[0] == 0 or touch_values[1] == 0 or laser_close_count > 15:
+        led.on()
+        motors.run(0, 0, 2)
+
+        evac_trigger = True
+                    
+    elif red_count > 15:
+        red_count = 0
+        print("Red Found")
+        motors.run(0, 0, 10)
+
+    elif touch_count > 150:
         avoid_obstacle()
+    
     elif len(green_signal) > 0:
         intersection_handling(green_signal, colour_values)
+        
     else:
         follow_line(colour_values, gyroscope_values)
 
@@ -71,8 +91,8 @@ def main(evacuation_zone_enable: bool = False) -> None:
     main_loop_count += 1
 
 def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]]) -> None:
-    global uphill_trigger, downhill_trigger, acute_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger
-    global main_loop_count, last_yaw, last_uphill
+    global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger, evac_trigger
+    global main_loop_count, last_yaw, last_uphill, touch_count
     global ir_integral, ir_derivative, ir_last_error, integral_reset_count, min_integral_reset_count
     global camera_integral, camera_derivative, camera_last_error, camera_last_angle
     global camera_enable
@@ -82,47 +102,50 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     if gyroscope_values[0] is not None:
         uphill_trigger   = True if gyroscope_values[0] >=  15 else False
         downhill_trigger = True if gyroscope_values[0] <= -15 else False
-    
+        
     # tilt detection
     # if gyroscope_values[1] is not None:
     #     tilt_left_trigger  = True if gyroscope_values[1] >=  15 else False
     #     tilt_right_trigger = True if gyroscope_values[1] <= -15 else False
 
     # RESET DETECTION
-    if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:
-        if acute_trigger  and main_loop_count > 150: acute_trigger  = False  
+    if colour_values[2] <= 40 and abs(camera_last_error) < 15 and abs(camera_integral) == 0:  
         if gap_trigger    and main_loop_count > 100: gap_trigger    = False
         if seasaw_trigger and main_loop_count > 150: seasaw_trigger = False
+        
+    if evac_trigger:
+        if main_loop_count > 75: evac_trigger = False
 
     # Modifiers
     modifiers = []
     if uphill_trigger:      modifiers.append("UPHILL")
     if downhill_trigger:    modifiers.append("DOWNHILL")
-    if acute_trigger:       modifiers.append("ACUTE")
     if tilt_left_trigger:   modifiers.append("TILT LEFT")
     if tilt_right_trigger:  modifiers.append("TILT RIGHT")
     if gap_trigger:         modifiers.append("GAP")
+    if seasaw_trigger:      modifiers.append("SEASAW")
+    if evac_trigger:        modifiers.append("EVAC")
     modifiers = " ".join(modifiers)
 
     # Counting Modifiers
     last_uphill = 0 if uphill_trigger else last_uphill + 1
 
     # PID Values
-    if   uphill_trigger:   kP, kI, kD, v = 0.4 , 0     ,  0  , 25
+    if   uphill_trigger:   kP, kI, kD, v = 0.2 , 0     ,  0  , 25
     elif downhill_trigger: kP, kI, kD, v = 0.5 , 0     ,  0  , 10
-    elif acute_trigger:    kP, kI, kD, v = 1.5 , 0     ,  0  , 18
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
-    else:                  kP, kI, kD, v = 1.5 , 0     ,  0  , config.line_speed
+    elif evac_trigger:     kP, kI, kD, v = 0.5 , 0     ,  0  , 18
+    else:                  kP, kI, kD, v = 1.3   , 0     ,  0  , config.line_speed
 
     # Input method
-    if uphill_trigger or downhill_trigger or acute_trigger or gap_trigger or seasaw_trigger:
+    if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger:
         modifiers += " CAMERA"
         camera_enable = True
         led.on()
 
         image = camera.capture_array()
-        transformed_image = camera.perspective_transform(image)
+        transformed_image = camera.perspective_transform(image, modifiers)
         line_image = transformed_image.copy()
         
         black_contour, _ = camera.find_line_black_mask(transformed_image, line_image, camera_last_angle)
@@ -145,12 +168,14 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         camera_last_error = error
         
         if config.X11: cv2.imshow("line", line_image)
-        config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count}"], [24, 8, 30, 16, 10, 15])
+        config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
         
     else:
         camera_enable = False
         led.off()
-    
+        
+        colour_values = [min(value, 100) for value in colour_values]
+
         outer_error = 1 * (colour_values[0] - colour_values[4])
         inner_error = 1 * (colour_values[1] - colour_values[3])
         error = outer_error + inner_error
@@ -163,47 +188,59 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
         else: ir_integral += error * 0.8 if abs(error) > 120 else error * 0.3
         ir_derivative = error - ir_last_error
 
-        if colour_values[0] > 70 and colour_values[0] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
+        if colour_values[0] > 70 and colour_values[1] > 70 and colour_values[3] > 70 and colour_values[4] > 70:
             middle_multi = 0.2
         else:
-            middle_multi = 1 + (colour_values[2] - 100)/100
+            middle_multi = max(1 + (colour_values[2] - 60)/100, 0)
+
         turn = middle_multi * (error * kP + ir_integral * kI + ir_derivative * kD)
         v1, v2 = v + turn, v - turn
 
         if   tilt_left_trigger:  v1, v2 = v1 + 5, v2 - 5
         elif tilt_right_trigger: v1, v2 = v1 - 5, v2 + 5
     
+        # Run slower if touching
+        if touch_count > 20: v1, v2 = 0.7 * v1, 0.7 * v2
+
         motors.run(v1, v2)
         ir_last_error = error
         last_yaw = gyroscope_values[2] if ir_integral == 0 and gyroscope_values[2] is not None else last_yaw
                 
-        config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count}"], [24, 8, 30, 16, 10, 15])    
+        config.update_log([modifiers+" PID", f"{main_loop_count}", ", ".join(list(map(str, colour_values))), f"{error:.2f} {ir_integral:.2f} {ir_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])    
         
 def green_check(colour_values: list[int]) -> str:
-    global main_loop_count
+    global main_loop_count, ir_integral
     signal = ""
 
     if main_loop_count < 20: return signal
 
     # Black Types
     # Left Mid
-    left_black = colour_values[0] < 30 and colour_values[1] < 30 and colour_values[2] < 50
+    left_black = colour_values[0] < 30 and colour_values[1] < 30
 
     # Right Mid
-    right_black = colour_values[3] < 30 and colour_values[4] < 30 and colour_values[2] < 50
+    right_black = colour_values[3] < 30 and colour_values[4] < 30
     # Double
-    left_double_black = left_black and (colour_values[3] < 40 or colour_values[4] < 40)
-    right_double_black = right_black and (colour_values[0] < 40 or colour_values[1] < 40)
+    left_double_black  = left_black  and (colour_values[3] < 45 or colour_values[4] < 60)
+    right_double_black = right_black and (colour_values[0] < 45 or colour_values[1] < 60)
 
     # Green
-    if (left_double_black or right_double_black) and colour_values[5] < 40 and colour_values[6] < 40:
-        signal = "double"
+    
+
+    if left_black and right_black and colour_values[2] > 40 and colour_values[5] + colour_values[6] >= 120:
+        if colour_values[0] + colour_values[1] < colour_values[3] + colour_values[4]:
+            signal = "fake left"
+        else:
+            signal = "fake right"
+    elif colour_values[2] < 80 and abs(ir_integral) <= 1000:
+        if (left_double_black or right_double_black) and ((colour_values[5] < 30 and colour_values[6] < 40) or (colour_values[5] < 40 and colour_values[6] < 30)):
+            signal = "double"
+            
+        elif (left_black or left_double_black) and colour_values[5] < 30:
+            signal = "left"
         
-    elif (left_black or left_double_black) and colour_values[5] < 40:
-        signal = "left"
-        
-    elif (right_black or right_double_black) and colour_values[6] < 40:
-        signal = "right"
+        elif (right_black or right_double_black) and colour_values[6] < 30:
+            signal = "right"
         
     if len(signal) != 0: config.update_log(["GREEN CHECK", ",".join(list(map(str, colour_values))), signal], [24, 30, 10])
 
@@ -221,63 +258,54 @@ def intersection_handling(signal: str, colour_values) -> None:
         if current_angle is not None: break
 
     if signal == "left":
-        motors.run(-config.line_speed - 5, config.line_speed + 5, 1.2)
+        motors.run(config.line_speed * 1, config.line_speed * 1, 0.3)
+        motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
+        motors.run(0, 0, 0.15)
+        motors.run(-config.line_speed, config.line_speed, 0.2)
+        motors.run(0, 0, 0.15)
+        motors.run_until(-config.line_speed, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+        motors.run(0, 0, 0.15)
+        motors.run(-config.line_speed, config.line_speed, 0.4)
+        motors.run(0, 0, 0.15)
         motors.run(config.line_speed, config.line_speed, 0.3)
-        colour_values = colour.read()
-        while colour_values[0] < 40 and turn_count < 500:
-            turn_count += 1
-            colour_values = colour.read()
+        motors.run(0, 0, 0.15)
 
     elif signal == "right":
-        motors.run(config.line_speed + 5, -config.line_speed - 5, 1.2)
+        motors.run(config.line_speed * 1, config.line_speed * 1, 0.3)
+        motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 40, "FIRST ALIGN")
+        motors.run(0, 0, 0.15)
+        motors.run(config.line_speed, -config.line_speed, 0.2)
+        motors.run(0, 0, 0.15)
+        motors.run_until(config.line_speed, -config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+        motors.run(0, 0, 0.15)
+        motors.run(config.line_speed, -config.line_speed, 0.4)
+        motors.run(0, 0, 0.15)
         motors.run(config.line_speed, config.line_speed, 0.3)
-        colour_values = colour.read()
-        while colour_values[4] < 40 and turn_count < 500:
-            turn_count += 1
-            colour_values = colour.read()
+        motors.run(0, 0, 0.15)
     
     elif signal == "double":
-        motors.run(config.line_speed + 5, config.line_speed + 5, 0.2)
         motors.run(-config.line_speed - 10, config.line_speed + 10, 3)
         colour_values = colour.read()
         while colour_values[3] > 60 and turn_count < 1000:
             turn_count += 1
             colour_values = colour.read()
+
+    elif signal == "fake left":
+        angle = current_angle - 35 if abs(current_angle - last_yaw) < 20 else last_yaw
+        motors.run_until( config.line_speed      , -config.line_speed      , gyroscope.read, 2, "<=", angle, "GYRO")
+        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.3)
+                
+    elif signal == "fake right":
+        angle = current_angle + 35 if abs(current_angle - last_yaw) < 20 else last_yaw
+        motors.run_until(-config.line_speed      ,  config.line_speed      , gyroscope.read, 2, ">=", angle, "GYRO")
+        motors.run      ( config.line_speed * 1.5,  config.line_speed * 1.5, 0.3)
         
     else: print(signal)
-
-def acute_check(colour_values: list[int]) -> None:
-    global main_loop_count, acute_trigger, min_green_loop_count
-
-    if main_loop_count < min_green_loop_count: return None
-    
-    if (
-        ((colour_values[6] <= 20 and colour_values[5] <= 80) or (colour_values[6] <= 80 and colour_values[5] <= 20))
-        and colour_values[2] >= 80
-        and colour_values[0] + colour_values[4] >= 100
-    ): acute_trigger = True
-    
-    if acute_trigger:
-        config.update_log(["ACUTE CHECK", ", ".join(map(str, colour_values))], [24, 30])
-
-        # while True:
-        #     colour_values = colour.read()
-
-        #     # if   colour_values[5] <= 50 and colour_values[6] <= 50: motors.run(-config.line_speed, -config.line_speed)
-        #     # elif colour_values[5] <= 50:                            motors.run(-config.line_speed,  config.line_speed)
-        #     # elif colour_values[6] <= 50:                            motors.run( config.line_speed, -config.line_speed)
-
-        #     if colour_values[2] <= 20: break
-        #     config.update_log(["ACUTE ORIENTATING", ", ".join(map(str, colour_values))], [24, 30])
-        #     print()
-
-        motors.run(-config.line_speed * 1.5, -config.line_speed * 1.5, 1.2)
-        main_loop_count = 0
 
 def gap_check(colour_values: list[int]) -> None:
     global main_loop_count, gap_loop_count, gap_trigger
 
-    white_values = [1 if value > 90 else 0 for value in colour_values]
+    white_values = [1 if value > 80 else 0 for value in colour_values]
     gap_loop_count = gap_loop_count + 1 if sum(white_values) == 7 else 0
 
     gap_trigger = True if gap_loop_count >= 40 else False
@@ -294,104 +322,137 @@ def seasaw_check():
     global downhill_trigger, last_uphill, seasaw_trigger
     
     if downhill_trigger and last_uphill < 40:
+        last_uphill = 100
+        main_loop_count = 0
         motors.run(0, 0, 2)
-        motors.run(-config.line_speed, -config.line_speed, 1)
+        motors.run(-config.line_speed, -config.line_speed, 1.5)
         seasaw_trigger = True
 
-def circle_obstacle(laser_pin, turn_type, more_than, check_black, colour_is_black, min_move_time):
-    laser_condition_met = False
-    starting_time = time.time()
-    current_time = 0
+def avoid_obstacle() -> None:
+    side_values = laser_sensors.read([config.x_shut_pins[0], config.x_shut_pins[2]])
 
-    while (not laser_condition_met or current_time < min_move_time) and (not colour_is_black[0] or not colour_is_black[1]):
-        if turn_type == "straight":
-            motors.run(30, 30)
-        elif turn_type == "left":
-            motors.run(25, -25)
-        elif turn_type == "right":
-            motors.run(-25, 25)
+    config.update_log(["OBSTACLE", "FINDING SIDE", ", ".join(list(map(str, side_values)))], [24, 50, 14])
+    print()
 
-        colour_values = colour.read()
-        distance = laser_sensors.read([config.x_shut_pins[laser_pin]])[0]
-        touch_values = touch_sensors.read()
-        print(distance)
+    # Clockwise if left > right
+    direction = "cw" if side_values[0] > side_values[1] else "ccw"
 
-        if more_than == ">":
-            laser_condition_met = distance > 10 and distance != 0
-        elif more_than == "<":
-            laser_condition_met = distance < 10 and distance != 0
-
-        if check_black:
-            colour_is_black[0] = (colour_values[1] < 50 and not colour_is_black[0]) or colour_is_black[0]
-            colour_is_black[1] = (colour_values[3] < 50 and not colour_is_black[1]) or colour_is_black[1]
-
-        for touch_side in range(1):
-            if touch_values[touch_side] == 0 and turn_type == 'straight':
-                if touch_side == 0:
-                    motors.run(config.line_speed, -config.line_speed)
-                if touch_side == 1:
-                    motors.run(-config.line_speed, config.line_speed)
-
-                colour.read()
-                laser_sensors.read()
-                touch_sensors.read()
-                print()
-
-        print(f"Laser Condition Met: {laser_condition_met}")
-
-        current_time = time.time() - starting_time
-
-    return colour_is_black
-
-def avoid_obstacle():
-    
-    turn_count = 0
-    colour_is_black = [False, False]
-
-    distances = laser_sensors.read()
-
-    if distances[0] > distances[2]:
-        config.update_log(["OBSTACLE DETECTED", "left"], [24, 10])
-        colour_is_black = circle_obstacle(2, "right", "<", False, colour_is_black, 0.5)
-        motors.run(config.line_speed, -config.line_speed, 0.3)
-        colour_is_black = circle_obstacle(2, "straight", ">", False, colour_is_black, 0.5)
-        motors.run(-config.line_speed, -config.line_speed, 0.3)
-
-        while not colour_is_black[0]:
-            colour_is_black = circle_obstacle(2, "left", ">", True, colour_is_black, 1)
-            colour_is_black = circle_obstacle(2, "straight", ">", True, colour_is_black, 1)
-            motors.run(-config.line_speed, -config.line_speed, 0.3)
-
-        motors.run(-config.line_speed - 5, config.line_speed + 5, 1.2)
-        motors.run(config.line_speed, config.line_speed, 0.3)
-        colour_values = colour.read()
-        
-        while colour_values[0] < 40 and turn_count < 500:
-            turn_count += 1
-            colour_values = colour.read()
-    
+    # Turn until appropriate laser sees obstacle
+    v1 = v2 = laser_pin = 0
+    if direction == "cw":
+        v1 = -config.line_speed
+        v2 =  config.line_speed * 0.8
+        laser_pin = 2
     else:
-        config.update_log(["OBSTACLE DETECTED", "right"], [24, 10])
-        colour_is_black = circle_obstacle(0, "left", "<", False, colour_is_black, 0.5)
-        motors.run(-config.line_speed, config.line_speed, 0.3)
-        colour_is_black = circle_obstacle(0, "straight", ">", False, colour_is_black, 0.5)
-        motors.run(-config.line_speed, -config.line_speed, 0.3)
+        v1 =  config.line_speed * 0.8
+        v2 = -config.line_speed
+        laser_pin = 0
 
-        while not colour_is_black[1]:
-            colour_is_black = circle_obstacle(0, "right", ">", True, colour_is_black, 1)
-            colour_is_black = circle_obstacle(0, "straight", ">", True, colour_is_black, 1)
-            motors.run(-config.line_speed, -config.line_speed, 0.3)
+    # SETUP
 
-        motors.run(config.line_speed + 5, -config.line_speed - 5, 1.2)
-        motors.run(config.line_speed, config.line_speed, 0.3)
-        colour_values = colour.read()
+    motors.run(-config.line_speed, -config.line_speed, 0.5)
+
+    # Over turn passed obstacle
+    for i in range(20):
+        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
+        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+
+    for i in range(35):
+        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
+        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+
+    motors.run(1.2 * v1, 1.2*v2, 0.5)
+
+    motors.run(0, 0, 1)
+
+    # Turn back onto obstacle
+    motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
+    motors.run(-1.2 * v1, -1.2 * v2, 1.8)
+
+    # Circle obstacle
+    v1 = v2 = laser_pin = colour_align_pin = 0
+
+    if direction == "cw":
+        v1 =  config.line_speed
+        v2 = -config.line_speed
+        laser_pin = 2
+        colour_align_pin = 3
+        colour_black_pin = 1
+    else:
+        v1 = -config.line_speed
+        v2 =  config.line_speed
+        laser_pin = 0
+        colour_align_pin = 1
+        colour_black_pin = 3
+
+    initial_sequence = True
+    
+    circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
+    motors.run(config.line_speed, config.line_speed, 0.5)
+
+    while True:
+        if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
+        elif not initial_sequence: break
+        motors.run(-config.line_speed, -config.line_speed, 0.4)
+        motors.run(0, 0, 0.15)
+
         
-        while colour_values[4] < 40 and turn_count < 500:
-            turn_count += 1
-            colour_values = colour.read()
+        if circle_obstacle(v1, v2, laser_pin, colour_black_pin, "<=", 15, "TURNING TILL OBSTACLE"): pass
+        elif not initial_sequence: break
+        motors.run(0, 0, 0.15)
+
+        if circle_obstacle(v1, v2, laser_pin, colour_black_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
+        elif not initial_sequence: break
+        motors.run(v1, v2, 0.4)
+        motors.run(0, 0, 0.15)
+
+        if circle_obstacle(config.line_speed, config.line_speed, laser_pin, colour_black_pin, "<=", 18, "FORWARDS TILL OBSTACLE"): pass
+        elif not initial_sequence: break
+        motors.run(0, 0, 0.15)
+
+        initial_sequence = False
+
+    config.update_log(["OBSTACLE", "FOUND BLACK"], [24, 50])
+    print()
+    
+    # Turn in the opposite direction
+    motors.run(config.line_speed, config.line_speed, 0.5)
+    motors.run_until(config.line_speed, config.line_speed, colour.read, colour_align_pin, ">=", 60, "FORWARDS TILL WHITE")
+    motors.run_until(-v1, -v2, colour.read, colour_align_pin, "<=", 50, "TURNING TILL BLACK")
+
+def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
+    if   comparison == "<=": comparison_function = operator.le
+    elif comparison == ">=": comparison_function = operator.ge
+
+    while True:
+        laser_value = laser_sensors.read([config.x_shut_pins[laser_pin]])[0]
+        colour_values = colour.read()
+
+        config.update_log(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
+        print()
+
+        motors.run(v1, v2)
+        if laser_value is not None:
+            if comparison_function(laser_value, target_distance) and laser_value != 0: return True
+
+        if colour_values[colour_pin] <= 30:
+            return False
 
 def silver_check(colour_values, silver_count):
-    silver_values = [1 if value > 110 else 0 for value in colour_values]
-    silver_count = silver_count + 1 if sum(silver_values) > 2 and colour_values[2] > 30 else 0
+    global silver_min
+    if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
+        silver_count += 1
+    else: 
+        silver_count = 0
     
     return silver_count
+
+def red_check(colour_values, red_count):
+    global red_threshold
+
+    if (red_threshold[0][0] < colour_values[5] < red_threshold[0][1] or red_threshold[1][0] < colour_values[6] < red_threshold[1][1]) and all(colour_values[i] > 70 and colour_values[i] < 120 for i in range(5)):
+        red_count += 1
+    else: 
+        red_count = 0
+    
+    return red_count
