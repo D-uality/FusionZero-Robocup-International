@@ -17,11 +17,11 @@ from listener import listener
 import config
 import camera
 import motors
-import touch_sensors
-import laser_sensors
+# import touch_sensors
+# import laser_sensors
 import led
-import colour
-import oled_display
+# import colour
+# import oled_display
 
 silver_min = 130
 black_max = 20

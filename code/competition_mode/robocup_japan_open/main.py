@@ -9,12 +9,12 @@ modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
 import camera
-import colour
-import laser_sensors
-import touch_sensors
-import oled_display
+# import colour
+# import laser_sensors
+# import touch_sensors
+# import oled_display
 import motors
-import gyroscope
+# import gyroscope
 import led
 import line
 import evacuation_zone
@@ -23,15 +23,15 @@ import config
 
 def main() -> None:
     start_time = time.time()
-    oled_display.initialise()
-    laser_sensors.initialise()
-    touch_sensors.initialise()
+    # oled_display.initialise()
+    # laser_sensors.initialise()
+    # touch_sensors.initialise()
     motors.initialise()
     camera.initialise("line")
-    gyroscope.initialise()
+    # gyroscope.initialise()
     
     motors.run(0, 0)
-    oled_display.reset()
+    # oled_display.reset()
     led.off()
     
     config.update_log(["INITIALISATION", f"({time.time() - start_time:.2f})"], [24, 15])
@@ -66,7 +66,7 @@ def main() -> None:
 
     finally:
         camera.close()
-        oled_display.reset()
+        # oled_display.reset()
         motors.run(0, 0)
     
 if __name__ == "__main__": main()

@@ -15,12 +15,12 @@ from random import randint
 import config
 import camera
 import motors
-import touch_sensors
-import laser_sensors
+# import touch_sensors
+# import laser_sensors
 import led
-import colour
-import oled_display
-import gyroscope
+# import colour
+# import oled_display
+# import gyroscope
 
 from typing import Optional
 import victims

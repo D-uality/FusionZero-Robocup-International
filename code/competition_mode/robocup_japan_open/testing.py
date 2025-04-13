@@ -8,8 +8,8 @@ if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
 import config
 import motors
-import colour
-import gyroscope
+# import colour
+# import gyroscope
 import camera
 import numpy as np
 import cv2

@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 from libcamera import Transform
-import oled_display
+# import oled_display
     
 min_black_area = 50
 camera = None
@@ -24,20 +24,33 @@ def initialise(mode: str):
             )
             camera_mode = "evac"
         else:
-            camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.LINE_WIDTH, config.LINE_HEIGHT)})
+            camera_config = camera.create_still_configuration(
+                main={"size": (config.LINE_WIDTH, config.LINE_HEIGHT), "format": "YUV420"},
+                # raw={"size": (2304, 1296), "format": "SBGGR10"},
+                raw={"size": (2304, 1500), "format": "SBGGR10"},
+                transform=Transform(vflip=config.FLIP, hflip=config.FLIP)
+            )
+            controls = {
+                # "ExposureTime": 10000,  # Shutter speed in microseconds
+                "ExposureTime": 300,  # Shutter speed in microseconds
+                "AnalogueGain": 0     # Analog gain (ISO-like setting)
+            }
+
+            # camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (config.LINE_WIDTH, config.LINE_HEIGHT)})
             camera_mode = "line"
         
         camera.configure(camera_config)
+        camera.set_controls(controls)
         camera.start()
         
         config.update_log(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
         print()
-        oled_display.text("Camera: ✓", 0, 40)
+        # oled_display.text("Camera: ✓", 0, 40)
         
     except Exception as e:
         config.update_log(["INITIALISATION", "CAMERA", f"{e}"], [24, 15, 50])
         print()
-        oled_display.text("Camera: X", 0, 40)
+        # oled_display.text("Camera: X", 0, 40)
         raise e
 
     if config.X11:
@@ -46,12 +59,12 @@ def initialise(mode: str):
             
             config.update_log(["INITIALISATION", "X11", "✓"], [24, 15, 50])
             print()            
-            oled_display.text("X11: ✓", 60, 40)
+            # oled_display.text("X11: ✓", 60, 40)
             
         except Exception as e:
             config.update_log(["INITIALISATION", "X11", f"{e}"], [24, 15, 50])
             print()
-            oled_display.text("X11: X", 60, 40)
+            # oled_display.text("X11: X", 60, 40)
             raise e
 
 def perspective_transform(image, mode):
@@ -80,10 +93,10 @@ def perspective_transform(image, mode):
 
 def find_line_black_mask(image, display_image, prev_angle):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    black_mask = cv2.inRange(image, (0, 0, 0), (255, 255, 60))
+    black_mask = cv2.inRange(image, (0, 0, 0), (255, 255, 40))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
-    black_mask = cv2.erode(black_mask, kernel, iterations=3)
-    black_mask = cv2.dilate(black_mask, kernel, iterations=4)
+    black_mask = cv2.erode(black_mask, kernel, iterations=1)
+    black_mask = cv2.dilate(black_mask, kernel, iterations=7)
     
     contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_black_area]
@@ -172,6 +185,7 @@ def calculate_angle(contour, display_image, prev_angle):
             bottom_points = calculate_bottom_points(contour)
             if bottom_points:
                 leftmost_point, rightmost_point = bottom_points
+                print("hiiiiii")
 
                 if angle < 90:  # Left side
                     # Calculate distance from the leftmost point to the center
@@ -185,21 +199,53 @@ def calculate_angle(contour, display_image, prev_angle):
                     angle = 90 + int(distance / config.LINE_WIDTH * 90)  # Return a negative value less than 90
                     if display_image is not None:
                         cv2.line(display_image, rightmost_point, (rightmost_point[0], 0), (0, 0, 255), 2)
+                else:
+                    if left_edge_points and prev_angle < 90:
+                        y_avg = int(np.mean([p[1] for p in left_edge_points]))
+                        ref_point = (0, y_avg)
+                    elif right_edge_points and prev_angle > 90:
+                        y_avg = int(np.mean([p[1] for p in right_edge_points]))
+                        ref_point = (config.LINE_WIDTH - 1, y_avg)
+                    else:
+                        left_y_avg = right_y_avg = None
+
+                        if left_edge_points:
+                            left_y_avg = int(np.mean([p[1] for p in left_edge_points]))
+                            ref_point = (0, left_y_avg)
+                        else:
+                            right_y_avg = int(np.mean([p[1] for p in right_edge_points]))
+                            ref_point = (config.LINE_WIDTH - 5, right_y_avg)
+                        
+                        if left_y_avg and right_y_avg:
+                            if left_y_avg < right_y_avg:
+                                ref_point = (0, left_y_avg)
+
+                            elif left_y_avg > right_y_avg:
+                                ref_point = (config.LINE_WIDTH - 5, right_y_avg)
             
-            elif left_edge_points and right_edge_points:
-                if prev_angle < 90:
+            elif left_edge_points or right_edge_points:
+                if left_edge_points and prev_angle < 90:
                     y_avg = int(np.mean([p[1] for p in left_edge_points]))
                     ref_point = (0, y_avg)
-                elif prev_angle > 90:
+                elif right_edge_points and prev_angle > 90:
                     y_avg = int(np.mean([p[1] for p in right_edge_points]))
                     ref_point = (config.LINE_WIDTH - 1, y_avg)
                 else:
-                    left_y_avg = int(np.mean([p[1] for p in left_edge_points]))
-                    right_y_avg = int(np.mean([p[1] for p in right_edge_points]))
-                    if left_y_avg < right_y_avg:
+                    left_y_avg = right_y_avg = None
+
+                    if left_edge_points:
+                        left_y_avg = int(np.mean([p[1] for p in left_edge_points]))
                         ref_point = (0, left_y_avg)
-                    elif left_y_avg > right_y_avg:
-                        ref_point = (config.LINE_WIDTH - 1, right_y_avg)
+                    else:
+                        right_y_avg = int(np.mean([p[1] for p in right_edge_points]))
+                        ref_point = (config.LINE_WIDTH - 5, right_y_avg)
+                    
+                    if left_y_avg and right_y_avg:
+                        if left_y_avg < right_y_avg:
+                            ref_point = (0, left_y_avg)
+
+                        elif left_y_avg > right_y_avg:
+                            ref_point = (config.LINE_WIDTH - 5, right_y_avg)
             else:
                 top_ref_point = calculate_top_contour(contour)
                 if top_ref_point[1] < config.LINE_HEIGHT/2:
@@ -212,7 +258,7 @@ def calculate_angle(contour, display_image, prev_angle):
                     ref_point = (config.LINE_WIDTH, y_avg)
 
         if ref_point:
-            bottom_center = (config.LINE_WIDTH // 2, config.LINE_HEIGHT)
+            bottom_center = (config.LINE_WIDTH // 2, config.LINE_HEIGHT // 2 + 15)
             dx = bottom_center[0] - ref_point[0]
             dy = bottom_center[1] - ref_point[1]
 
@@ -235,8 +281,9 @@ def capture_array():
     global camera, camera_mode
     image = camera.capture_array()
     
-    if camera_mode == "evac":
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
-        image = image[20:, :]
+    # if camera_mode == "evac":
+    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
+    # image = image[20:, :]
+    image = image[:, :config.LINE_WIDTH - 5]
 
     return image
