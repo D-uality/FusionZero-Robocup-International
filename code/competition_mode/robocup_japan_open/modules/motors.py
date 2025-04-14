@@ -26,13 +26,17 @@ def initialise() -> None:
 def run(v1: float, v2: float, delay: float = 0) -> None:
     calculated_angles = [0, 0, 0, 0]
 
-    # Frederick
-    negative_gradients  = [0.70106, 0.70440, 0.66426, 0.69425]
-    negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-    positive_gradients  = [0.70924, 0.63035, 0.67858, 0.69916]
-    positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
+    # # Frederick
+    # negative_gradients  = [0.70106, 0.70440, 0.66426, 0.69425]
+    # negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
+    # positive_gradients  = [0.70924, 0.63035, 0.67858, 0.69916]
+    # positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
 
-    # # Aidan
+    # Aidan
+    negative_gradients = [0.7, 0.7, 0.7, 0.7]
+    negative_intercepts = [-3, -3, -3, -3]
+    positive_gradients = [0.7, 0.7, 0.7, 0.7]
+    positive_intercepts = [3, 3, 3, 3]
     # negative_gradients  = [0.80872, 0.87105, 0.68875, 0.79321]
     # negative_intercepts = [-3.3078, -5.3841, -2.8756, -1.1818]
     # positive_gradients  = [0.81624, 0.80004, 0.68003, 0.67527]
