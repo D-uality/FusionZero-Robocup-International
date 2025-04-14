@@ -117,6 +117,8 @@ def main(evacuation_zone_enable: bool = False) -> None:
     main_loop_count += 1
 
 def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]]) -> None:
+    start_time = time.time()  # record the start time for FPS calculations
+
     global uphill_trigger, downhill_trigger, tilt_left_trigger, tilt_right_trigger, gap_trigger, seasaw_trigger, evac_trigger
     global main_loop_count, last_yaw, last_uphill, touch_count
     global ir_integral, ir_derivative, ir_last_error, integral_reset_count, min_integral_reset_count
@@ -189,8 +191,8 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     elif gap_trigger:      kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif seasaw_trigger:   kP, kI, kD, v = 1   , 0     ,  0  , config.line_speed
     elif evac_trigger:     kP, kI, kD, v = 0.5 , 0     ,  0  , 18
-    # else:                  kP, kI, kD, v = 1.5, 0     ,  0  , 15
-    else:                  kP, kI, kD, v = 0.3, 0     ,  0  , 10
+    else:                  kP, kI, kD, v = 2,    0     ,  0  , 50
+    # else:                  kP, kI, kD, v = 0.3, 0     ,  0  , 10
 
     # Input method
     # if uphill_trigger or downhill_trigger or gap_trigger or seasaw_trigger or evac_trigger or tilt_left_trigger or tilt_right_trigger:
@@ -199,9 +201,10 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
     led.on()
 
     image = camera.capture_array()
-    # transformed_image = camera.perspective_transform(image, modifiers)
-    line_image = image.copy()
-    transformed_image = image
+    transformed_image = camera.perspective_transform(image, modifiers)
+    line_image = transformed_image
+    # line_image = image.copy()
+    # transformed_image = image
     
     black_contour, black_image = camera.find_line_black_mask(transformed_image, line_image, camera_last_angle)
     green_contours, green_image = green_functions.green_mask(transformed_image, line_image)
@@ -221,64 +224,76 @@ def follow_line(colour_values: list[int], gyroscope_values: list[Optional[int]])
 
     angle = camera.calculate_angle(black_contour, line_image, camera_last_angle)
             
-    if green == "Left":
-        if tilt_left_trigger:
-            motors.run( config.line_speed,  config.line_speed, 2)
-            motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
-            motors.run(0, 0, 0.15)
-            motors.run(-config.line_speed, config.line_speed, 1.2)
-            motors.run(0, 0, 0.15)
-            motors.run_until(-config.line_speed, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
-            motors.run(0, 0, 0.15)
-            motors.run(-config.line_speed, config.line_speed, 0.4)
-            motors.run(0, 0, 0.15)   
-        else:
-            motors.run( config.line_speed,  config.line_speed, 1.7)
-            motors.run_until(0, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
-            motors.run(0, 0, 0.15)
-            motors.run(0, config.line_speed, 1.2)
-            motors.run(0, 0, 0.15)
-            motors.run_until(0, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
-            motors.run(0, 0, 0.15)
+    # if green == "Left":
+    #     if tilt_left_trigger:
+    #         motors.run( config.line_speed,  config.line_speed, 2)
+    #         motors.run_until(-config.line_speed, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
+    #         motors.run(0, 0, 0.15)
+    #         motors.run(-config.line_speed, config.line_speed, 1.2)
+    #         motors.run(0, 0, 0.15)
+    #         motors.run_until(-config.line_speed, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+    #         motors.run(0, 0, 0.15)
+    #         motors.run(-config.line_speed, config.line_speed, 0.4)
+    #         motors.run(0, 0, 0.15)   
+    #     else:
+    #         motors.run( config.line_speed,  config.line_speed, 1.7)
+    #         motors.run_until(0, config.line_speed * 1.1, colour.read, 2, ">=", 40, "FIRST ALIGN")
+    #         motors.run(0, 0, 0.15)
+    #         motors.run(0, config.line_speed, 1.2)
+    #         motors.run(0, 0, 0.15)
+    #         motors.run_until(0, config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+    #         motors.run(0, 0, 0.15)
         
-    elif green == "Right":
-        if tilt_right_trigger:
-            motors.run( config.line_speed,  config.line_speed, 2)
-            motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 40, "FIRST ALIGN")
-            motors.run(0, 0, 0.15)
-            motors.run(config.line_speed, -config.line_speed, 1.2)
-            motors.run(0, 0, 0.15)
-            motors.run_until(config.line_speed, -config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
-            motors.run(0, 0, 0.15)
-            motors.run(config.line_speed, -config.line_speed, 0.4)
-            motors.run(0, 0, 0.15)   
-        else:
-            motors.run( config.line_speed,  config.line_speed, 1.7)
-            motors.run_until(config.line_speed * 1.1, 0, colour.read, 2, ">=", 40, "FIRST ALIGN")
-            motors.run(0, 0, 0.15)
-            motors.run(config.line_speed, 0, 1.2)
-            motors.run(0, 0, 0.15)
-            motors.run_until(config.line_speed, 0, colour.read, 2, "<=", 30, "SECOND ALIGN")
-            motors.run(0, 0, 0.15)
+    # elif green == "Right":
+    #     if tilt_right_trigger:
+    #         motors.run( config.line_speed,  config.line_speed, 2)
+    #         motors.run_until(config.line_speed * 1.1, -config.line_speed, colour.read, 2, ">=", 40, "FIRST ALIGN")
+    #         motors.run(0, 0, 0.15)
+    #         motors.run(config.line_speed, -config.line_speed, 1.2)
+    #         motors.run(0, 0, 0.15)
+    #         motors.run_until(config.line_speed, -config.line_speed, colour.read, 2, "<=", 30, "SECOND ALIGN")
+    #         motors.run(0, 0, 0.15)
+    #         motors.run(config.line_speed, -config.line_speed, 0.4)
+    #         motors.run(0, 0, 0.15)   
+    #     else:
+    #         motors.run( config.line_speed,  config.line_speed, 1.7)
+    #         motors.run_until(config.line_speed * 1.1, 0, colour.read, 2, ">=", 40, "FIRST ALIGN")
+    #         motors.run(0, 0, 0.15)
+    #         motors.run(config.line_speed, 0, 1.2)
+    #         motors.run(0, 0, 0.15)
+    #         motors.run_until(config.line_speed, 0, colour.read, 2, "<=", 30, "SECOND ALIGN")
+    #         motors.run(0, 0, 0.15)
             
-    else:
-        error = angle - 90
+    # else:
+    error = angle - 90
 
-        if abs(error) < 10: camera_integral = 0
-        camera_integral += error if abs(error) > 5 else 0
-        camera_derivative = error - camera_last_error
+    if abs(error) < 10: 
+        camera_integral = 0
+        error = 0
+    elif error > 0: 
+        error = error * 2
+    camera_integral += error if abs(error) > 5 else 0
+    camera_derivative = error - camera_last_error
 
-        turn = error * kP + camera_integral * kI + camera_derivative * kD
-        v1, v2 = v + turn, v - turn
+    turn = error * kP + camera_integral * kI + camera_derivative * kD
+    v1, v2 = v + turn, v - turn
 
-        motors.run(v1, v2)
-        camera_last_angle = angle
-        camera_last_error = error
-        config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
-    
+    motors.run(v1, v2)
+    camera_last_angle = angle
+    camera_last_error = error
+    # config.update_log([modifiers+" PID", f"{main_loop_count}", f"{angle:.2f} {colour_values[2]}", f"{error:.2f} {camera_integral:.2f} {camera_derivative:.2f}", f"{v1:.2f} {v2:.2f}", f"{silver_count} {laser_close_count} {touch_count} {red_count}"], [24, 8, 30, 30, 10, 30])
+
     if config.X11:
         line_image = np.uint8(line_image)
+        # line_image = np.repeat(np.repeat(line_image, 2, axis=0), 2, axis=1)  # 2x height, then 2x width
         cv2.imshow("line", line_image)
+
+    # --- Compute elapsed time and FPS before updating the log ---
+    elapsed_time = time.time() - start_time
+    fps = 1.0 / elapsed_time if elapsed_time > 0 else 0
+
+    # Update the log with only the loop count, FPS, and error values.
+    config.update_log([f"{main_loop_count}", f"{fps:.2f}", f"{error:.2f}"], [8, 10, 10])
         
     # else:
     #     camera_enable = False

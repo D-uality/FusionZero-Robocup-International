@@ -43,6 +43,7 @@ def main() -> None:
             
             if mode == 0:
                 motors.run(0, 0)
+                led.off()
 
             elif mode == 1:
                 line.main()
