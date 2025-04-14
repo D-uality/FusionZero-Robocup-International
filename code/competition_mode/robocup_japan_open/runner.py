@@ -4,12 +4,25 @@ import subprocess
 import os
 import sys
 
+import cv2
+import numpy as np
+from random import randint
+from picamera2 import Picamera2
+from libcamera import Transform
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
+import config
+import camera
 import motors
+import touch_sensors
+import laser_sensors
+import led
+import colour
 import oled_display
+import gyroscope
 
 switch_pin = 22
 

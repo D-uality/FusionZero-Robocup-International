@@ -15,18 +15,18 @@ from random import randint
 import config
 import camera
 import motors
-import touch_sensors
-import laser_sensors
+# import touch_sensors
+# import laser_sensors
 import led
-import colour
-import oled_display
-import gyroscope
+# import colour
+# import oled_display
+# import gyroscope
 
 from typing import Optional
 import victims
 import triangles
 
-silver_min = 110
+silver_min = 130
 black_max = 20
 
 align_failures = 0
@@ -36,6 +36,7 @@ def main():
     global align_failures, last_align_attempt
 
     motors.run(0, 0)
+    led.off()
     camera.close()
     camera.initialise("evac")
 
@@ -43,7 +44,7 @@ def main():
     oled_display.reset()
     oled_display.text("Align: Silver", 0, 0, size=10)
     
-    entrance_exit_align("silver")
+    # entrance_exit_align("silver")
     
     motors.run(0, 0)
     # Let camera warm up
@@ -63,12 +64,14 @@ def main():
         elapsed = time.time() - start_time
         print(elapsed)
         remaining = int(4 * 60 - elapsed)
+        
         # Update OLED with victim count and remaining time (update periodically)
         oled_display.reset()
         oled_display.text(f"Victims: {config.victim_count}", 0, 0, size=10)
         oled_display.text(f"Time: {remaining}s", 0, 10, size=10)
 
-        if config.victim_count == 3 or elapsed > 4 * 60: break
+        # if config.victim_count == 3 or elapsed > 4 * 60: break
+        if config.victim_count == 2 or elapsed > 4 * 60: break
 
         search_type = victims.live if config.victim_count < 2 else victims.dead
         motors.claw_step(270, 0.00001)
@@ -240,7 +243,7 @@ def find(search_function: callable) -> None:
 
             # Ensure we stay within the evacuation_zone
             colour_values = colour.read()
-            exit_entrance_values = [1 if value >= 110 or value <= 30 else 0 for value in colour_values]
+            exit_entrance_values = [1 if value >= 130 or value <= 30 else 0 for value in colour_values]
             exit_entrance_count = exit_entrance_count + sum(exit_entrance_values) if sum(exit_entrance_values) >= 1 else 0
 
             if exit_entrance_count >= 5:
@@ -298,7 +301,7 @@ def route(search_function: callable, kP: float) -> bool:
         
         # Ensure we stay within the evacuation_zone
         colour_values = colour.read()
-        exit_entrance_values = [1 if value >= 110 or value <= 30 else 0 for value in colour_values]
+        exit_entrance_values = [1 if value >= 130 or value <= 30 else 0 for value in colour_values]
         exit_entrance_count = exit_entrance_count + sum(exit_entrance_values) if sum(exit_entrance_values) >= 1 else 0
 
         if exit_entrance_count >= 5:
@@ -403,7 +406,7 @@ def grab() -> bool:
             config.update_log(["PRESENCE CHECK", f"{y + h/2}"], [24, 10])
             print()
 
-            if y + h/2 > 85: y_levels.append(0)
+            if y + h/2 > 70: y_levels.append(0)
             else:            y_levels.append(1)
 
         average = sum(y_levels) / trials
@@ -451,7 +454,7 @@ def grab() -> bool:
     
     config.update_log(["GRAB", "MOVE BACKWARDS"], [24, 24])
     print()
-    motors.run(-config.evacuation_speed, -config.evacuation_speed, 1.3)
+    motors.run(-config.evacuation_speed, -config.evacuation_speed, 0.6)
     motors.run(0, 0)
     
     # config.update_log(["GRAB", "CLAW READJUST"], [24, 24])
@@ -608,6 +611,6 @@ if __name__ == "__main__":
     oled_display.reset()
     led.off()
     
-    # config.victim_count =0
-    
+    config.victim_count = 0
+     
     main()
