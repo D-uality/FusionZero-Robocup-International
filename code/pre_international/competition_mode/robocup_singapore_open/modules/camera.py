@@ -57,13 +57,13 @@ def initialise(mode: str):
 def perspective_transform(image, mode):
     """Apply perspective transform to the image"""
     if "UPHILL" in mode or "DOWNHILL" in mode:
-        view_multi = 1.5
+        view_div = 1.5
     else:
-        view_multi = 2.2
+        view_div = 2.2
 
-    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_multi))
+    top_left =      (int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_div))
     bottom_left =   (0, config.LINE_HEIGHT - 1)
-    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_multi))
+    top_right =     (config.LINE_WIDTH - int(config.LINE_WIDTH / 32), int(config.LINE_HEIGHT / view_div))
     bottom_right =  (config.LINE_WIDTH, config.LINE_HEIGHT- 1 )
     
     # Define points for the perspective transform (source and destination)
@@ -235,7 +235,7 @@ def capture_array():
     global camera, camera_mode
     image = camera.capture_array()
     
-    if camera_mode == "evac":
+    if "evac" in camera_mode:
         image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
         image = image[20:, :]
 

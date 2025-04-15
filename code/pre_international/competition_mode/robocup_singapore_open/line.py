@@ -25,11 +25,13 @@ import led
 import oled_display
 import random
 import green_functions
+import camera
+import cv2
+import numpy as np
 
 ir_integral = ir_derivative = ir_last_error = 0
 camera_integral = camera_derivative = camera_last_error = 0
 camera_last_angle = 90
-last_angle = 90
 
 min_integral_reset_count, integral_reset_count = 2, 0
 
@@ -53,6 +55,216 @@ tilt_left_trigger = tilt_right_trigger = False
 gap_trigger = False
 evac_exited = False
 camera_enable = False
+
+class cRobotState():
+    def __init__(self):
+        self.main_loop_count = 0
+        
+        self.pid_values = {
+            "ir": {
+                "integral": 0,
+                "derivative": 0,
+                "last_error": 0
+            },
+            
+            "camera": {
+                "integral": 0,
+                "derivative": 0,
+                "last_error": 0
+            }
+        }
+        
+        self.count = {
+            "uphill": 0,
+            "downhill": 0,
+            "tilt_left": 0,
+            "tilt_right": 0,
+            "red": 0,
+            "silver": 0,
+            "touch": 0
+        }
+        
+        self.trigger = {
+            "uphill": False,
+            "downhill": False,
+            "tilt_left": False,
+            "tilt_right": False,
+            "seasaw": False,
+            "evacuation_zone": False
+        }
+        
+        self.camera_enabled = False
+        self.last_uphill = 0
+
+robot_state = cRobotState()
+
+def main(evacuation_zone_enabled: bool) -> None:
+    global robot_state
+    
+    while True:
+        colour_values = colour.read()
+        gyro_values = gyroscope.read()
+        touch_values = touch_sensors.read()    
+        
+        # Update all counts
+        
+        if not robot_state.camera_enabled:
+            # Only update if camera is disabled
+            touch_check(robot_state, touch_values)
+
+        ramp_check(robot_state, gyro_values)
+        red_check(robot_state)
+        silver_check(robot_state, colour_values)
+        
+        # Determine line following mode
+        green_signal = green_check(colour_values)
+        
+        if robot_state.count["red"] >= 1:
+            # Found red stop
+            robot_state.count["red"] = 0
+            
+            motors.run(config.line_speed, config.line_speed, 0.5)
+            motors.run(0, 0, 10)
+            
+        elif robot_state.count["silver"] >= 20 and evacuation_zone_enabled:
+            # Found evacuation zone
+            evacuation_zone.main()
+            
+            # Line follow with camera
+            robot_state.trigger["evacuation_zone"] = True
+        
+        elif robot_state.count["touch"] > 300:
+            # Found obstacle
+            robot_state.count["touch"] = 0
+            
+            avoid_obstacle()
+            
+        elif len(green_signal) != 0:
+            # Found intersection
+            intersection_handling(green_signal)
+        
+        else:
+            # Line Follow
+            
+            # Find modifiers
+            modifiers = find_modifiers(robot_state)
+            
+            line_follow(robot_state, modifiers)
+        
+        # Update the loop count
+        robot_state.main_loop_count += 1
+    
+def touch_check(robot_state: cRobotState, touch_values: list[int]) -> None:
+    if robot_state.camera_enabled:
+        robot_state.count["touch"] = 0
+    
+    robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
+    
+def ramp_check(robot_state: cRobotState, gyro_values: list[int]) -> None:
+    pitch = gyro_values[0]
+    roll  = gyro_values[1]
+    
+    robot_state.count["uphill"]     = robot_state.count["uphill"]     + 1 if pitch >= 15 else 0
+    robot_state.count["downhill"]   = robot_state.count["downhill"]   + 1 if pitch >= 15 else 0
+    
+    robot_state.count["tilt_left"]  = robot_state.count["tilt_left"]  + 1 if roll  >= 15 else 0
+    robot_state.count["tilt_right"] = robot_state.count["tilt_right"] + 1 if roll  >= 15 else 0
+    
+    robot_state.last_uphill = 0 if robot_state.trigger["uphill"] else robot_state.last_uphill + 1
+
+def red_check(robot_state: cRobotState) -> None:
+    # Only process images every 10 loops
+    # Only process images if we are not mid-turn
+    # Only process images if we are not using camera
+    
+    if (   robot_state.main_loop_count % 10 != 0
+        or robot_state.pid_values
+        or not camera_enable                     ):
+        
+        robot_state.count["red"] = 0
+        return None
+    
+    image = camera.capture_array()
+    image = camera.perspective_transform(image, "LINE")
+    if config.X11: cv2.imshow("image", image)
+    
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    mask_lower = cv2.inRange(hsv_image, (0, 230, 46), (10, 255, 255))
+    mask_upper = cv2.inRange(hsv_image, (170, 230, 0), (179, 255, 255))
+    mask = cv2.bitwise_or(mask_lower, mask_upper)
+    
+    mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+    
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if not contours:
+        robot_state.count["red"] = 0
+        return None
+    
+    # Find valid contours based on criteria
+    valid_contours = []
+    
+    for contour in contours:
+        _, _, w, h = cv2.boundingRect(largest_contour)
+
+        if (   cv2.contourArea(contour) >= 100
+            and w > h                         ):
+            valid_contours.append(contour)
+    
+    # Find the largest contour
+    largest_contour = max(valid_contours, key=cv2.contourArea)
+    
+    if not largest_contour:
+        robot_state.count["red"] = 0
+        return None
+    else:
+        robot_state.count["red"] += 1
+    
+def silver_check(robot_state: cRobotState, colour_values: list[int]) -> None:
+    global silver_min
+    
+    if robot_state.pid_values["ir"]["integral"] >= 1000:
+        robot_state.count["silver"] = 0
+        return None
+    
+    if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
+        robot_state.count["silver"] += 1
+    else:
+        robot_state.count["silver"] = 0
+    
+    return silver_count
+
+def find_modifiers(robot_state: cRobotState, last_modifier) -> list[str]:
+    modifiers = []
+    
+    # Counting modifiers
+    if robot_state.count["uphill"] > 30:
+        modifiers.append("uphill")
+        
+    if robot_state.count["downhill"] > 0:
+        modifiers.append("downhills")
+        
+    if robot_state.count["tilt_left"] > 0:
+        modifiers.append("tilt_left")
+        
+    if robot_state.count["tilt_right"] > 0:
+        modifiers.append("tilt_right")
+    
+    # Seasaw modifier
+    if robot_state.last_uphill <= 40 and robot_state.trigger["downhill"]:
+        robot_state.trigger["downhill"] = False
+        robot_state.trigger["seasaw"] = True
+        modifiers.append("seasaw")
+    
+    modifiers = " ".join(modifiers)
+    
+    # If there has been a change in modifiers
+    if last_modifier != modifiers:
+        # Check if the current modifier has been running for AT LEAST 50 loops
+        if robot_state.main_loop_count <= 50:
+            return last_modifier
+        else:
+            return modifiers
 
 def main(evacuation_zone_enable: bool = False) -> None:
     global main_loop_count, laser_close_count, silver_count, red_count, evac_trigger, evac_exited, touch_count, last_uphill
@@ -600,3 +812,12 @@ def red_check(colour_values, red_count):
         red_count = 0
     
     return red_count
+
+if __name__ == "__main__":
+    robot_state = cRobotState()
+    led.on()
+    
+    while True:
+        robot_state.main_loop_count += 1
+        
+        red_check()
