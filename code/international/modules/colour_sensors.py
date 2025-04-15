@@ -21,10 +21,10 @@ class cCOLOUR_SENSORS():
                 self.__min_values = list(map(int, lines[0].strip().split(",")))
                 self.__max_values = list(map(int, lines[1].strip().split(",")))
 
-            debug( ["INITIALISATION", "COLOUR SENSORS", ", ".join(list(map(str, self.__min_values))), ", ".join(list(map(str, self.__max_values)))], [24, 24, 30, 30] )
+            main.debug( ["INITIALISATION", "COLOUR SENSORS", ", ".join(list(map(str, self.__min_values))), ", ".join(list(map(str, self.__max_values)))], [24, 24, 30, 30] )
         
         else:
-            debug( ["INITIALISATION", "COLOUR SENSORS", "x"], [24, 24, 50] )
+            main.debug( ["INITIALISATION", "COLOUR SENSORS", "x"], [24, 24, 50] )
             exit()
             
     def read_raw(self) -> list[int]:
@@ -60,7 +60,7 @@ class cCOLOUR_SENSORS():
                 self.__min_values[i] = min(self.__min_values[i], analog_values[i])
                 self.__max_values[i] = max(self.__max_values[i], analog_values[i])
                 
-            debug( ["CALIBRATION", ", ".join(list(map(str, self.__min_values))), ", ".join(list(map(str, self.__max_values)))], [24, 30, 30] )
+            main.debug( ["CALIBRATION", ", ".join(list(map(str, self.__min_values))), ", ".join(list(map(str, self.__max_values)))], [24, 30, 30] )
         
         with open(self.__CALIBRATION_FILE, "w") as file:
             file.write(",".join(map(str, self.__min_values)) + "\n")
