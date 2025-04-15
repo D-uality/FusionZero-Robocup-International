@@ -3,14 +3,10 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 from libcamera import Transform
-from main import debug
+from utils import debug
 
 class cCAMERA():
     def __init__(self, mode: str):
-        self.camera = None
-        self.camera_mode = ""
-        self.initialise(mode)
-
         # Camera settings
         self.X11 = True
         self.FLIP = False
@@ -18,6 +14,9 @@ class cCAMERA():
         self.LINE_HEIGHT = 200
         self.EVAC_WIDTH = 320
         self.EVAC_HEIGHT = 200
+
+        self.camera = None
+        self.camera_mode = "line"
     
     def initialise(self, mode: str):
         try:
@@ -46,13 +45,13 @@ class cCAMERA():
             self.camera.set_controls(controls)
             self.camera.start()
             
-            main.debug(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
+            debug(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
             print()
             # oled_display.reset()
             # oled_display.text("Camera: ✓", 0, 40)
             
         except Exception as e:
-            main.debug(["INITIALISATION", "CAMERA", f"{e}"], [24, 15, 50])
+            debug(["INITIALISATION", "CAMERA", f"{e}"], [24, 15, 50])
             print()
             # oled_display.reset()
             # oled_display.text("Camera: X", 0, 40)
@@ -70,8 +69,8 @@ class cCAMERA():
     def perspective_transform(self, image: np.ndarray) -> np.ndarray:
 
         # Transformation points
-        top_left = (int(self.LINE_WIDTH / 4),      int(self.LINE_HEIGHT / 4.5))
-        top_right = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 4.5))
+        top_left = (int(self.LINE_WIDTH / 4),      int(self.LINE_HEIGHT / 4))
+        top_right = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 4))
         bottom_left = (0,                          self.LINE_HEIGHT - 1)
         bottom_right = (self.LINE_WIDTH,           self.LINE_HEIGHT - 1)
 
@@ -87,13 +86,13 @@ class cCAMERA():
         if self.camera:
             self.camera.close()
             self.camera = None
-            main.debug(["TERMINATION", "CAMERA", "✓"], [24, 15, 50])
+            debug(["TERMINATION", "CAMERA", "✓"], [24, 15, 50])
             print()
             # oled_display.reset()
             # oled_display.text("Camera: ✓", 0, 40)
             # oled_display.show()
         else:
-            main.debug(["TERMINATION", "CAMERA", "X"], [24, 15, 50])
+            debug(["TERMINATION", "CAMERA", "X"], [24, 15, 50])
             print()
             # oled_display.reset()
             # oled_display.text("Camera: X", 0, 40)

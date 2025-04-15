@@ -1,7 +1,7 @@
 import time
 from adafruit_servokit import ServoKit
 import operator
-from main import debug
+from utils import debug
 
 pca = ServoKit(channels=16)
 
@@ -34,11 +34,11 @@ class cMOTORS():
             pca.servo[self.servo_pins[3]].angle = self.stop_angles[3]
 
             pca.servo[self.claw_pin].angle = self.claw_angle
-            main.debug(["INITIALISATION", "MOTORS", f"✓"], [24, 15, 50])
+            debug(["INITIALISATION", "MOTORS", f"✓"], [24, 15, 50])
             print()
             
         except Exception as e:
-            main.debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
+            debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
             print()
             
             raise e
@@ -71,7 +71,7 @@ class cMOTORS():
                 time.sleep(delay)
         except Exception as e:  
             print("I2C TIMEOUT!")
-            main.debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
+            debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
             print()
             
             raise e
@@ -81,7 +81,7 @@ class cMOTORS():
             self.claw_angle = angle
         except Exception as e:
             print("I2C TIMEOUT!")
-            main.debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
+            debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
             print()
             
             raise e
@@ -124,7 +124,7 @@ class cMOTORS():
             self.run(v1, v2)
             
             if value is not None: 
-                main.debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
+                debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
                 print()
                 if comparison_function(value, target_value): break
 
