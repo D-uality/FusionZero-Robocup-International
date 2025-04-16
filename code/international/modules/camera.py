@@ -69,8 +69,8 @@ class cCAMERA():
     def perspective_transform(self, image: np.ndarray) -> np.ndarray:
 
         # Transformation points
-        top_left = (int(self.LINE_WIDTH / 4),      int(self.LINE_HEIGHT / 4))
-        top_right = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 4))
+        top_left = (int(self.LINE_WIDTH / 4),      int(self.LINE_HEIGHT / 6))
+        top_right = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 6))
         bottom_left = (0,                          self.LINE_HEIGHT - 1)
         bottom_right = (self.LINE_WIDTH,           self.LINE_HEIGHT - 1)
 

@@ -24,10 +24,10 @@ class cRobotState():
 
 class cLine():
     def __init__(self, camera, motors):
-        self.straight_speed = 30
-        self.turn_multi = 1
+        self.straight_speed = 25
+        self.turn_multi = 1.6
         self.min_black_area = 1000
-        self.min_green_area = 500
+        self.min_green_area = 1000
 
         self.camera = camera
         self.motors = motors
@@ -48,19 +48,22 @@ class cLine():
         self.find_black()
         self.find_green()
         self.green_check()
+        self.calculate_angle(self.black_contour)
 
         if self.green_signal == "Double":
             self.angle = 90
             error = 0
-            self.motors.run(30, -30, 1.5)
+            # self.motors.run(30, -30, 1.5)
+            self.motors.pause()
         else:
-            self.calculate_angle(self.black_contour)
-
-            error = self.turn_multi * (self.angle - 90)
+            error = int(self.turn_multi * (self.angle - 90))
             self.motors.run(self.straight_speed + error, self.straight_speed - error)
         
         if self.display_image is not None and self.camera.X11:
             cv2.imshow("line", np.uint8(self.display_image))
+            
+            # if self.black_mask is not None:
+            #     cv2.imshow("black", np.uint8(self.black_mask))
             cv2.waitKey(1)
         
         elapsed_time = time.time() - start_time
@@ -87,37 +90,31 @@ class cLine():
             elif len(valid_rects) == 1:
                 valid_rect = valid_rects[0]
                 
-                # Take lowest 2 points
-                # Get the 2 visually lowest points (highest y)
-                lowest_corners = sorted(valid_rect, key=lambda p: p[1])[-2:]
-
-                # Pick the actual bottom-left: the one with smaller x
-                bottom_left = min(lowest_corners, key=lambda p: p[0])
-                bottom_left = tuple(bottom_left)
-
+                # Take 2 Leftmost points
+                left_points = sorted(valid_rect, key=lambda p: p[0])[:2]
+                # Average left points
+                left_x = int(sum(p[0] for p in left_points) / len(left_points))
+                left_y = int(sum(p[1] for p in left_points) / len(left_points))
 
                 # Check black on left
-                check_point = (bottom_left[0] - 30, bottom_left[1])
-                # Check if the point is within the image bounds
-                if 0 <= check_point[0] < self.camera.LINE_WIDTH and 0 <= check_point[1] < self.camera.LINE_HEIGHT:
-                    # Create a 20x20 region around the point
-                    y_start = max(0, check_point[1] - 10)
-                    y_end = min(self.camera.LINE_HEIGHT, check_point[1] + 10)
-                    x_start = max(0, check_point[0] - 10)
-                    x_end = min(self.camera.LINE_WIDTH, check_point[0] + 10)
-                    region = self.black_mask[y_start:y_end, x_start:x_end]
-                    
-                    # If display image, draw the check point
-                    if self.display_image is not None and self.camera.X11:
-                        cv2.circle(self.display_image, check_point, 20, (0, 255, 255), -1)
+                check_point = (left_x - 20, left_y)
+                if self.black_check(check_point):
+                    self.green_signal = "Right"
+                    return
 
-                    # Check if any pixel in the region is black
-                    if np.any(region == 255):
-                        self.green_signal = "Right"
-                        return
-                
+                # Take 2 Rightmost points
+                right_points = sorted(valid_rect, key=lambda p: p[0])[-2:]
+                # Average right points
+                right_x = int(sum(p[0] for p in right_points) / len(right_points))
+                right_y = int(sum(p[1] for p in right_points) / len(right_points))
+
+                # Check black on right
+                check_point = (right_x + 20, right_y)
+                if self.black_check(check_point):
+                    self.green_signal = "Left"
+                    return
+
                 self.green_signal = "Left"
-                return 
 
     def validate_green_contour(self, contour):
         rect = cv2.minAreaRect(contour)
@@ -128,33 +125,35 @@ class cLine():
         top_left, top_right = y_sorted_green[:2]
         top_left, top_right = tuple(top_left), tuple(top_right)
 
-        
-        # Check if the top corners are black within a diameter of 3 pixels
-        check_points = [(top_left[0], top_left[1] - 10), (top_right[0], top_right[1] - 10)]
+        # Average top left and top right points and increase y result
+        x_check = int((top_left[0] + top_right[0]) / 2)
+        y_check = int((top_left[1] + top_right[1]) / 2) - 10
+
         green_valid = False
 
-        # Check if the points are within the image bounds
-        if all(0 <= x < self.camera.LINE_WIDTH and 0 <= y < self.camera.LINE_HEIGHT for x, y in check_points):
-            for x, y in check_points:
-                # Create a 3x3 region around the point
-                y_start = max(0, y - 1)
-                y_end = min(self.camera.LINE_HEIGHT, y + 2)
-                x_start = max(0, x - 1)
-                x_end = min(self.camera.LINE_WIDTH, x + 2)
-                region = self.black_mask[y_start:y_end, x_start:x_end]
+        # Check if point is within image bounds
+        if 0 <= x_check < self.camera.LINE_WIDTH and 0 <= y_check < self.camera.LINE_HEIGHT and self.black_mask is not None:
+            if self.black_check((x_check, y_check)):
+                return box
 
-                # If displaying image, draw the check points
-                if self.display_image is not None and self.camera.X11:
-                    cv2.circle(self.display_image, (x, y), 3, (0, 255, 255), -1)
-                
-                # Check if any pixel in the region is black
-                if np.any(region == 255):
-                    green_valid = True
-                    
-        if green_valid:
-            return box
-    
         return None
+
+    def black_check(self, check_point):
+        if 0 <= check_point[0] < self.camera.LINE_WIDTH and 0 <= check_point[1] < self.camera.LINE_HEIGHT and self.black_mask is not None:
+            # Create a 20x20 region around the point
+            y_start = max(0, check_point[1] - 10)
+            y_end = min(self.camera.LINE_HEIGHT, check_point[1] + 10)
+            x_start = max(0, check_point[0] - 10)
+            x_end = min(self.camera.LINE_WIDTH, check_point[0] + 10)
+            region = self.black_mask[y_start:y_end, x_start:x_end]
+
+            # If display image, draw the check point
+            if self.display_image is not None and self.camera.X11:
+                cv2.circle(self.display_image, check_point, 20, (0, 255, 255), -1)
+
+            # Check if any pixel in the region is black
+            return np.any(region == 255)
+        return False
 
     def find_green(self):
         self.green_contours = None
@@ -232,13 +231,13 @@ class cLine():
 
     def find_black(self):
         self.black_contour = None
+        self.black_mask = None
         image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         black_mask = cv2.inRange(image, 0, 30)
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
         black_mask = cv2.erode(black_mask, kernel, iterations=3)
         black_mask = cv2.dilate(black_mask, kernel, iterations=10)
-        self.black_mask = black_mask
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
@@ -250,6 +249,11 @@ class cLine():
                 angle = self.calculate_angle(contour, validate=True)
                 if abs(angle - self.last_angle) < 15:
                     close_contours.append(contour)
+
+            if len(close_contours) == 0:
+                # pick the contour which is closest to the previous angle and set as self.black_contour
+                closest_contour = min(contours, key=lambda c: abs(self.calculate_angle(c, validate=True) - self.last_angle))
+                self.black_contour = closest_contour
 
             # Highest contour
             tallest_contours = []
@@ -269,11 +273,16 @@ class cLine():
 
         elif len(contours) == 1:
             self.black_contour = contours[0]
-        if self.black_contour is not None and self.camera.X11:
-            # Draw all contours in blue, and the largest in cyan
-            for c in contours:
-                color = (255, 255, 0) if c is self.black_contour else (255, 0, 0)
-                cv2.drawContours(self.display_image, [c], -1, color, 2)
+        if self.black_contour is not None:
+            contour_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+            cv2.drawContours(contour_mask, [self.black_contour], -1, color=255, thickness=cv2.FILLED)
+            self.black_mask = contour_mask
+
+            if self.camera.X11:
+                # Draw all contours in blue, and the largest in cyan
+                for c in contours:
+                    color = (255, 255, 0) if c is self.black_contour else (255, 0, 0)
+                    cv2.drawContours(self.display_image, [c], -1, color, 2)
 
 robot_state = cRobotState()
 
