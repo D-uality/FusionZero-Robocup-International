@@ -14,10 +14,10 @@ class cMOTORS():
 
         # Aidan
         self.stop_angles = [ 97, 96, 96, 97 ]
-        self.negative_gradients = [0.7, 0.7, 0.7, 0.7]
-        self.negative_intercepts = [-3, -3, -3, -3]
-        self.positive_gradients = [0.7, 0.7, 0.7, 0.7]
-        self.positive_intercepts = [3, 3, 3, 3]
+        self.negative_gradients = [1.17106, 1.15876, 0.50274, 0.53452]
+        self.negative_intercepts = [-3.8658, -1.5444, -2.8559, -2.4646]
+        self.positive_gradients = [0.87580, 0.82601, 1.78133, 1.81726]
+        self.positive_intercepts = [4.6227, 4.3606, 3.9117, 3.4639]
 
         # # Frederick
         # self.stop_angles = [ 88, 89, 88, 89 ]
@@ -62,10 +62,10 @@ class cMOTORS():
 
             calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
         try:
-            pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+50), 90-50)
-            pca.servo[self.servo_pins[1]].angle = max(min(self.stop_angles[1] + calculated_angles[1], 90+50), 90-50)
-            pca.servo[self.servo_pins[2]].angle = max(min(self.stop_angles[2] + calculated_angles[2], 90+50), 90-50)
-            pca.servo[self.servo_pins[3]].angle = max(min(self.stop_angles[3] + calculated_angles[3], 90+50), 90-50)
+            pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+60), 90-40)
+            pca.servo[self.servo_pins[1]].angle = max(min(self.stop_angles[1] + calculated_angles[1], 90+60), 90-40)
+            pca.servo[self.servo_pins[2]].angle = max(min(self.stop_angles[2] + calculated_angles[2], 90+40), 90-40)
+            pca.servo[self.servo_pins[3]].angle = max(min(self.stop_angles[3] + calculated_angles[3], 90+40), 90-40)
 
             if delay > 0:
                 time.sleep(delay)
