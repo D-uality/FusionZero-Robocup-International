@@ -9,22 +9,22 @@ class cMOTORS():
     def __init__(self) -> None:
         self.servo_pins = [ 14, 13, 12, 10 ]
         self.claw_pin = 9
-        self.claw_angle = 270
+        self.claw_angle = 70
         pca.servo[self.claw_pin].actuation_range = 270
 
-        # Aidan
-        self.stop_angles = [ 97, 96, 96, 97 ]
-        self.negative_gradients = [1.17106, 1.15876, 0.50274, 0.53452]
-        self.negative_intercepts = [-3.8658, -1.5444, -2.8559, -2.4646]
-        self.positive_gradients = [0.87580, 0.82601, 1.78133, 1.81726]
-        self.positive_intercepts = [4.6227, 4.3606, 3.9117, 3.4639]
+        # # Aidan
+        # self.stop_angles = [ 97, 96, 96, 97 ]
+        # self.negative_gradients = [1.17106, 1.15876, 0.50274, 0.53452]
+        # self.negative_intercepts = [-3.8658, -1.5444, -2.8559, -2.4646]
+        # self.positive_gradients = [0.87580, 0.82601, 1.78133, 1.81726]
+        # self.positive_intercepts = [4.6227, 4.3606, 3.9117, 3.4639]
 
-        # # Frederick
-        # self.stop_angles = [ 88, 89, 88, 89 ]
-        # negative_gradients  = [0.70106, 0.70440, 0.66426, 0.69425]
-        # negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
-        # positive_gradients  = [0.70924, 0.63035, 0.67858, 0.69916]
-        # positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
+        # Frederick
+        self.stop_angles = [ 88, 89, 88, 89 ]
+        self.negative_gradients  = [0.70106, 0.70440, 0.66426, 0.69425]
+        self.negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
+        self.positive_gradients  = [0.70924, 0.63035, 0.67858, 0.69916]
+        self.positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
        
     def initialise(self):
         try:

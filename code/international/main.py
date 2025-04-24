@@ -40,7 +40,7 @@ def main() -> None:
 
             elif mode == 1:
                 line.main(line_follow)
-            
+                
             elif mode == 9: listener.exit_event.set()
 
     finally:

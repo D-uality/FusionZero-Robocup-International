@@ -69,13 +69,12 @@ class cLine():
         if self.green_signal == "Double":
             self.angle = 90
             error = 0
-            self.motors.run(30, -30, 2.3)
+            self.motors.run(40, -40, 2.5)
         else:
             error = int(self.turn_multi * (self.angle - 90))
             if abs(error) < 10:
                 error = 0
             self.motors.run(self.straight_speed + error, self.straight_speed - error)
-
         
         if self.display_image is not None and self.camera.X11:
             small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
@@ -90,7 +89,7 @@ class cLine():
             elapsed_time = elapsed_time - 1.5
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
 
-        # print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
+        print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
 
         return fps, error, self.green_signal
 
@@ -171,19 +170,31 @@ class cLine():
                 cv2.circle(self.display_image, check_point, 20, (0, 255, 255), -1)
 
             # Check if any pixel in the region is black
+            if np.any(region == 255):
+                # Check if green is present in the region
+                if self.green_contours is not None:
+                    for contour in self.green_contours:
+                        # Iterate over pixels in the region
+                        for y in range(y_start, y_end):
+                            for x in range(x_start, x_end):
+                                if self.black_mask[y, x] == 255:
+                                    if cv2.pointPolygonTest(contour, (x, y), False) >= 0:
+                                        # Found green at black pixel → fail
+                                        return False
+                    
             return np.any(region == 255)
         return False
 
     def green_hold(self):
-        if self.green_signal != None and self.prev_green_signal != self.green_signal:
+        if self.green_signal != None and self.green_signal != "Double" and self.prev_green_signal != self.green_signal:
+            self.last_seen_green = time.time()
+        elif self.green_signal == "Double":
             self.last_seen_green = 0
-        else:
-            self.last_seen_green += 1
 
-        if self.last_seen_green < 20:
-            if self.green_signal != "Double":
+        if time.time() - self.last_seen_green < 0.4:
+            if self.prev_green_signal != "Double" and self.prev_green_signal is not None:
                 print("Holding green")
-                self.prev_green_signal = self.green_signal
+                self.green_signal = self.prev_green_signal
 
     def find_green(self):
         self.green_contours = []
@@ -194,10 +205,13 @@ class cLine():
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
-
-        for contour in green_contours:
-            if all(p[0][1] > int(self.camera.LINE_HEIGHT/3.5) for p in contour) and contour is not None and len(contour) > 0:
-                self.green_contours.append(contour)
+        
+        if len(green_contours) == 1:
+            for contour in green_contours:
+                if all(p[0][1] > int(self.camera.LINE_HEIGHT/3.5) for p in contour) and contour is not None and len(contour) > 0:
+                    self.green_contours.append(contour)
+        elif len(green_contours) > 1:
+            self.green_contours = green_contours
 
         if self.green_contours and self.display_image is not None and self.camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (0, 0, 255), 2)
@@ -276,29 +290,13 @@ class cLine():
         base_mask = cv2.inRange(gray, 0, self.base_black)
         light_mask = cv2.inRange(gray, 0, self.light_black)
         lightest_mask = cv2.inRange(gray, 0, self.lightest_black)
-
-        # Define regions using self.camera.LINE_WIDTH and LINE_HEIGHT
-        light_points = np.array([
-            (self.camera.LINE_WIDTH - 55, 0),
-            (60, 0),
-            (60, int(self.camera.LINE_HEIGHT / 2.5) - 1),
-            (self.camera.LINE_WIDTH - 55, int(self.camera.LINE_HEIGHT / 2.35) - 1)
-        ], dtype=np.int32)
-
-        lightest_points = np.array([
-            (self.camera.LINE_WIDTH - 55, int(self.camera.LINE_HEIGHT / 2.35)),
-            (60, int(self.camera.LINE_HEIGHT / 2.5)),
-            (40, self.camera.LINE_HEIGHT - 30),
-            (self.camera.LINE_WIDTH - 50, self.camera.LINE_HEIGHT - 25)
-        ], dtype=np.int32)
-
         # Create region masks
         region_mask_lightest = np.zeros_like(gray, dtype=np.uint8)
         region_mask_light = np.zeros_like(gray, dtype=np.uint8)
         region_mask_base = np.ones_like(gray, dtype=np.uint8) * 255
 
-        cv2.fillPoly(region_mask_lightest, [lightest_points], 255)
-        cv2.fillPoly(region_mask_light, [light_points], 255)
+        cv2.fillPoly(region_mask_lightest, [np.int32(self.camera.lightest_points)], 255)
+        cv2.fillPoly(region_mask_light, [np.int32(self.camera.light_points)], 255)
 
         # Exclude those regions from the base region
         region_mask_base = cv2.subtract(region_mask_base, region_mask_lightest)
@@ -361,11 +359,6 @@ class cLine():
                 for c in contours:
                     color = (255, 255, 0) if c is self.black_contour else (255, 0, 0)
                     cv2.drawContours(self.display_image, [c], -1, color, 2)
-                
-                    # for pt in c:
-                    #     x, y = pt[0]
-                    #     # a filled circle of radius 1 (you can bump that up if you like)
-                    #     cv2.circle(self.display_image, (x, y), radius=1, color=color, thickness=-1)
 
         # if self.camera.X11:
         #     cv2.imshow("black_mask", black_mask)
