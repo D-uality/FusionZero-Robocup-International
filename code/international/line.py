@@ -69,7 +69,7 @@ class cLine():
         if self.green_signal == "Double":
             self.angle = 90
             error = 0
-            self.motors.run(40, -40, 2.5)
+            self.motors.run(40, -40, 2.7)
         else:
             error = int(self.turn_multi * (self.angle - 90))
             if abs(error) < 10:
@@ -191,7 +191,7 @@ class cLine():
         elif self.green_signal == "Double":
             self.last_seen_green = 0
 
-        if time.time() - self.last_seen_green < 0.4:
+        if time.time() - self.last_seen_green < 0.3:
             if self.prev_green_signal != "Double" and self.prev_green_signal is not None:
                 print("Holding green")
                 self.green_signal = self.prev_green_signal

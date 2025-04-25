@@ -7,7 +7,7 @@ from utils import debug
 
 class cCAMERA():
     def __init__(self, mode: str):
-        # Camera settings
+        # Camera settings   
         self.X11 = True
         self.FLIP = False
         self.LINE_WIDTH = 320
