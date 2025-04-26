@@ -16,7 +16,7 @@ i2c = busio.I2C(board.SCL, board.SDA)
 gyroscope = None
 delay_time, last_read = 0.02, 0
 last_angles = unwrapped_angles = None
-
+    
 def initialise():
     global gyroscope
     try:

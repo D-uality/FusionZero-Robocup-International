@@ -31,14 +31,17 @@ def main() -> None:
             
             if mode == 0:
                 motors.run(0, 0)
-                led.off()
+                led.on()
 
             elif mode == 1:
                 line.main()
 
             elif mode == 2:
-                debug(["MODE 2", f"Touch: {touch_sensors.read()}   Lasers: {laser_sensors.read()}   Colour: {colour_sensors.read()}"], [30, 50])
-                
+                # debug(["MODE 2", f"Touch: {touch_sensors.read()}   Lasers: {laser_sensors.read()}   Colour: {colour_sensors.read()}"], [30, 50])
+                gyro_values = gyroscope.read()
+                if gyro_values is not None:
+                    print(gyro_values)
+
             elif mode == 9: listener.exit_event.set()
 
     finally:

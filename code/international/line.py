@@ -25,7 +25,7 @@ class cLine():
     def __init__(self, camera: cCAMERA):
         self.straight_speed = 30
         self.turn_multi = 1.5
-        self.min_black_area = 2000
+        self.min_black_area = 4000
         self.min_green_area = 1000
         self.base_black = 50
         self.light_black = 60
@@ -254,7 +254,7 @@ class cLine():
             if self.display_image is not None and self.camera.X11:
                 cv2.line(self.display_image, ref_point, bottom_center, (0, 0, 255), 2)
             
-            return 90
+        return 90
         
     def calculate_top_contour(self, contour, validate):
         ys = [pt[0][1] for pt in contour]
@@ -443,8 +443,35 @@ def avoid_obstacle(line_follow: cLine) -> None:
     circle_obstacle(line_follow.straight_speed, line_follow.straight_speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
     motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.5)
 
-    # while True:
-    
+    motors.run(0, 0, 0.15)
+
+    start_time = time.perf_counter()
+    wall_multi = 8
+    target_distance = 3
+
+    while True:
+        laser_value = laser_sensors.read([laser_pin])[0]
+        colour_values = colour_sensors.read()
+        touch_values = touch_sensors.read()
+        if colour_values[colour_pin] <= 30 and time.perf_counter() - start_time > 0.5:
+            break
+
+        if laser_value is not None:
+            error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.straight_speed)), int(-1*line_follow.straight_speed))
+        else:
+            error = 0
+
+        if sum(touch_values) < 2:
+            # motors.run(-v1, -v2, 0.3)
+            motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 10, "TURNING BACK TILL OBSTACLE")
+            motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.15)
+
+        print(error)
+        if direction == "cw":
+            motors.run(line_follow.straight_speed + error, line_follow.straight_speed - error)
+        else:
+            motors.run(line_follow.straight_speed - error, line_follow.straight_speed + error)
+
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
 
@@ -453,8 +480,10 @@ def avoid_obstacle(line_follow: cLine) -> None:
     print()
     
     # Turn in the opposite direction
-    motors.run(-line_follow.straight_speed, -line_follow.straight_speed, 0.5)
-    motors.run(-v1, -v2, 1)
+    # motors.run(-line_follow.straight_speed, -line_follow.straight_speed, 0.5)
+    motors.run(-v1, -v2, 2)
+
+    motors.pause()
 
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
     if   comparison == "<=": comparison_function = operator.le
