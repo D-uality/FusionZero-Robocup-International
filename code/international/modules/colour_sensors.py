@@ -28,7 +28,7 @@ class cCOLOUR_SENSORS():
             exit()
             
     def read_raw(self) -> list[int]:
-        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(0, 7)]
+        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(0, 5)]
         return values
     
     def read(self) -> list[int]:
@@ -36,11 +36,11 @@ class cCOLOUR_SENSORS():
         
         raw_values = self.read_raw()
         
-        for i in range(7):
+        for i in range(5):
             mapped_value = (raw_values[i] - self.__min_values[i]) * 100 / (self.__max_values[i] - self.__min_values[i])
             mapped_values.append(int(mapped_value))
             
-        return mapped_value
+        return mapped_values
     
     def calibrate(self) -> None:
         # Rest calibration values
@@ -56,7 +56,7 @@ class cCOLOUR_SENSORS():
             analog_values = self.read_raw()
 
             # Update min, max for each sensor
-            for i in range(7):
+            for i in range(5):
                 self.__min_values[i] = min(self.__min_values[i], analog_values[i])
                 self.__max_values[i] = max(self.__max_values[i], analog_values[i])
                 

@@ -26,22 +26,13 @@ class cMOTORS():
         self.positive_gradients  = [0.70924, 0.63035, 0.67858, 0.69916]
         self.positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
        
-    def initialise(self):
-        try:
-            pca.servo[self.servo_pins[0]].angle = self.stop_angles[0]
-            pca.servo[self.servo_pins[1]].angle = self.stop_angles[1]
-            pca.servo[self.servo_pins[2]].angle = self.stop_angles[2]
-            pca.servo[self.servo_pins[3]].angle = self.stop_angles[3]
+        pca.servo[self.servo_pins[0]].angle = self.stop_angles[0]
+        pca.servo[self.servo_pins[1]].angle = self.stop_angles[1]
+        pca.servo[self.servo_pins[2]].angle = self.stop_angles[2]
+        pca.servo[self.servo_pins[3]].angle = self.stop_angles[3]
 
-            pca.servo[self.claw_pin].angle = self.claw_angle
-            debug(["INITIALISATION", "MOTORS", f"✓"], [24, 15, 50])
-            print()
-            
-        except Exception as e:
-            debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
-            print()
-            
-            raise e
+        pca.servo[self.claw_pin].angle = self.claw_angle
+        debug(["INITIALISATION", "MOTORS", f"✓"], [24, 15, 50])
     
     def run(self, v1: float, v2: float, delay: float = 0) -> None:
         calculated_angles = [0, 0, 0, 0]

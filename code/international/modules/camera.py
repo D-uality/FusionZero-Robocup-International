@@ -6,7 +6,7 @@ from libcamera import Transform
 from utils import debug
 
 class cCAMERA():
-    def __init__(self, mode: str):
+    def __init__(self):
         # Camera settings   
         self.X11 = True
         self.FLIP = False
@@ -27,54 +27,31 @@ class cCAMERA():
         bottom_left =  (40,                    self.LINE_HEIGHT - 20)
         bottom_right = (self.LINE_WIDTH-50,    self.LINE_HEIGHT - 15)
         self.lightest_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+    
+        self.camera = Picamera2()
 
-        self.camera = None
-        self.camera_mode = "line"
-    
-    def initialise(self, mode: str):
-        try:
-            self.camera = Picamera2()
+        camera_config = self.camera.create_preview_configuration(
+            main={"size": (self.LINE_WIDTH, self.LINE_HEIGHT), "format": self.color_format},
+            raw={"size": (2304, 1296), "format": "SBGGR10"},
+            transform=Transform(vflip=self.FLIP, hflip=self.FLIP),
+        )
+        # controls = {
+        #     "ExposureTime": 5000,
+        #     "AnalogueGain": 0
+        # }
+        
+        self.camera.configure(camera_config)
+        # self.camera.set_controls(controls)
+        self.camera.start()
+        
+        debug(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
+        print()
+        # oled_display.reset()
+        # oled_display.text("Camera: ✓", 0, 40)
             
-            if "evac" in mode:
-                camera_config = self.camera.create_still_configuration(
-                    main={"size": (self.EVAC_WIDTH, self.EVAC_HEIGHT), "format": self.color_format},
-                    raw={"size": (2304, 1296), "format": "SBGGR10"},
-                    transform=Transform(vflip=self.FLIP, hflip=self.FLIP)
-                )
-                self.camera_mode = "evac"
-            else:
-                camera_config = self.camera.create_preview_configuration(
-                    main={"size": (self.LINE_WIDTH, self.LINE_HEIGHT), "format": self.color_format},
-                    raw={"size": (2304, 1296), "format": "SBGGR10"},
-                    transform=Transform(vflip=self.FLIP, hflip=self.FLIP),
-                )
-                controls = {
-                    "ExposureTime": 100,
-                    "AnalogueGain": 0
-                }
-                self.camera_mode = "line"
-            
-            self.camera.configure(camera_config)
-            # self.camera.set_controls(controls)
-            self.camera.start()
-            
-            debug(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
-            print()
-            # oled_display.reset()
-            # oled_display.text("Camera: ✓", 0, 40)
-            
-        except Exception as e:
-            debug(["INITIALISATION", "CAMERA", f"{e}"], [24, 15, 50])
-            print()
-            # oled_display.reset()
-            # oled_display.text("Camera: X", 0, 40)
-            raise e
-    
     def capture_array(self) -> np.ndarray:
         image = self.camera.capture_array()
-
-        if self.camera_mode == "line":
-            image = self.perspective_transform(image)
+        image = self.perspective_transform(image)
 
         return image
 

@@ -7,12 +7,11 @@ class C_MODE_LISTENER():
         self.exit_event = threading.Event()
         self.listener_thread = threading.Thread(target=self._input_listener, daemon=True)
         
-        
     def start(self) -> None:
         self.listener_thread.start()
         
     def _input_listener(self):
-        valid_modes = {"0", "1", "9"}
+        valid_modes = {"0", "1", "2", "9"}
 
         while not self.exit_event.is_set():
             print("[0] Nothing")

@@ -1,18 +1,16 @@
 import os
 import sys
 import time
+from random import randint
+from typing import Optional
+import operator
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
-import time
-from typing import Optional
-import operator
-
-from motors import cMOTORS
-from camera import cCAMERA
+from robot import *
 from utils import debug
 import led
 import cv2
@@ -21,19 +19,19 @@ import numpy as np
 class cRobotState():
     def __init__(self):
         self.main_loop_count = 0
-
+        
+        
 class cLine():
-    def __init__(self, camera, motors):
+    def __init__(self, camera: cCAMERA):
         self.straight_speed = 30
         self.turn_multi = 1.5
-        self.min_black_area = 1000
+        self.min_black_area = 2000
         self.min_green_area = 1000
         self.base_black = 50
         self.light_black = 60
         self.lightest_black = 100
 
         self.camera = camera
-        self.motors = motors
 
         self.last_angle = 90
         self.angle = 90
@@ -47,34 +45,32 @@ class cLine():
         self.black_mask = None
     
     def follow_line(self) -> None:
-        start_time = time.time()
+        start_time = time.perf_counter()
 
-        t0 = time.time()
+        t0 = time.perf_counter()
         self.image = self.camera.capture_array()
-        t1 = time.time()
+        t1 = time.perf_counter()
         self.display_image = self.image.copy()
 
         self.find_black()
-        t2 = time.time()
+        t2 = time.perf_counter()
 
         self.find_green()
-        t3 = time.time()
+        t3 = time.perf_counter()
 
         self.green_check()
-        t4 = time.time()
+        t4 = time.perf_counter()
 
         self.calculate_angle(self.black_contour)
-        t5 = time.time()
+        t5 = time.perf_counter()
 
         if self.green_signal == "Double":
             self.angle = 90
             error = 0
-            self.motors.run(40, -40, 2.7)
         else:
             error = int(self.turn_multi * (self.angle - 90))
             if abs(error) < 10:
                 error = 0
-            self.motors.run(self.straight_speed + error, self.straight_speed - error)
         
         if self.display_image is not None and self.camera.X11:
             small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
@@ -82,9 +78,9 @@ class cLine():
             cv2.imshow("line", np.uint8(small_image))
             cv2.waitKey(1)
 
-        t6 = time.time()
+        t6 = time.perf_counter()
 
-        elapsed_time = time.time() - start_time
+        elapsed_time = time.perf_counter() - start_time
         if self.green_signal == "Double":
             elapsed_time = elapsed_time - 1.5
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
@@ -187,11 +183,11 @@ class cLine():
 
     def green_hold(self):
         if self.green_signal != None and self.green_signal != "Double" and self.prev_green_signal != self.green_signal:
-            self.last_seen_green = time.time()
+            self.last_seen_green = time.perf_counter()
         elif self.green_signal == "Double":
             self.last_seen_green = 0
 
-        if time.time() - self.last_seen_green < 0.3:
+        if time.perf_counter() - self.last_seen_green < 0.3:
             if self.prev_green_signal != "Double" and self.prev_green_signal is not None:
                 print("Holding green")
                 self.green_signal = self.prev_green_signal
@@ -257,6 +253,8 @@ class cLine():
 
             if self.display_image is not None and self.camera.X11:
                 cv2.line(self.display_image, ref_point, bottom_center, (0, 0, 255), 2)
+            
+            return 90
         
     def calculate_top_contour(self, contour, validate):
         ys = [pt[0][1] for pt in contour]
@@ -365,18 +363,135 @@ class cLine():
         #     cv2.waitKey(1)
 
 robot_state = cRobotState()
+line_follow = cLine(camera)
 
-def main(line_follow) -> None:
-    global robot_state
+def avoid_obstacle(line_follow: cLine) -> None:    
+    while True:
+        left_value = laser_sensors.read([0])[0]
+        if left_value is not None: break
+    
+    while True:
+        right_value = laser_sensors.read([1])[0]
+        if right_value is not None: break
 
-    something_besides_line_follow = False
-    if something_besides_line_follow:
-        pass
+    side_values = [left_value, right_value]
+
+    # Immediately update OLED for obstacle detection
+    # oled_display.reset()
+    # oled_display.text("Obstacle Detected", 0, 0, size=10)
+
+    debug(["OBSTACLE", "FINDING SIDE", ", ".join(list(map(str, side_values)))], [24, 50, 14])
+    print()
+
+    # Clockwise if left > right, else random
+    if side_values[0] <= 30 or side_values[1] <= 30:
+        direction = "cw" if side_values[0] > side_values[1] else "ccw"
+    else:
+        direction = "cw" if randint(0, 1) == 0 else "ccw"
+
+    # Turn until appropriate laser sees obstacle
+    v1 = v2 = laser_pin = 0
+    if direction == "cw":
+        v1 = -line_follow.straight_speed
+        v2 =  line_follow.straight_speed * 0.8
+        laser_pin = 1
+    else:
+        v1 =  line_follow.straight_speed * 0.8
+        v2 = -line_follow.straight_speed
+        laser_pin = 0
+
+    # SETUP
+
+    motors.run(-line_follow.straight_speed, -line_follow.straight_speed, 0.5)
+
+    # Over turn passed obstacle
+    # oled_display.text("Turning till obstacle", 0, 10, size=10)
+    for i in range(25):
+        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
+        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+    
+    # oled_display.text("Turning past obstacle", 0, 20, size=10)
+    for i in range(25):
+        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
+        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+
+    motors.run(1.2 * v1, 1.2*v2, 0.1)
+
+    motors.run(0, 0, 1)
+
+    # Turn back onto obstacle
+    # oled_display.text("Turning till obstacle", 0, 30, size=10)
+    motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
+    motors.run(-1.2 * v1, -1.2 * v2, 1)
+
+    # Circle obstacle
+    v1 = v2 = laser_pin = colour_align_pin = 0
+
+    if direction == "cw":
+        v1 =  line_follow.straight_speed
+        v2 = -line_follow.straight_speed
+        laser_pin = 1
+        colour_pin = 2
+    else:
+        v1 = -line_follow.straight_speed
+        v2 =  line_follow.straight_speed
+        laser_pin = 0
+        colour_pin = 2
+
+    initial_sequence = True
+    # oled_display.text("Circle Obstacle: Starting", 0, 40, size=10)
+    circle_obstacle(line_follow.straight_speed, line_follow.straight_speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
+    motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.5)
+
+    # while True:
+    
+    # oled_display.reset()
+    # oled_display.text("Black Found", 0, 0, size=10)
+
+
+    debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
+    print()
+    
+    # Turn in the opposite direction
+    motors.run(-line_follow.straight_speed, -line_follow.straight_speed, 0.5)
+    motors.run(-v1, -v2, 1)
+
+def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
+    if   comparison == "<=": comparison_function = operator.le
+    elif comparison == ">=": comparison_function = operator.ge
+
+    while True:
+        laser_value = laser_sensors.read([laser_pin])[0]
+        colour_values = colour_sensors.read()
+
+        debug(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
+        print()
+
+        motors.run(v1, v2)
+        if laser_value is not None:
+            if comparison_function(laser_value, target_distance) and laser_value != 0: return True
+
+        if colour_values[colour_pin] <= 30:
+            return False
+
+def main() -> None:
+    global robot_state, line_follow
+    fps = error = 0
+    green_signal = None
+
+    if sum(touch_sensors.read()) <= 1:
+        # motors.pause()
+        avoid_obstacle(line_follow)
+        # motors.pause()
     else:
         led.on()
         fps, error, green_signal = line_follow.follow_line()
+        if line_follow.green_signal == "Double":
+            motors.run(40, -40, 2.7)
+        else:            
+            motors.run(line_follow.straight_speed + error, line_follow.straight_speed - error)
 
-        debug(["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
+    debug(["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
     # Update the loop count
     robot_state.main_loop_count += 1

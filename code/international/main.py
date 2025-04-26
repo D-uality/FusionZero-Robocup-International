@@ -11,6 +11,9 @@ if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 import led
 from motors import cMOTORS
 from camera import cCAMERA
+from laser_sensors import cLASER_SENSORS
+from touch_sensors import cTOUCH_SENSORS
+from robot import *
 from utils import debug
 import line
 
@@ -19,14 +22,6 @@ def main() -> None:
 
     listener = C_MODE_LISTENER()
     listener.start()
-
-    motors = cMOTORS()
-    motors.initialise()
-
-    camera = cCAMERA("line")
-    camera.initialise("line")
-
-    line_follow = line.cLine(camera, motors)
     
     debug(["INITIALISATION", f"{time.perf_counter() - start_time:.2f}"], [24, 24])
     
@@ -39,7 +34,10 @@ def main() -> None:
                 led.off()
 
             elif mode == 1:
-                line.main(line_follow)
+                line.main()
+
+            elif mode == 2:
+                debug(["MODE 2", f"Touch: {touch_sensors.read()}   Lasers: {laser_sensors.read()}   Colour: {colour_sensors.read()}"], [30, 50])
                 
             elif mode == 9: listener.exit_event.set()
 
