@@ -9,10 +9,6 @@ modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
 import led
-from motors import cMOTORS
-from camera import cCAMERA
-from laser_sensors import cLASER_SENSORS
-from touch_sensors import cTOUCH_SENSORS
 from robot import *
 from utils import debug
 import line

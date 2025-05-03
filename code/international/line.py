@@ -401,9 +401,6 @@ def avoid_obstacle(line_follow: cLine) -> None:
         laser_pin = 0
 
     # SETUP
-
-    motors.run(-line_follow.straight_speed, -line_follow.straight_speed, 0.5)
-
     # Over turn passed obstacle
     # oled_display.text("Turning till obstacle", 0, 10, size=10)
     for i in range(25):
@@ -415,18 +412,12 @@ def avoid_obstacle(line_follow: cLine) -> None:
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
 
-    motors.run(1.2 * v1, 1.2*v2, 0.1)
-
-    motors.run(0, 0, 1)
-
     # Turn back onto obstacle
     # oled_display.text("Turning till obstacle", 0, 30, size=10)
     motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
     motors.run(-1.2 * v1, -1.2 * v2, 1)
 
     # Circle obstacle
-    v1 = v2 = laser_pin = colour_align_pin = 0
-
     if direction == "cw":
         v1 =  line_follow.straight_speed
         v2 = -line_follow.straight_speed
@@ -438,16 +429,14 @@ def avoid_obstacle(line_follow: cLine) -> None:
         laser_pin = 0
         colour_pin = 2
 
-    initial_sequence = True
     # oled_display.text("Circle Obstacle: Starting", 0, 40, size=10)
     circle_obstacle(line_follow.straight_speed, line_follow.straight_speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
-    motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.5)
 
     motors.run(0, 0, 0.15)
 
     start_time = time.perf_counter()
     wall_multi = 8
-    target_distance = 3
+    target_distance = 1
 
     while True:
         laser_value = laser_sensors.read([laser_pin])[0]
@@ -480,10 +469,7 @@ def avoid_obstacle(line_follow: cLine) -> None:
     print()
     
     # Turn in the opposite direction
-    # motors.run(-line_follow.straight_speed, -line_follow.straight_speed, 0.5)
-    motors.run(-v1, -v2, 2)
-
-    motors.pause()
+    motors.run(-v1, -v2, 2.5)
 
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
     if   comparison == "<=": comparison_function = operator.le
