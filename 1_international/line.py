@@ -11,14 +11,38 @@ modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
 from robot import *
-from utils import debug
+from utils import *
 import led
 import cv2
 import numpy as np
 
+start_display()
+
 class cRobotState():
     def __init__(self):
         self.main_loop_count = 0
+        
+        self.count = {
+            "uphill": 0,
+            "downhill": 0,
+            "tilt_left": 0,
+            "tilt_right": 0,
+            "red": 0,
+            "silver": 0,
+            "touch": 0
+        }
+         
+        self.trigger = {
+            "uphill": False,
+            "downhill": False,
+            "tilt_left": False,
+            "tilt_right": False,
+            "seasaw": False,
+            "evacuation_zone": False
+        }
+         
+        self.last_uphill = 0
+        self.modifiers = []
         
 class cLine():
     def __init__(self, camera: cCAMERA):
@@ -72,10 +96,8 @@ class cLine():
                 error = 0
         
         if self.display_image is not None and self.camera.X11:
-            small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
-
-            cv2.imshow("line", np.uint8(small_image))
-            cv2.waitKey(1)
+                small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
+                show(np.uint8(small_image), name="line")
 
         t6 = time.perf_counter()
 
@@ -357,12 +379,164 @@ class cLine():
                     color = (255, 255, 0) if c is self.black_contour else (255, 0, 0)
                     cv2.drawContours(self.display_image, [c], -1, color, 2)
 
-        # if self.camera.X11:
-        #     cv2.imshow("black_mask", black_mask)
-        #     cv2.waitKey(1)
-
 robot_state = cRobotState()
 line_follow = cLine(camera)
+
+def main() -> None:
+    global robot_state, line_follow
+    fps = error = 0
+    green_signal = None
+
+    colour_values = colour_sensors.read()
+    touch_values = touch_sensors.read()
+    gyro_values = gyroscope.read()
+    touch_check(robot_state, touch_values)
+    ramp_check(robot_state, gyro_values)
+    
+    # red_check(robot_state)
+    # silver_check(robot_state, colour_values)
+
+    # if robot_state.count["red"] >= 1:
+    #     # Found red stop
+    #     robot_state.count["red"] = 0
+        
+    #     motors.run(config.line_speed, config.line_speed, 0.5)
+    #     motors.run(0, 0, 10)
+        
+    # elif robot_state.count["silver"] >= 20 and evacuation_zone_enabled:
+    #     # Found evacuation zone
+    #     evacuation_zone.main()
+        
+    #     # Line follow with camera
+    #     robot_state.trigger["evacuation_zone"] = True
+    
+    if robot_state.count["touch"] > 10:
+        robot_state.count["touch"] = 0
+        avoid_obstacle(line_follow)
+    else:
+        # Find modifiers
+        find_modifiers(robot_state)
+
+        # Line Follow
+        led.on()
+        fps, error, green_signal = line_follow.follow_line()
+        if line_follow.green_signal == "Double":
+            motors.run(40, -40, 2.7)
+        else:            
+            motors.run(line_follow.straight_speed + error, line_follow.straight_speed - error)
+
+    debug(["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
+
+    # Update the loop count
+    robot_state.main_loop_count += 1
+
+def touch_check(robot_state: cRobotState, touch_values: list[int]) -> None:
+    robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
+     
+def ramp_check(robot_state: cRobotState, gyro_values: list[int]) -> None:
+    if gyro_values is not None:
+        pitch = gyro_values[0]
+        roll  = gyro_values[1]
+        
+        robot_state.count["uphill"]     = robot_state.count["uphill"]     + 1 if pitch >=  15 else 0
+        robot_state.count["downhill"]   = robot_state.count["downhill"]   + 1 if pitch <= -15 else 0
+        
+        robot_state.count["tilt_left"]  = robot_state.count["tilt_left"]  + 1 if roll  <= -15 else 0
+        robot_state.count["tilt_right"] = robot_state.count["tilt_right"] + 1 if roll  >= 15 else 0
+        
+        robot_state.last_uphill = 0 if robot_state.trigger["uphill"] else robot_state.last_uphill + 1
+
+# def red_check(robot_state: cRobotState) -> None:
+#     # Only process images every 10 loops
+#     # Only process images if we are not mid-turn
+#     # Only process images if we are not using camera
+
+#     if (   robot_state.main_loop_count % 10 != 0
+#         or robot_state.pid_values
+#         or not camera_enable                     ):
+
+#         robot_state.count["red"] = 0
+#         return None
+
+#     image = camera.capture_array()
+#     image = camera.perspective_transform(image, "LINE")
+#     if config.X11: cv2.imshow("image", image)
+
+#     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+#     mask_lower = cv2.inRange(hsv_image, (0, 230, 46), (10, 255, 255))
+#     mask_upper = cv2.inRange(hsv_image, (170, 230, 0), (179, 255, 255))
+#     mask = cv2.bitwise_or(mask_lower, mask_upper)
+
+#     mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+
+#     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+#     if not contours:
+#         robot_state.count["red"] = 0
+#         return None
+
+#     # Find valid contours based on criteria
+#     valid_contours = []
+
+#     for contour in contours:
+#         _, _, w, h = cv2.boundingRect(largest_contour)
+
+#         if (   cv2.contourArea(contour) >= 100
+#             and w > h                         ):
+#             valid_contours.append(contour)
+
+#     # Find the largest contour
+#     largest_contour = max(valid_contours, key=cv2.contourArea)
+
+#     if not largest_contour:
+#         robot_state.count["red"] = 0
+#         return None
+#     else:
+#         robot_state.count["red"] += 1
+
+# def silver_check(robot_state: cRobotState, colour_values: list[int]) -> None:
+#     global silver_min
+
+#     if robot_state.pid_values["ir"]["integral"] >= 1000:
+#         robot_state.count["silver"] = 0
+#         return None
+
+#     if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
+#         robot_state.count["silver"] += 1
+#     else:
+#         robot_state.count["silver"] = 0
+
+#     return silver_count
+ 
+def find_modifiers(robot_state: cRobotState) -> list[str]:
+    modifiers = []
+     
+    # Counting modifiers
+    if robot_state.count["uphill"] > 30:
+        modifiers.append("uphill")
+         
+    if robot_state.count["downhill"] > 0:
+        modifiers.append("downhills")
+         
+    if robot_state.count["tilt_left"] > 0:
+        modifiers.append("tilt_left")
+         
+    if robot_state.count["tilt_right"] > 0:
+        modifiers.append("tilt_right")
+     
+    # Seasaw modifier
+    if robot_state.last_uphill <= 40 and robot_state.trigger["downhill"]:
+        robot_state.trigger["downhill"] = False
+        robot_state.trigger["seasaw"] = True
+        modifiers.append("seasaw")
+     
+    modifiers = " ".join(modifiers)
+     
+    # If there has been a change in modifiers
+    if robot_state.modifiers != modifiers:
+        # Check if the current modifier has been running for AT LEAST 10 loops
+        if robot_state.main_loop_count >= 10:
+            robot_state.modifiers = modifiers
 
 def avoid_obstacle(line_follow: cLine) -> None:    
     while True:
@@ -380,8 +554,7 @@ def avoid_obstacle(line_follow: cLine) -> None:
     # oled_display.text("Obstacle Detected", 0, 0, size=10)
 
     debug(["OBSTACLE", "FINDING SIDE", ", ".join(list(map(str, side_values)))], [24, 50, 14])
-    print()
-
+    
     # Clockwise if left > right, else random
     if side_values[0] <= 30 or side_values[1] <= 30:
         direction = "cw" if side_values[0] > side_values[1] else "ccw"
@@ -462,10 +635,7 @@ def avoid_obstacle(line_follow: cLine) -> None:
 
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
-
-
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
-    print()
     
     # Turn in the opposite direction
     motors.run(-v1, -v2, 2.5)
@@ -479,7 +649,6 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         colour_values = colour_sensors.read()
 
         debug(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
-        print()
 
         motors.run(v1, v2)
         if laser_value is not None:
@@ -488,28 +657,6 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         if colour_values[colour_pin] <= 30:
             return False
 
-def main() -> None:
-    global robot_state, line_follow
-    fps = error = 0
-    green_signal = None
-
-    if sum(touch_sensors.read()) <= 1:
-        # motors.pause()
-        avoid_obstacle(line_follow)
-        # motors.pause()
-    else:
-        led.on()
-        fps, error, green_signal = line_follow.follow_line()
-        if line_follow.green_signal == "Double":
-            motors.run(40, -40, 2.7)
-        else:            
-            motors.run(line_follow.straight_speed + error, line_follow.straight_speed - error)
-
-    debug(["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
-
-    # Update the loop count
-    robot_state.main_loop_count += 1
-    
 """
 TESTING
 """
