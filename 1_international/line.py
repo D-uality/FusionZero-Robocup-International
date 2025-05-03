@@ -20,7 +20,6 @@ class cRobotState():
     def __init__(self):
         self.main_loop_count = 0
         
-        
 class cLine():
     def __init__(self, camera: cCAMERA):
         self.straight_speed = 30
@@ -510,3 +509,9 @@ def main() -> None:
 
     # Update the loop count
     robot_state.main_loop_count += 1
+    
+"""
+TESTING
+"""
+
+if __name__ == "__main__": pass
