@@ -2,7 +2,6 @@ import multiprocessing as mp
 import time
 from RPi import GPIO
 
-
 class C_MODE_LISTENER():
     BUTTON_PIN = 22
 
@@ -14,7 +13,7 @@ class C_MODE_LISTENER():
         # create—but don’t start—child processes
         self._process_console = mp.Process(target=self.__input_listener,  daemon=True)
         self._process_button  = mp.Process(target=self.__button_listener, daemon=True)
-
+        
     def start(self) -> None:
         # Start the child processes
         self._process_console.start()
