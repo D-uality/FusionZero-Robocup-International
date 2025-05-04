@@ -45,7 +45,7 @@ class cRobotState():
         self.modifiers = []
         
 class cLine():
-    def __init__(self, camera: cCAMERA):
+    def __init__(self, camera: cCAMERA, motors: cMOTORS):
         self.straight_speed = 30
         self.turn_multi = 1.5
         self.min_black_area = 4000
@@ -55,6 +55,7 @@ class cLine():
         self.lightest_black = 100
 
         self.camera = camera
+        self.motors = motors
 
         self.last_angle = 90
         self.angle = 90
@@ -67,49 +68,70 @@ class cLine():
         self.black_contour = None
         self.black_mask = None
     
-    def follow_line(self) -> None:
+    def follow_line(self, modifiers) -> None:
         start_time = time.perf_counter()
 
-        t0 = time.perf_counter()
+        # t0 = time.perf_counter()
         self.image = self.camera.capture_array()
-        t1 = time.perf_counter()
+        # t1 = time.perf_counter()
         self.display_image = self.image.copy()
 
         self.find_black()
-        t2 = time.perf_counter()
+        # t2 = time.perf_counter()
 
         self.find_green()
-        t3 = time.perf_counter()
+        # t3 = time.perf_counter()
 
         self.green_check()
-        t4 = time.perf_counter()
+        # t4 = time.perf_counter()
 
         self.calculate_angle(self.black_contour)
-        t5 = time.perf_counter()
-
-        if self.green_signal == "Double":
-            self.angle = 90
-            error = 0
-        else:
-            error = int(self.turn_multi * (self.angle - 90))
-            if abs(error) < 10:
-                error = 0
+        # t5 = time.perf_counter()
         
-        if self.display_image is not None and self.camera.X11:
-                small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
-                show(np.uint8(small_image), name="line")
+        self.turn(modifiers)
 
-        t6 = time.perf_counter()
+        if self.display_image is not None and self.camera.X11:
+            small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
+            show(np.uint8(small_image), name="line")
+
+        # t6 = time.perf_counter()
 
         elapsed_time = time.perf_counter() - start_time
-        if self.green_signal == "Double":
-            elapsed_time = elapsed_time - 1.5
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
 
-        print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
+        # print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
 
-        return fps, error, self.green_signal
+        return fps, self.error, self.green_signal
 
+    def turn(self, modifiers):
+        if self.green_signal == "Double":
+            self.angle = 90
+            self.error = 0
+        else:
+            self.error = int(self.turn_multi * (self.angle - 90))
+            if abs(self.error) < 10:
+                self.error = 0
+
+        if self.green_signal == "Double":
+            self.motors.run(40, -40, 2)
+            self.motors.run(30, -30)
+
+            while True:
+                self.image = self.camera.capture_array()
+                self.display_image = self.image.copy()
+
+                self.find_black()
+                self.calculate_angle(self.black_contour)
+
+                if self.display_image is not None and self.camera.X11:
+                    small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
+                    show(np.uint8(small_image), name="line")
+                
+                if self.angle < 90+20 and self.angle > 90-20 and self.angle != 90: break
+      
+            
+        else:
+            self.motors.run(line_follow.straight_speed + self.error, line_follow.straight_speed - self.error)
     
 
     # GREEN
@@ -174,17 +196,19 @@ class cLine():
         return None
 
     def black_check(self, check_point):
+        check_size = 10
+
         if 0 <= check_point[0] < self.camera.LINE_WIDTH and 0 <= check_point[1] < self.camera.LINE_HEIGHT and self.black_mask is not None:
-            # Create a 20x20 region around the point
-            y_start = max(0, check_point[1] - 10)
-            y_end = min(self.camera.LINE_HEIGHT, check_point[1] + 10)
-            x_start = max(0, check_point[0] - 10)
-            x_end = min(self.camera.LINE_WIDTH, check_point[0] + 10)
+            # Create a region around the point
+            y_start = max(0, check_point[1] - check_size)
+            y_end = min(self.camera.LINE_HEIGHT, check_point[1] + check_size)
+            x_start = max(0, check_point[0] - check_size)
+            x_end = min(self.camera.LINE_WIDTH, check_point[0] + check_size)
             region = self.black_mask[y_start:y_end, x_start:x_end]
 
             # If display image, draw the check point
             if self.display_image is not None and self.camera.X11:
-                cv2.circle(self.display_image, check_point, 20, (0, 255, 255), -1)
+                cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), -1)
 
             # Check if any pixel in the region is black
             if np.any(region == 255):
@@ -222,13 +246,9 @@ class cLine():
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
-        
-        if len(green_contours) == 1:
-            for contour in green_contours:
-                if all(p[0][1] > int(self.camera.LINE_HEIGHT/3.5) for p in contour) and contour is not None and len(contour) > 0:
-                    self.green_contours.append(contour)
-        elif len(green_contours) > 1:
-            self.green_contours = green_contours
+        for contour in green_contours:
+            if all(p[0][1] > int(self.camera.LINE_HEIGHT/3) for p in contour) and contour is not None and len(contour) > 0:
+                self.green_contours.append(contour)
 
         if self.green_contours and self.display_image is not None and self.camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (0, 0, 255), 2)
@@ -249,7 +269,7 @@ class cLine():
             elif self.green_signal == "Right":  
                 point = max(contour, key=lambda p: p[0][0], default=None)
                 ref_point = tuple(point[0])
-            elif ref_point[1] > 50 and (left_edge_points or right_edge_points):
+            elif ref_point[1] > 10 and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
@@ -380,7 +400,7 @@ class cLine():
                     cv2.drawContours(self.display_image, [c], -1, color, 2)
 
 robot_state = cRobotState()
-line_follow = cLine(camera)
+line_follow = cLine(camera, motors)
 
 def main() -> None:
     global robot_state, line_follow
@@ -419,11 +439,7 @@ def main() -> None:
 
         # Line Follow
         led.on()
-        fps, error, green_signal = line_follow.follow_line()
-        if line_follow.green_signal == "Double":
-            motors.run(40, -40, 2.7)
-        else:            
-            motors.run(line_follow.straight_speed + error, line_follow.straight_speed - error)
+        fps, error, green_signal = line_follow.follow_line(robot_state.modifiers)
 
     debug(["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
