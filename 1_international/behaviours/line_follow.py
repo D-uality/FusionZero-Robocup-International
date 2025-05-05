@@ -119,7 +119,7 @@ class LineFollower():
                 if self.angle < 90+20 and self.angle > 90-20 and  self.angle != 90: break
     
         else:
-            motors.run(line_follow.straight_speed + self.error, line_follow.straight_speed - self.error)
+            motors.run(self.straight_speed + self.error, self.straight_speed - self.error)
     
     # GREEN
     def green_check(self):
@@ -544,7 +544,7 @@ def find_modifiers(robot_state: RobotState) -> list[str]:
         if robot_state.main_loop_count >= 10:
             robot_state.modifiers = modifiers
 
-def avoid_obstacle(line_follow: Line) -> None:    
+def avoid_obstacle(line_follow: LineFollower) -> None:    
     while True:
         left_value = laser_sensors.read([0])[0]
         if left_value is not None: break
