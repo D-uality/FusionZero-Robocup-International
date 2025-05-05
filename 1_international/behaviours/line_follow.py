@@ -8,7 +8,7 @@ modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
-class cRobotState():
+class RobotState():
     def __init__(self):
         self.main_loop_count = 0
         
@@ -34,7 +34,7 @@ class cRobotState():
         self.last_uphill = 0
         self.modifiers = []
         
-class cLine():
+class LineFollower():
     def __init__(self):
         self.straight_speed = 30
         self.turn_multi = 1.5
@@ -55,36 +55,36 @@ class cLine():
         self.black_contour = None
         self.black_mask = None
         
-        self.timing = False
+        self.__timing = False
     
-    def follow_line(self) -> None:
+    def follow(self) -> None:
         start_time = time.perf_counter()
 
-        if self.timing: t0 = time.perf_counter()
+        if self.__timing: t0 = time.perf_counter()
         image = camera.capture_array()
         
-        if self.timing: t1 = time.perf_counter()
+        if self.__timing: t1 = time.perf_counter()
         display_image = image.copy()
 
         self.find_black()
-        if self.timing: t2 = time.perf_counter()
+        if self.__timing: t2 = time.perf_counter()
 
         self.find_green()
-        if self.timing: t3 = time.perf_counter()
+        if self.__timing: t3 = time.perf_counter()
 
         self.green_check()
-        if self.timing: t4 = time.perf_counter()
+        if self.__timing: t4 = time.perf_counter()
 
         self.calculate_angle(self.black_contour)
-        if self.timing: t5 = time.perf_counter()
+        if self.__timing: t5 = time.perf_counter()
         
-        self.turn()
+        self.__turn()
 
         if display_image is not None and camera.X11:
             small_image = cv2.resize(display_image, (0, 0), fx=0.5, fy=0.5)
             display_manager.show(np.uint8(small_image), name="line")
 
-        if self.timing: t6 = time.perf_counter()
+        if self.__timing: t6 = time.perf_counter()
 
         elapsed_time = time.perf_counter() - start_time
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
@@ -92,7 +92,7 @@ class cLine():
         # print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
         return fps, self.error, self.green_signal
 
-    def turn(self):
+    def __turn(self):
         if self.green_signal == "Double":
             self.angle = 90
             self.error = 0
@@ -386,57 +386,60 @@ class cLine():
                     color = (255, 255, 0) if c is self.black_contour else (255, 0, 0)
                     cv2.drawContours(self.display_image, [c], -1, color, 2)
 
-robot_state = cRobotState()
-line_follow = cLine(camera, motors)
-
 def main() -> None:
-    global robot_state, line_follow
-    fps = error = 0
-    green_signal = None
-
-    colour_values = colour_sensors.read()
-    touch_values = touch_sensors.read()
-    gyro_values = gyroscope.read()
-    touch_check(robot_state, touch_values)
-    ramp_check(robot_state, gyro_values)
+    robot_state = RobotState()
+    line_follow = LineFollower()
+    led.on()
     
-    # red_check(robot_state)
-    # silver_check(robot_state, colour_values)
+    while True:            
+        fps = error = 0
+        green_signal = None
 
-    # if robot_state.count["red"] >= 1:
-    #     # Found red stop
-    #     robot_state.count["red"] = 0
+        colour_values = colour_sensors.read()
+        touch_values = touch_sensors.read()
+        gyro_values = gyroscope.read()
         
-    #     motors.run(config.line_speed, config.line_speed, 0.5)
-    #     motors.run(0, 0, 10)
+        touch_check(robot_state, touch_values)
+        ramp_check(robot_state, gyro_values)
         
-    # elif robot_state.count["silver"] >= 20 and evacuation_zone_enabled:
-    #     # Found evacuation zone
-    #     evacuation_zone.main()
+        # red_check(robot_state)
+        # silver_check(robot_state, colour_values)
+
+        # if robot_state.count["red"] >= 1:
+        #     # Found red stop
+        #     robot_state.count["red"] = 0
+            
+        #     motors.run(config.line_speed, config.line_speed, 0.5)
+        #     motors.run(0, 0, 10)
+            
+        # elif robot_state.count["silver"] >= 20 and evacuation_zone_enabled:
+        #     # Found evacuation zone
+        #     evacuation_zone.main()
+            
+        #     # Line follow with camera
+        #     robot_state.trigger["evacuation_zone"] = True
         
-    #     # Line follow with camera
-    #     robot_state.trigger["evacuation_zone"] = True
-    
-    if robot_state.count["touch"] > 10:
-        robot_state.count["touch"] = 0
-        avoid_obstacle(line_follow)
-    else:
-        # Find modifiers
-        find_modifiers(robot_state)
+        if robot_state.count["touch"] > 10:
+            robot_state.count["touch"] = 0
+            avoid_obstacle(line_follow)
+            
+        else:
+            # Find modifiers
+            find_modifiers(robot_state)
 
-        # Line Follow
-        led.on()
-        fps, error, green_signal = line_follow.follow_line(robot_state.modifiers)
+            # Line Follow
+            
+            fps, error, green_signal = line_follow.follow()
 
-    debug( ["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15] )
+            debug( ["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15] )
 
-    # Update the loop count
-    robot_state.main_loop_count += 1
+        # Update the loop count
+        robot_state.main_loop_count += 1
 
-def touch_check(robot_state: cRobotState, touch_values: list[int]) -> None:
+def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
      
-def ramp_check(robot_state: cRobotState, gyro_values: list[int]) -> None:
+def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
         pitch = gyro_values[0]
         roll  = gyro_values[1]
@@ -511,7 +514,7 @@ def ramp_check(robot_state: cRobotState, gyro_values: list[int]) -> None:
 
 #     return silver_count
  
-def find_modifiers(robot_state: cRobotState) -> list[str]:
+def find_modifiers(robot_state: RobotState) -> list[str]:
     modifiers = []
      
     # Counting modifiers
@@ -541,7 +544,7 @@ def find_modifiers(robot_state: cRobotState) -> list[str]:
         if robot_state.main_loop_count >= 10:
             robot_state.modifiers = modifiers
 
-def avoid_obstacle(line_follow: cLine) -> None:    
+def avoid_obstacle(line_follow: Line) -> None:    
     while True:
         left_value = laser_sensors.read([0])[0]
         if left_value is not None: break
