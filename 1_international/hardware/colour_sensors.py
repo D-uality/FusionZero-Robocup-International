@@ -1,13 +1,7 @@
-import os
-import time
+from core.shared_imports import os, time, board, ADC, AnalogIn
+from core.utilities import debug
 
-import board
-import adafruit_ads7830.ads7830 as ADC
-from adafruit_ads7830.analog_in import AnalogIn
-
-from utils import debug
-
-class cCOLOUR_SENSORS():
+class ColourSensors():
     def __init__(self):
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)

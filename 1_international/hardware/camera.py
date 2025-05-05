@@ -5,21 +5,20 @@ from picamera2 import Picamera2
 from libcamera import Transform
 from utils import debug
 
-class cCAMERA():
+class Camera():
     def __init__(self):
         # Camera settings   
         self.X11 = True
         self.FLIP = False
         self.LINE_WIDTH = 320
         self.LINE_HEIGHT = 200
-        self.EVAC_WIDTH = 320
-        self.EVAC_HEIGHT = 200
+
         self.color_format = "RGB888"
         
-        top_left =     (60,                    0)
-        top_right =    (self.LINE_WIDTH - 55,  0)
-        bottom_left =  (60,                     int(self.LINE_HEIGHT / 2.5) - 1)
-        bottom_right = (self.LINE_WIDTH - 55,      int(self.LINE_HEIGHT / 2.35) - 1)
+        top_left =     (60,                   0)
+        top_right =    (self.LINE_WIDTH - 55, 0)
+        bottom_left =  (60,                   int(self.LINE_HEIGHT / 2.5) - 1)
+        bottom_right = (self.LINE_WIDTH - 55, int(self.LINE_HEIGHT / 2.35) - 1)
         self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
         top_left =     (60,                    int(self.LINE_HEIGHT / 2.5))
@@ -31,23 +30,16 @@ class cCAMERA():
         self.camera = Picamera2()
 
         camera_config = self.camera.create_preview_configuration(
-            main={"size": (self.LINE_WIDTH, self.LINE_HEIGHT), "format": self.color_format},
-            raw={"size": (2304, 1296), "format": "SBGGR10"},
-            transform=Transform(vflip=self.FLIP, hflip=self.FLIP),
+            main      = {"size": (self.LINE_WIDTH, self.LINE_HEIGHT), "format": self.color_format},
+            raw       = {"size": (2304, 1296), "format": "SBGGR10"},
+            transform = Transform(vflip=self.FLIP, hflip=self.FLIP),
         )
-        # controls = {
-        #     "ExposureTime": 5000,
-        #     "AnalogueGain": 0
-        # }
-        
+
         self.camera.configure(camera_config)
-        # self.camera.set_controls(controls)
         self.camera.start()
         
         debug(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
         print()
-        # oled_display.reset()
-        # oled_display.text("Camera: ✓", 0, 40)
             
     def capture_array(self) -> np.ndarray:
         image = self.camera.capture_array()
@@ -56,17 +48,16 @@ class cCAMERA():
         return image
 
     def perspective_transform(self, image: np.ndarray) -> np.ndarray:
-
         # Transformation points
-        top_left = (int(self.LINE_WIDTH / 4),      20)
-        top_right = (int(self.LINE_WIDTH * 3 / 4), 20)
-        bottom_left = (0,                          self.LINE_HEIGHT - 50)
-        bottom_right = (self.LINE_WIDTH,           self.LINE_HEIGHT - 50)
+        top_left     = (int(self.LINE_WIDTH / 4),     20)
+        top_right    = (int(self.LINE_WIDTH * 3 / 4), 20)
+        bottom_left  = (0,                            self.LINE_HEIGHT - 50)
+        bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 50)
 
         src_points = np.array([top_left, top_right, bottom_left, bottom_right], dtype=np.float32)
         dst_points = np.array([[0, 0], [self.LINE_WIDTH, 0], [0, self.LINE_HEIGHT], [self.LINE_WIDTH, self.LINE_HEIGHT]], dtype=np.float32)
         
-        matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+        matrix            = cv2.getPerspectiveTransform(src_points, dst_points)
         transformed_image = cv2.warpPerspective(image, matrix, (self.LINE_WIDTH, self.LINE_HEIGHT))
 
         # if self.X11:
@@ -90,5 +81,5 @@ class cCAMERA():
             # oled_display.reset()
             # oled_display.text("Camera: X", 0, 40)
             # oled_display.show()
-        if self.X11:
-            cv2.destroyAllWindows()
+            
+        if self.X11: cv2.destroyAllWindows()
