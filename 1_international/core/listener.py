@@ -1,7 +1,3 @@
-import multiprocessing as mp
-import time
-from RPi import GPIO
-
 from core.shared_imports import mp, time, GPIO, Thread
 
 class ModeListener():
