@@ -7,4 +7,6 @@ __pycache__/
 cython_debug/
 code/line_follow/cam_line_following/1_minRect_angle/main.py
 code/line_follow/cam_line_following/1_minRect_angle/main.py
-code/competition_mode/robocup_japan_open/runner.py
+.
+# Ignore .vscode directory
+.vscode/

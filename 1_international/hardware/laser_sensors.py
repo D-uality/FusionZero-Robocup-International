@@ -1,14 +1,11 @@
-import RPi.GPIO as GPIO
-import adafruit_vl53l1x
-import board
-import time
+from core.shared_imports import GPIO, board, time, adafruit_vl53l1x, Optional
 
-class cLASER_SENSORS:
+class LaserSensors():
     def __init__(self):
         # self.x_shut_pins = [23, 24, 25]  # Left, Middle, Right
         self.x_shut_pins = [23, 25]  # Left, Right
+        
         self.tof_sensors = []
-        GPIO.setmode(GPIO.BCM)
         for pin in self.x_shut_pins:
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, GPIO.LOW)
