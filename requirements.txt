@@ -1,0 +1,12 @@
+numpy==1.26.4
+pycoral==2.0.0
+opencv-python==4.10.0.82
+shapely==2.0.7
+fiona==1.9.5
+RPi.GPIO==0.7.1
+tflite-runtime==2.5.0.post1
+adafruit-circuitpython-ads7830
+adafruit-circuitpython-vl53l1x
+adafruit-circuitpython-bno08x
+adafruit-circuitpython-servokit
+adafruit-blinka

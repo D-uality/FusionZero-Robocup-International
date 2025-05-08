@@ -21,12 +21,7 @@ class Camera():
         bottom_right = (self.LINE_WIDTH - 55, int(self.LINE_HEIGHT / 2.35) - 1)
         self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
-        top_left =     (60,                    int(self.LINE_HEIGHT / 2.5))
-        top_right =    (self.LINE_WIDTH - 55,  int(self.LINE_HEIGHT / 2.35))
-        bottom_left =  (40,                    self.LINE_HEIGHT - 20)
-        bottom_right = (self.LINE_WIDTH-50,    self.LINE_HEIGHT - 15)
-        self.lightest_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
-    
+       
         self.camera = Picamera2()
 
         camera_config = self.camera.create_preview_configuration(
