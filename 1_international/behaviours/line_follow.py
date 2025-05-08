@@ -32,7 +32,6 @@ class RobotState():
         }
          
         self.last_uphill = 0
-        self.modifiers = []
         
 class LineFollower():
     def __init__(self):
@@ -116,10 +115,25 @@ class LineFollower():
                     small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
                     display_manager.show(np.uint8(small_image), name="line")
                 
-                if self.angle < 90+20 and self.angle > 90-20 and  self.angle != 90: break
-    
+                if self.angle < 90+20 and self.angle > 90-20 and self.angle != 90: break
+            
         else:
-            motors.run(self.straight_speed + self.error, self.straight_speed - self.error)
+            v1 = self.straight_speed + self.error
+            v2 = self.straight_speed - self.error
+            if robot_state.trigger["uphill"]:
+                v1 = self.straight_speed + 10 + self.error * 0.5
+                v2 = self.straight_speed + 10 - self.error * 0.5
+
+            # if robot_state.trigger["tilt_right"]:
+            #     v1 = 15 + self.error
+            #     v2 = 15 - self.error
+            #     if self.error < 0: v1 = 0
+            #     elif self.error > 0: v2 = 0
+            # elif robot_state.trigger["uphill"]:
+            #     if self.error < 0: v1 = 5
+            #     elif self.error > 0: v2 = 5
+
+            self.motors.run(v1, v2)
     
     # GREEN
     def green_check(self):
@@ -233,9 +247,12 @@ class LineFollower():
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
-        for contour in green_contours:
-            if all(p[0][1] > int(camera.LINE_HEIGHT/3) for p in contour) and contour is not None and len(contour) > 0:
-                self.green_contours.append(contour)
+        if robot_state.trigger["tilt_right"] or robot_state.trigger["tilt_left"]:
+            self.green_contours = green_contours
+        else:
+            for contour in green_contours:
+                if all(p[0][1] > int(self.camera.LINE_HEIGHT/3) for p in contour) and contour is not None and len(contour) > 0:
+                    self.green_contours.append(contour)
 
         if self.green_contours and self.display_image is not None and camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (0, 0, 255), 2)
@@ -244,6 +261,7 @@ class LineFollower():
     # BLACK
     def calculate_angle(self, contour=None, validate=False):
         ref_point = None
+        self.angle = 90
         if contour is not None:
             ref_point = self.calculate_top_contour(contour, validate)
 
@@ -281,7 +299,7 @@ class LineFollower():
 
             if self.display_image is not None and camera.X11:
                 cv2.line(self.display_image, ref_point, bottom_center, (0, 0, 255), 2)
-            
+    
         return 90
         
     def calculate_top_contour(self, contour, validate):
@@ -419,19 +437,22 @@ def main() -> None:
         #     # Line follow with camera
         #     robot_state.trigger["evacuation_zone"] = True
         
+    #     # Line follow with camera
+    #     robot_state.trigger["evacuation_zone"] = True
+
         if robot_state.count["touch"] > 10:
             robot_state.count["touch"] = 0
             avoid_obstacle(line_follow)
-            
         else:
-            # Find modifiers
-            find_modifiers(robot_state)
-
             # Line Follow
-            
-            fps, error, green_signal = line_follow.follow()
+            led.on()
+            fps, error, green_signal = line_follow.follow_line()
 
-            debug( ["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15] )
+        active_triggers = ["LINE"]
+        for key in robot_state.trigger:
+            if robot_state.trigger[key]: active_triggers.append(key)
+
+        debug([f" ".join(active_triggers), str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
         # Update the loop count
         robot_state.main_loop_count += 1
@@ -514,35 +535,45 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
 
 #     return silver_count
  
-def find_modifiers(robot_state: RobotState) -> list[str]:
-    modifiers = []
+def update_triggers(robot_state: RobotState) -> list[str]:
+    prev_triggers = robot_state.trigger
      
     # Counting modifiers
     if robot_state.count["uphill"] > 30:
-        modifiers.append("uphill")
+        robot_state.trigger["uphill"] = True
+    else:
+        robot_state.trigger["uphill"] = False
          
     if robot_state.count["downhill"] > 0:
-        modifiers.append("downhills")
+        robot_state.trigger["downhill"] = True
+    else:
+        robot_state.trigger["downhill"] = False
+    
          
     if robot_state.count["tilt_left"] > 0:
-        modifiers.append("tilt_left")
+        robot_state.trigger["tilt_left"] = True
+    else:
+        robot_state.trigger["tilt_left"] = False
+    
          
     if robot_state.count["tilt_right"] > 0:
-        modifiers.append("tilt_right")
+        robot_state.trigger["tilt_right"] = True
+    else:
+        robot_state.trigger["tilt_right"] = False
+    
      
     # Seasaw modifier
     if robot_state.last_uphill <= 40 and robot_state.trigger["downhill"]:
         robot_state.trigger["downhill"] = False
         robot_state.trigger["seasaw"] = True
-        modifiers.append("seasaw")
-     
-    modifiers = " ".join(modifiers)
+    else:
+        robot_state.trigger["seasaw"] = False
      
     # If there has been a change in modifiers
-    if robot_state.modifiers != modifiers:
-        # Check if the current modifier has been running for AT LEAST 10 loops
-        if robot_state.main_loop_count >= 10:
-            robot_state.modifiers = modifiers
+    if robot_state.trigger != prev_triggers:
+        # Check if the current trigger has been the same for AT LEAST 10 loops
+        if robot_state.main_loop_count <= 10:
+            robot_state.triggers = prev_triggers
 
 def avoid_obstacle(line_follow: LineFollower) -> None:    
     while True:

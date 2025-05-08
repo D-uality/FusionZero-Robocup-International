@@ -66,8 +66,8 @@ class Gyroscope():
 
                     last_angles = current_angles[:]  # update wrapped angles for next call
 
-                return unwrapped_angles
+                return [int(angle) for angle in unwrapped_angles]
             
-            except Exception as error:
-                print(f"Error reading gyroscope: {error}")
+            except Exception as e:
+                print(f"Error reading gyroscope: {e}")
                 return [None, None, None]
