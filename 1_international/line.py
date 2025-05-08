@@ -42,10 +42,9 @@ class cRobotState():
         }
          
         self.last_uphill = 0
-        self.modifiers = []
         
 class cLine():
-    def __init__(self, camera: cCAMERA, motors: cMOTORS):
+    def __init__(self, camera: cCAMERA, motors: cMOTORS, robot_state: cRobotState):
         self.straight_speed = 30
         self.turn_multi = 1.5
         self.min_black_area = 4000
@@ -68,11 +67,17 @@ class cLine():
         self.black_contour = None
         self.black_mask = None
     
-    def follow_line(self, modifiers) -> None:
+    def follow_line(self) -> None:
         start_time = time.perf_counter()
 
         # t0 = time.perf_counter()
         self.image = self.camera.capture_array()
+        # if robot_state.trigger["uphill"]:
+        #     # Crop the image at from y=20 to len(image)
+        #     self.image = self.image[20:, :]
+
+        # print(self.image.)
+        # camera.LINE_HEIGHT = self.image.shape[0]
         # t1 = time.perf_counter()
         self.display_image = self.image.copy()
 
@@ -88,7 +93,7 @@ class cLine():
         self.calculate_angle(self.black_contour)
         # t5 = time.perf_counter()
         
-        self.turn(modifiers)
+        self.turn()
 
         if self.display_image is not None and self.camera.X11:
             small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
@@ -103,7 +108,7 @@ class cLine():
 
         return fps, self.error, self.green_signal
 
-    def turn(self, modifiers):
+    def turn(self):
         if self.green_signal == "Double":
             self.angle = 90
             self.error = 0
@@ -128,10 +133,21 @@ class cLine():
                     show(np.uint8(small_image), name="line")
                 
                 if self.angle < 90+20 and self.angle > 90-20 and self.angle != 90: break
-      
             
         else:
-            self.motors.run(line_follow.straight_speed + self.error, line_follow.straight_speed - self.error)
+            v1 = self.straight_speed + self.error
+            v2 = self.straight_speed - self.error
+
+            # if robot_state.trigger["tilt_right"]:
+            #     v1 = 15 + self.error
+            #     v2 = 15 - self.error
+            #     if self.error < 0: v1 = 0
+            #     elif self.error > 0: v2 = 0
+            # elif robot_state.trigger["uphill"]:
+            #     if self.error < 0: v1 = 5
+            #     elif self.error > 0: v2 = 5
+
+            self.motors.run(v1, v2)
     
 
     # GREEN
@@ -246,9 +262,12 @@ class cLine():
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
-        for contour in green_contours:
-            if all(p[0][1] > int(self.camera.LINE_HEIGHT/3) for p in contour) and contour is not None and len(contour) > 0:
-                self.green_contours.append(contour)
+        if robot_state.trigger["tilt_right"] or robot_state.trigger["tilt_left"]:
+            self.green_contours = green_contours
+        else:
+            for contour in green_contours:
+                if all(p[0][1] > int(self.camera.LINE_HEIGHT/3) for p in contour) and contour is not None and len(contour) > 0:
+                    self.green_contours.append(contour)
 
         if self.green_contours and self.display_image is not None and self.camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (0, 0, 255), 2)
@@ -257,6 +276,7 @@ class cLine():
     # BLACK
     def calculate_angle(self, contour=None, validate=False):
         ref_point = None
+        self.angle = 90
         if contour is not None:
             ref_point = self.calculate_top_contour(contour, validate)
 
@@ -294,7 +314,7 @@ class cLine():
 
             if self.display_image is not None and self.camera.X11:
                 cv2.line(self.display_image, ref_point, bottom_center, (0, 0, 255), 2)
-            
+    
         return 90
         
     def calculate_top_contour(self, contour, validate):
@@ -400,7 +420,7 @@ class cLine():
                     cv2.drawContours(self.display_image, [c], -1, color, 2)
 
 robot_state = cRobotState()
-line_follow = cLine(camera, motors)
+line_follow = cLine(camera, motors, robot_state)
 
 def main() -> None:
     global robot_state, line_follow
@@ -412,7 +432,8 @@ def main() -> None:
     gyro_values = gyroscope.read()
     touch_check(robot_state, touch_values)
     ramp_check(robot_state, gyro_values)
-    
+    update_triggers(robot_state)
+
     # red_check(robot_state)
     # silver_check(robot_state, colour_values)
 
@@ -429,19 +450,20 @@ def main() -> None:
         
     #     # Line follow with camera
     #     robot_state.trigger["evacuation_zone"] = True
-    
+
     if robot_state.count["touch"] > 10:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow)
     else:
-        # Find modifiers
-        find_modifiers(robot_state)
-
         # Line Follow
         led.on()
-        fps, error, green_signal = line_follow.follow_line(robot_state.modifiers)
+        fps, error, green_signal = line_follow.follow_line()
 
-    debug(["LINE", str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
+    active_triggers = ["LINE"]
+    for key in robot_state.trigger:
+        if robot_state.trigger[key]: active_triggers.append(key)
+
+    debug([f" ".join(active_triggers), str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
     # Update the loop count
     robot_state.main_loop_count += 1
@@ -524,35 +546,45 @@ def ramp_check(robot_state: cRobotState, gyro_values: list[int]) -> None:
 
 #     return silver_count
  
-def find_modifiers(robot_state: cRobotState) -> list[str]:
-    modifiers = []
+def update_triggers(robot_state: cRobotState) -> list[str]:
+    prev_triggers = robot_state.trigger
      
     # Counting modifiers
     if robot_state.count["uphill"] > 30:
-        modifiers.append("uphill")
+        robot_state.trigger["uphill"] = True
+    else:
+        robot_state.trigger["uphill"] = False
          
     if robot_state.count["downhill"] > 0:
-        modifiers.append("downhills")
+        robot_state.trigger["downhill"] = True
+    else:
+        robot_state.trigger["downhill"] = False
+    
          
     if robot_state.count["tilt_left"] > 0:
-        modifiers.append("tilt_left")
+        robot_state.trigger["tilt_left"] = True
+    else:
+        robot_state.trigger["tilt_left"] = False
+    
          
     if robot_state.count["tilt_right"] > 0:
-        modifiers.append("tilt_right")
+        robot_state.trigger["tilt_right"] = True
+    else:
+        robot_state.trigger["tilt_right"] = False
+    
      
     # Seasaw modifier
     if robot_state.last_uphill <= 40 and robot_state.trigger["downhill"]:
         robot_state.trigger["downhill"] = False
         robot_state.trigger["seasaw"] = True
-        modifiers.append("seasaw")
-     
-    modifiers = " ".join(modifiers)
+    else:
+        robot_state.trigger["seasaw"] = False
      
     # If there has been a change in modifiers
-    if robot_state.modifiers != modifiers:
-        # Check if the current modifier has been running for AT LEAST 10 loops
-        if robot_state.main_loop_count >= 10:
-            robot_state.modifiers = modifiers
+    if robot_state.trigger != prev_triggers:
+        # Check if the current trigger has been the same for AT LEAST 10 loops
+        if robot_state.main_loop_count <= 10:
+            robot_state.triggers = prev_triggers
 
 def avoid_obstacle(line_follow: cLine) -> None:    
     while True:

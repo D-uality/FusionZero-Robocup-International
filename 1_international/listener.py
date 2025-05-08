@@ -1,68 +1,58 @@
-import multiprocessing as mp
+import threading
+import RPi.GPIO as GPIO
 import time
-from RPi import GPIO
 
 class C_MODE_LISTENER():
-    BUTTON_PIN = 22
-
     def __init__(self, initial_mode: int = 0) -> None:
-        # shared state
-        self.mode       = mp.Value("i", initial_mode)
-        self.exit_event = mp.Event()
+        self.button_pin = 22
 
-        # create—but don’t start—child processes
-        self._process_console = mp.Process(target=self.__input_listener,  daemon=True)
-        self._process_button  = mp.Process(target=self.__button_listener, daemon=True)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        
+        self.mode = initial_mode
+        self.mode_lock = threading.Lock()
+        self.exit_event = threading.Event()
+        self.listener_thread = threading.Thread(target=self._input_listener, daemon=True)
+        # self.listener_thread = threading.Thread(target=self._button_listener, daemon=True)
         
     def start(self) -> None:
-        # Start the child processes
-        self._process_console.start()
-        self._process_button.start()
+        self.listener_thread.start()
+        
+    def _input_listener(self):
+        valid_modes = {"0", "1", "2", "9"}
 
-    def join(self) -> None:
-        # Wait for the child processes to finish
-        self._process_console.join()
-        self._process_button.join()
-
-    def stop(self) -> None:
-        # Stop the child processes
-        self.exit_event.set()
-        self.join()
-
-    def get_mode(self) -> int:
-        return self.mode.value
-
-    def has_exited(self) -> bool:
-        return self.exit_event.is_set()
-
-    def run(self) -> None:
-        # Start the listener and wait for it to finish
-        try:
-            self.start()
-        finally:
-            self.stop()
-
-    def __input_listener(self) -> None:
-        valid = {"0", "1", "2", "9"}
         while not self.exit_event.is_set():
-            print("[0] Nothing\n[1] Line Follow only\n[9] Exit program")
+            print("[0] Nothing")
+            print("[1] Line Follow")
+            print("[9] Exit program")
             mode = input("Enter mode: ")
-            mode = int(mode) if mode in valid else 1
-            self.mode.value = mode
+            mode = int(mode) if mode in valid_modes else 1                
+            
+            with self.mode_lock: self.mode = mode
+                
             if mode == 9:
                 self.exit_event.set()
+                break
 
-    def __button_listener(self) -> None:
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    # def _button_listener(self) -> None:
+    #     start_time = time.perf_counter()
 
-        start_time = time.perf_counter()
+    #     while not self.exit_event.is_set():
+    #         if time.perf_counter() - start_time > 0.5:
+    #             start_time = time.perf_counter()
 
-        while not self.exit_event.is_set():
-            current_time = time.perf_counter()
-            
-            if current_time - start_time >= 1:
-                start_time = current_time
-                
-                pressed = GPIO.input(self.BUTTON_PIN) == GPIO.LOW 
-                self.mode.value = 1 if pressed else 0
+    #             print(GPIO.input(self.button_pin))
+
+    #             if GPIO.input(self.button_pin) == GPIO.LOW:
+    #                 with self.mode_lock: self.mode = 1
+    #             else:
+    #                 with self.mode_lock: self.mode = 0
+    
+    def get_mode(self) -> int:
+        with self.mode_lock: return self.mode
+        
+    def reset_exit_event(self) -> None:
+        self.exit_event.clear()
+        
+    def has_exited(self) -> bool:
+        return self.exit_event.is_set()
