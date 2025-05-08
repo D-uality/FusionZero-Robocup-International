@@ -137,6 +137,9 @@ class cLine():
         else:
             v1 = self.straight_speed + self.error
             v2 = self.straight_speed - self.error
+            if robot_state.trigger["uphill"]:
+                v1 = self.straight_speed + 10 + self.error * 0.5
+                v2 = self.straight_speed + 10 - self.error * 0.5
 
             # if robot_state.trigger["tilt_right"]:
             #     v1 = 15 + self.error
