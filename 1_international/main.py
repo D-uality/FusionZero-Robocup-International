@@ -5,6 +5,7 @@ from core.listener import ModeListener
 from core.utilities import debug, DisplayManager
 
 import behaviours.line_follow as line_follow
+import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
 listener = ModeListener()
@@ -31,6 +32,10 @@ def main() -> None:
             
             elif listener.mode == 1:
                 line_follow.main()
+                
+            elif listener.mode == 2:
+                evacuation_zone.main()
+                
     finally:
         GPIO.cleanup()
 

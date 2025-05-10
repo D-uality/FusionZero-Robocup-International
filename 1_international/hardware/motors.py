@@ -1,5 +1,5 @@
 from core.shared_imports import time, ServoKit, operator, socket
-from core.utils import debug
+from core.utilities import debug
 
 pca = ServoKit(channels=16)
 

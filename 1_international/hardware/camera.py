@@ -1,9 +1,5 @@
-import cv2
-
-import numpy as np
-from picamera2 import Picamera2
-from libcamera import Transform
-from utils import debug
+from core.shared_imports import cv2, np, Picamera2, Transform
+from core.utilities import debug
 
 class Camera():
     def __init__(self):

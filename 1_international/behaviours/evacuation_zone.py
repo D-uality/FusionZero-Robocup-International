@@ -2,8 +2,6 @@ import time
 import numpy as np
 import cv2
 from typing import Optional
-from robot import motors, laser_sensors
-
 from hardware.robot import motors, laser_sensors
 
 HEIGHT = 240
