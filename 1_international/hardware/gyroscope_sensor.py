@@ -70,4 +70,4 @@ class Gyroscope():
             
             except Exception as e:
                 print(f"Error reading gyroscope: {e}")
-                return [None, None, None]
+                return None

@@ -42,10 +42,16 @@ class LineFollower():
         self.base_black = 50
         self.light_black = 60
         self.lightest_black = 100
+        self.silver = 250
+
+        self.camera = camera
+        self.motors = motors
 
         self.last_angle = 90
         self.angle = 90
         self.image = None
+        self.hsv_image = None
+        self.gray_image = None
         self.display_image = None
         self.green_contours = None
         self.green_signal = None
@@ -100,9 +106,25 @@ class LineFollower():
             if abs(self.error) < 10:
                 self.error = 0
 
-        if self.green_signal == "Double":
-            motors.run(40, -40, 2)
-            motors.run(30, -30)
+        if robot_state.trigger["seasaw"]:
+            for i in range(20):
+                self.motors.run(-20+i, -20+i, 0.05)
+
+        elif self.green_signal == "Double":
+            v1 = 40
+            v2 = -40
+            t=2.5
+            if robot_state.trigger["tilt_left"]:
+                v1 = 50
+                v2 = -10
+                t=4
+            elif robot_state.trigger["tilt_right"]:
+                v1 = -10
+                v2 = 50
+                t=4
+
+            self.motors.run(v1, v2, t)
+            self.motors.run(int(v1/1.5), int(v2/1.5))
 
             while True:
                 self.image = camera.capture_array()
@@ -213,18 +235,18 @@ class LineFollower():
 
             # Check if any pixel in the region is black
             if np.any(region == 255):
-                # Check if green is present in the region
                 if self.green_contours is not None:
-                    for contour in self.green_contours:
-                        # Iterate over pixels in the region
-                        for y in range(y_start, y_end):
-                            for x in range(x_start, x_end):
-                                if self.black_mask[y, x] == 255:
+                    for y in range(y_start, y_end):
+                        for x in range(x_start, x_end):
+                            if self.black_mask[y, x] == 255:
+                                in_any_contour = False
+                                for contour in self.green_contours:
                                     if cv2.pointPolygonTest(contour, (x, y), False) >= 0:
-                                        # Found green at black pixel → fail
-                                        return False
-                    
-            return np.any(region == 255)
+                                        in_any_contour = True
+                                        break
+                                if not in_any_contour:
+                                    return True  
+
         return False
 
     def green_hold(self):
@@ -240,8 +262,8 @@ class LineFollower():
 
     def find_green(self):
         self.green_contours = []
-        hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
-        green_mask = cv2.inRange(hsv_image, (40, 50, 50), (90, 255, 255))
+        self.hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+        green_mask = cv2.inRange(self.hsv_image, (40, 50, 50), (90, 255, 255))
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         green_mask = cv2.erode(green_mask, kernel, iterations=2)
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
@@ -328,16 +350,16 @@ class LineFollower():
     def find_black(self):
         self.black_contour = None
         self.black_mask = None
-        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
         # Threshold masks for different brightness levels
-        base_mask = cv2.inRange(gray, 0, self.base_black)
-        light_mask = cv2.inRange(gray, 0, self.light_black)
-        lightest_mask = cv2.inRange(gray, 0, self.lightest_black)
+        base_mask = cv2.inRange(self.gray_image, 0, self.base_black)
+        light_mask = cv2.inRange(self.gray_image, 0, self.light_black)
+        lightest_mask = cv2.inRange(self.gray_image, 0, self.lightest_black)
         # Create region masks
-        region_mask_lightest = np.zeros_like(gray, dtype=np.uint8)
-        region_mask_light = np.zeros_like(gray, dtype=np.uint8)
-        region_mask_base = np.ones_like(gray, dtype=np.uint8) * 255
+        region_mask_lightest = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_base = np.ones_like(self.gray_image, dtype=np.uint8) * 255
 
         cv2.fillPoly(region_mask_lightest, [np.int32(camera.lightest_points)], 255)
         cv2.fillPoly(region_mask_light, [np.int32(camera.light_points)], 255)
@@ -395,7 +417,7 @@ class LineFollower():
 
         # Final mask drawing
         if self.black_contour is not None:
-            contour_mask = np.zeros(gray.shape[:2], dtype=np.uint8)
+            contour_mask = np.zeros(self.gray_image.shape[:2], dtype=np.uint8)
             cv2.drawContours(contour_mask, [self.black_contour], -1, color=255, thickness=cv2.FILLED)
             self.black_mask = contour_mask
 
@@ -403,50 +425,78 @@ class LineFollower():
                 for c in contours:
                     color = (255, 255, 0) if c is self.black_contour else (255, 0, 0)
                     cv2.drawContours(self.display_image, [c], -1, color, 2)
+    
+    # SILVER
+    def find_silver(self):
+        if self.gray_image is not None:
+            mask = cv2.inRange(self.gray_image, self.silver, 255)
+            if cv2.countNonZero(mask) > 0:
+                robot_state.count["silver"] += 1
+                return
+        
+        robot_state.count["silver"] = 0
+    
+    # RED
+    def find_red(self):
+        if self.hsv_image is not None:
+            mask = cv2.inRange(self.hsv_image, self.silver, 255)
+            mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
+            mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
+            mask = cv2.bitwise_or(mask_lower, mask_upper)
+
+            if cv2.countNonZero(mask) > 0:
+                robot_state.count["red"] += 1
+                return
+        
+        robot_state.count["red"] = 0
+
+robot_state = cRobotState()
+line_follow = cLine(camera, motors, robot_state)
+start_time = time.perf_counter()
 
 def main() -> None:
-    robot_state = RobotState()
-    line_follow = LineFollower()
-    led.on()
+    global robot_state, line_follow, start_time
+    fps = error = 0
+    green_signal = None
+
+    colour_values = colour_sensors.read()
+    touch_values = touch_sensors.read()
+    gyro_values = gyroscope.read()
+    touch_check(robot_state, touch_values)
+    ramp_check(robot_state, gyro_values)
+    update_triggers(robot_state)
+
+    # red_check(robot_state)
+    if time.perf_counter() - start_time > 3:
+        line_follow.find_silver()
+        line_follow.find_red()
+
+    # if robot_state.count["red"] >= 1:
+    #     # Found red stop
+    #     robot_state.count["red"] = 0
+        
+    #     motors.run(config.line_speed, config.line_speed, 0.5)
+    #     motors.run(0, 0, 10)
+        
+    if robot_state.count["silver"] >= 5:
+        motors.pause()
+        # # Found evacuation zone
+        # evacuation_zone.main()
+        
+        # # Line follow with camera
+        # robot_state.trigger["evacuation_zone"] = True
     
-    while True:            
-        fps = error = 0
-        green_signal = None
+    elif robot_state.count["red"] >= 10:
+        motors.run(0, 0, 8)
+        robot_state.count["red"] = 0
 
-        colour_values = colour_sensors.read()
-        touch_values = touch_sensors.read()
-        gyro_values = gyroscope.read()
-        
-        touch_check(robot_state, touch_values)
-        ramp_check(robot_state, gyro_values)
-        
-        # red_check(robot_state)
-        # silver_check(robot_state, colour_values)
-
-        # if robot_state.count["red"] >= 1:
-        #     # Found red stop
-        #     robot_state.count["red"] = 0
-            
-        #     motors.run(config.line_speed, config.line_speed, 0.5)
-        #     motors.run(0, 0, 10)
-            
-        # elif robot_state.count["silver"] >= 20 and evacuation_zone_enabled:
-        #     # Found evacuation zone
-        #     evacuation_zone.main()
-            
-        #     # Line follow with camera
-        #     robot_state.trigger["evacuation_zone"] = True
-        
-    #     # Line follow with camera
-    #     robot_state.trigger["evacuation_zone"] = True
-
-        if robot_state.count["touch"] > 10:
-            robot_state.count["touch"] = 0
-            avoid_obstacle(line_follow)
-        else:
-            # Line Follow
-            led.on()
-            fps, error, green_signal = line_follow.follow_line()
+    elif robot_state.count["touch"] > 10:
+        robot_state.count["touch"] = 0
+        avoid_obstacle(line_follow)
+    else:
+        # Line Follow
+        led.on()
+        fps, error, green_signal = line_follow.follow_line()
 
         active_triggers = ["LINE"]
         for key in robot_state.trigger:
@@ -472,70 +522,8 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
         robot_state.count["tilt_right"] = robot_state.count["tilt_right"] + 1 if roll  >= 15 else 0
         
         robot_state.last_uphill = 0 if robot_state.trigger["uphill"] else robot_state.last_uphill + 1
-
-# def red_check(robot_state: cRobotState) -> None:
-#     # Only process images every 10 loops
-#     # Only process images if we are not mid-turn
-#     # Only process images if we are not using camera
-
-#     if (   robot_state.main_loop_count % 10 != 0
-#         or robot_state.pid_values
-#         or not camera_enable                     ):
-
-#         robot_state.count["red"] = 0
-#         return None
-
-#     image = camera.capture_array()
-#     image = camera.perspective_transform(image, "LINE")
-#     if config.X11: cv2.imshow("image", image)
-
-#     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-#     mask_lower = cv2.inRange(hsv_image, (0, 230, 46), (10, 255, 255))
-#     mask_upper = cv2.inRange(hsv_image, (170, 230, 0), (179, 255, 255))
-#     mask = cv2.bitwise_or(mask_lower, mask_upper)
-
-#     mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
-
-#     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-#     if not contours:
-#         robot_state.count["red"] = 0
-#         return None
-
-#     # Find valid contours based on criteria
-#     valid_contours = []
-
-#     for contour in contours:
-#         _, _, w, h = cv2.boundingRect(largest_contour)
-
-#         if (   cv2.contourArea(contour) >= 100
-#             and w > h                         ):
-#             valid_contours.append(contour)
-
-#     # Find the largest contour
-#     largest_contour = max(valid_contours, key=cv2.contourArea)
-
-#     if not largest_contour:
-#         robot_state.count["red"] = 0
-#         return None
-#     else:
-#         robot_state.count["red"] += 1
-
-# def silver_check(robot_state: cRobotState, colour_values: list[int]) -> None:
-#     global silver_min
-
-#     if robot_state.pid_values["ir"]["integral"] >= 1000:
-#         robot_state.count["silver"] = 0
-#         return None
-
-#     if any(colour_values[i] > silver_min for i in [0, 1, 3, 4]) and colour_values[2] > 60:
-#         robot_state.count["silver"] += 1
-#     else:
-#         robot_state.count["silver"] = 0
-
-#     return silver_count
  
-def update_triggers(robot_state: RobotState) -> list[str]:
+def update_triggers(robot_state: cRobotState) -> list[str]:
     prev_triggers = robot_state.trigger
      
     # Counting modifiers
@@ -563,9 +551,10 @@ def update_triggers(robot_state: RobotState) -> list[str]:
     
      
     # Seasaw modifier
-    if robot_state.last_uphill <= 40 and robot_state.trigger["downhill"]:
+    if robot_state.last_uphill <= 20 and robot_state.trigger["downhill"]:
         robot_state.trigger["downhill"] = False
         robot_state.trigger["seasaw"] = True
+        robot_state.last_uphill = 100
     else:
         robot_state.trigger["seasaw"] = False
      

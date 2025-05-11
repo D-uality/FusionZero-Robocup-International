@@ -29,9 +29,14 @@ def main() -> None:
             elif listener.mode.value == 1:
                 line_follow.main()
                 
-            elif listener.mode.value == 2:
-                evacuation_zone.main()
-                
+            elif mode == 2:
+                led.on()
+                gyro_values = gyroscope.read()
+                gyro_values = gyro_values if gyro_values is not None else ""
+                debug(["MODE 2", f"Touch: {touch_sensors.read()}   Lasers: {laser_sensors.read()}   Colour: {colour_sensors.read()}   Gyro: {gyro_values} "], [30, 50])
+
+            elif mode == 9: listener.exit_event.set()
+
     finally:
         GPIO.cleanup()
 
