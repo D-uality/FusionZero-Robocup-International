@@ -450,8 +450,8 @@ class LineFollower():
         
         robot_state.count["red"] = 0
 
-robot_state = cRobotState()
-line_follow = cLine(camera, motors, robot_state)
+robot_state = RobotState()
+line_follow = LineFollower()
 start_time = time.perf_counter()
 
 def main() -> None:
@@ -523,7 +523,7 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
         
         robot_state.last_uphill = 0 if robot_state.trigger["uphill"] else robot_state.last_uphill + 1
  
-def update_triggers(robot_state: cRobotState) -> list[str]:
+def update_triggers(robot_state: RobotState) -> list[str]:
     prev_triggers = robot_state.trigger
      
     # Counting modifiers
