@@ -13,30 +13,26 @@ display_manager = DisplayManager()
 
 def main() -> None:
     motors.run(0, 0)
-    motors.claw(0)
     led.off()
     
     try:
         listener.run()
         display_manager.start()
         
-        debug( ["INITIALISATION", f"{time.perf_counter() - start_time}"], [24, 50] )
+        debug( ["INITIALISATION", f"{time.perf_counter() - start_time:.2f}"], [24, 50] )
         
-        while listener.has_exited() == False:
-            if listener.mode == 9:
-                listener.stop()
-            
-            elif listener.mode == 0:
+        while not listener.has_exited():
+            if listener.mode.value == 0:
                 motors.run(0, 0)
                 led.off()
             
-            elif listener.mode == 1:
+            elif listener.mode.value == 1:
                 line_follow.main()
                 
-            elif listener.mode == 2:
+            elif listener.mode.value == 2:
                 evacuation_zone.main()
                 
     finally:
         GPIO.cleanup()
 
-if __name__ == "main": main()
+if __name__ == "__main__": main()

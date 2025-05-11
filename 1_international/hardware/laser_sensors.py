@@ -1,15 +1,16 @@
 from core.shared_imports import GPIO, board, time, adafruit_vl53l1x, Optional
+from core.utilities import debug
 
 class LaserSensors():
     def __init__(self):
         # self.x_shut_pins = [23, 24, 25]  # Left, Middle, Right
-        self.x_shut_pins = [23, 25]  # Left, Right
-        
+        self.x_shut_pins = [23]  # Left, Right
         self.tof_sensors = []
+        
         for pin in self.x_shut_pins:
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, GPIO.LOW)
-        
+            
         for pin_number, x_shut_pin in enumerate(self.x_shut_pins):
             self.change_address(pin_number, x_shut_pin)
 
@@ -30,7 +31,7 @@ class LaserSensors():
                 if pin_number < len(self.x_shut_pins) - 1:
                     sensor_i2c.set_address(pin_number + 0x30)
 
-                print(f"INITIALISATION: LASER {pin_number} ✓")
+                debug(["INITIALISATION", f"LASERS {pin_number}", "✓"], [24, 14, 50])
                 break
 
             except Exception as e:

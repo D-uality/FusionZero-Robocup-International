@@ -18,20 +18,12 @@ class ModeListener():
         self.__process_console.start()
         self.__process_button.start()
 
-    def stop(self) -> None:
-        # Stop the child processes
-        self.exit_event.set()
-
     def has_exited(self) -> bool:
         return self.exit_event.is_set()
 
     def run(self) -> None:
-        # Start the listener and wait for it to finish
-        try:
-            self.__start_input_thread()
-            self.start()
-        finally:
-            self.__stop()
+        self.__start_input_thread()
+        self.start()
 
     def __start_input_thread(self) -> None:
         # Start a thread in the main process to handle user input
@@ -48,28 +40,32 @@ class ModeListener():
 
     def __input_listener(self) -> None:
         valid = {"0", "1", "2", "9"}
-
         while not self.exit_event.is_set():
             if not self.input_queue.empty():
                 mode = self.input_queue.get()
                 
-                mode = int(mode) if mode in valid else 1
+                if mode in valid:
+                    mode = int(mode)
+                    
+                else:
+                    mode = 1
+                    
                 self.mode.value = mode
-
+                
                 if mode == 9:
                     self.exit_event.set()
 
     def __button_listener(self) -> None:
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.__button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        start_time = time.perf_counter()
+        prev_pressed = (GPIO.input(self.__button_pin) == GPIO.LOW)
 
         while not self.exit_event.is_set():
-            current_time = time.perf_counter()
+            pressed = (GPIO.input(self.__button_pin) == GPIO.LOW)
             
-            if current_time - start_time >= 1:
-                start_time = current_time
-                
-                pressed = GPIO.input(self.BUTTON_PIN) == GPIO.LOW 
+            if pressed != prev_pressed:
                 self.mode.value = 1 if pressed else 0
+                prev_pressed = pressed
+
+            time.sleep(0.05)
