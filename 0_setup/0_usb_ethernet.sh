@@ -10,14 +10,14 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # 1. Modify /boot/config.txt
-CONFIG=/boot/firmware/config.txt
+CONFIG=/boot/config.txt
 if ! grep -q "^dtoverlay=dwc2" $CONFIG; then
   echo "dtoverlay=dwc2,dr_mode=peripheral" >> $CONFIG
   echo "✅ Added dwc2 overlay to config.txt"
 fi
 
 # 2. Modify /boot/cmdline.txt (single line!)
-CMDLINE=/boot/firmware/cmdline.txt
+CMDLINE=/boot/cmdline.txt
 if ! grep -q "modules-load=dwc2,g_ether" $CMDLINE; then
   sed -i 's/rootwait/rootwait modules-load=dwc2,g_ether/' $CMDLINE
   echo "✅ Updated cmdline.txt with g_ether"
