@@ -11,13 +11,17 @@ class Camera():
 
         self.color_format = "RGB888"
         
-        top_left =     (60,                   0)
-        top_right =    (self.LINE_WIDTH - 55, 0)
-        bottom_left =  (60,                   int(self.LINE_HEIGHT / 2.5) - 1)
-        bottom_right = (self.LINE_WIDTH - 55, int(self.LINE_HEIGHT / 2.35) - 1)
+        top_left =     (60,                    0)
+        top_right =    (self.LINE_WIDTH - 55,  0)
+        bottom_left =  (60,                     int(self.LINE_HEIGHT / 2.5) - 1)
+        bottom_right = (self.LINE_WIDTH - 55,      int(self.LINE_HEIGHT / 2.35) - 1)
         self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
-       
+        top_left =     (60,                    int(self.LINE_HEIGHT / 2.5))
+        top_right =    (self.LINE_WIDTH - 55,  int(self.LINE_HEIGHT / 2.35))
+        bottom_left =  (40,                    self.LINE_HEIGHT - 20)
+        bottom_right = (self.LINE_WIDTH-50,    self.LINE_HEIGHT - 15)
+        self.lightest_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
         self.camera = Picamera2()
 
         camera_config = self.camera.create_preview_configuration(
@@ -34,9 +38,8 @@ class Camera():
             
     def capture_array(self) -> np.ndarray:
         image = self.camera.capture_array()
-        image = self.perspective_transform(image)
 
-        return image
+        return self.perspective_transform(image)
 
     def perspective_transform(self, image: np.ndarray) -> np.ndarray:
         # Transformation points

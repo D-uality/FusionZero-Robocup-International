@@ -5,45 +5,42 @@ def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
     print(f" {separator} ".join(formatted_cells))
 
-# Display Function
+_display_process = None
+_display_queue = None
 
-class DisplayManager():
-    def __init__(self):
-        self.__display_process = None
-        self.__display_queue   = None
+def _display_worker(queue: mp.Queue):
+    window_last_frame_time = {}
 
-    def __display_worker(self, queue: mp.Queue):
-        window_last_frame_time = {}
-        
-        while True:
-            item = queue.get()
-            
-            if item is None: break
-            
-            if isinstance(item, tuple) and len(item) == 2:
-                frame, window_name = item
-                
-                if isinstance(frame, np.ndarray):
-                    cv2.imshow(window_name, frame)
-                    cv2.waitKey(1)
-                    window_last_frame_time[window_name] = True
-                    
-        cv2.destroyAllWindows()
+    while True:
+        item = queue.get()
+        if item is None:
+            break
+        if isinstance(item, tuple) and len(item) == 2:
+            frame, window_name = item
+            if isinstance(frame, np.ndarray):
+                cv2.imshow(window_name, frame)
+                cv2.waitKey(1)
+                window_last_frame_time[window_name] = True
 
-    def start(self):
-        if self.__display_process is None:
-            self.__display_queue   = mp.Queue(maxsize=10)
-            self.__display_process = mp.Process(target=self.__display_worker, args=(self.__display_queue,), daemon=True)
-            
-            self.__display_process.start()
+    cv2.destroyAllWindows()
 
-    def show(self, frame: np.ndarray, name: str = "Display"):
-        if self.__display_queue is not None and self.__display_queue.qsize() < 10:
-            self.__display_queue.put((frame, name))
+def start_display():
+    global _display_process, _display_queue
+    if _display_process is None:
+        _display_queue = mp.Queue(maxsize=10)
+        _display_process = mp.Process(target=_display_worker, args=(_display_queue,), daemon=True)
+        _display_process.start()
 
-    def stop(self):
-        if self.__display_queue:   self.__display_queue.put(None)
-        if self.__display_process: self.__display_process.join()
-        
-        self.__display_process = None
-        self.__display_queue = None
+def show(frame: np.ndarray, name: str = "Display"):
+    global _display_queue
+    if _display_queue is not None and _display_queue.qsize() < 10:
+        _display_queue.put((frame, name))
+
+def stop_display():
+    global _display_process, _display_queue
+    if _display_queue:
+        _display_queue.put(None)
+    if _display_process:
+        _display_process.join()
+    _display_process = None
+    _display_queue = None

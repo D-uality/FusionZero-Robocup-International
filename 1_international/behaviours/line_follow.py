@@ -1,12 +1,14 @@
 from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
-from core.utilities import debug
+from core.utilities import *
 from hardware.robot import *
-from main import display_manager
+# from main import display_manager
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
 
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
+
+start_display()
 
 class RobotState():
     def __init__(self):
@@ -42,7 +44,7 @@ class LineFollower():
         self.base_black = 50
         self.light_black = 60
         self.lightest_black = 100
-        self.silver = 250
+        self.silver = 253
 
         self.camera = camera
         self.motors = motors
@@ -66,10 +68,10 @@ class LineFollower():
         start_time = time.perf_counter()
 
         if self.__timing: t0 = time.perf_counter()
-        image = camera.capture_array()
+        self.image = camera.capture_array()
         
         if self.__timing: t1 = time.perf_counter()
-        display_image = image.copy()
+        self.display_image = self.image.copy()
 
         self.find_black()
         if self.__timing: t2 = time.perf_counter()
@@ -85,9 +87,8 @@ class LineFollower():
         
         self.__turn()
 
-        if display_image is not None and camera.X11:
-            small_image = cv2.resize(display_image, (0, 0), fx=0.5, fy=0.5)
-            display_manager.show(np.uint8(small_image), name="line")
+        if self.display_image is not None and camera.X11:
+            show(np.uint8(self.display_image), name="line")
 
         if self.__timing: t6 = time.perf_counter()
 
@@ -134,8 +135,7 @@ class LineFollower():
                 self.calculate_angle(self.black_contour)
 
                 if self.display_image is not None and camera.X11:
-                    small_image = cv2.resize(self.display_image, (0, 0), fx=0.5, fy=0.5)
-                    display_manager.show(np.uint8(small_image), name="line")
+                    show(np.uint8(self.display_image), name="line")
                 
                 if self.angle < 90+20 and self.angle > 90-20 and self.angle != 90: break
             
@@ -430,10 +430,13 @@ class LineFollower():
     def find_silver(self):
         if self.gray_image is not None:
             mask = cv2.inRange(self.gray_image, self.silver, 255)
-            if cv2.countNonZero(mask) > 0:
+            silver_pixels = cv2.countNonZero(mask)
+            total_pixels = self.gray_image.shape[0] * self.gray_image.shape[1]
+            
+            if silver_pixels / total_pixels >= 0.05:
                 robot_state.count["silver"] += 1
                 return
-        
+
         robot_state.count["silver"] = 0
     
     # RED
@@ -452,10 +455,9 @@ class LineFollower():
 
 robot_state = RobotState()
 line_follow = LineFollower()
-start_time = time.perf_counter()
 
-def main() -> None:
-    global robot_state, line_follow, start_time
+def main(start_time) -> None:
+    global robot_state, line_follow
     fps = error = 0
     green_signal = None
 
@@ -471,15 +473,10 @@ def main() -> None:
         line_follow.find_silver()
         line_follow.find_red()
 
-    # if robot_state.count["red"] >= 1:
-    #     # Found red stop
-    #     robot_state.count["red"] = 0
-        
-    #     motors.run(config.line_speed, config.line_speed, 0.5)
-    #     motors.run(0, 0, 10)
-        
     if robot_state.count["silver"] >= 5:
+        print("Silver Found!")
         motors.pause()
+        robot_state.count["silver"] = 0
         # # Found evacuation zone
         # evacuation_zone.main()
         
@@ -487,6 +484,7 @@ def main() -> None:
         # robot_state.trigger["evacuation_zone"] = True
     
     elif robot_state.count["red"] >= 10:
+        print("Red Found!")
         motors.run(0, 0, 8)
         robot_state.count["red"] = 0
 
@@ -496,7 +494,7 @@ def main() -> None:
     else:
         # Line Follow
         led.on()
-        fps, error, green_signal = line_follow.follow_line()
+        fps, error, green_signal = line_follow.follow()
 
         active_triggers = ["LINE"]
         for key in robot_state.trigger:

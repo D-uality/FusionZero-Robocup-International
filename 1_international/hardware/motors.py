@@ -18,12 +18,12 @@ class Motors():
             self.positive_gradients = [0.70924, 0.63035, 0.67858, 0.69916]
             self.positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
             
-        elif user_at_host == "aidan@raspberrypi":
-            self.stop_angles = [97, 96, 96, 97]
-            self.negative_gradients = [1.17106, 1.15876, 0.50274, 0.53452]
-            self.negative_intercepts = [-3.8658, -1.5444, -2.8559, -2.4646]
-            self.positive_gradients = [0.87580, 0.82601, 1.78133, 1.81726]
-            self.positive_intercepts = [4.6227, 4.3606, 3.9117, 3.4639]
+        elif user_at_host == "aidan@fusionzero":
+            self.stop_angles = [88, 89, 88, 89]
+            self.negative_gradients = [0.70106, 0.70440, 0.66426, 0.69425]
+            self.negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
+            self.positive_gradients = [0.70924, 0.63035, 0.67858, 0.69916]
+            self.positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
             
         else:
             print(user_at_host)
