@@ -2,7 +2,7 @@
 import pathlib, sys, time, numpy as np, tflite_runtime.interpreter as tflite
 
 # ─── configurable section ──────────────────────────────────────────────────────
-modelPath  = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/models/black.tflite"
+modelPath  = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/models/dead.tflite"
 delegate   = "cpu"          # "cpu" or "tpu"
 numRuns    = 50
 # ───────────────────────────────────────────────────────────────────────────────
