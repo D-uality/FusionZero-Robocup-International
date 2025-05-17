@@ -5,6 +5,7 @@ import cv2, glob, random, os
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 # Path to your trained TFLite model (plain INT-8)
 MODEL_PATH    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/models/dead_edgetpu.tflite"
+# MODEL_PATH    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/models/dead.tflite"
 # Folder containing your val images
 VAL_IMAGES    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_images/images"
 # Camera device (can be index 0 or your /dev/v4l/... path)
@@ -42,8 +43,8 @@ def main():
     if not cap.isOpened():
         print(f"Cannot open camera: {CAMERA_SOURCE}")
         return
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     cap.set(cv2.CAP_PROP_FPS, 30)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -51,20 +52,17 @@ def main():
     print("Starting live camera inference. Press 'q' to quit.")
     while True:
         ret, frame = cap.read()
-        if not ret:
-            continue
+        if not ret: continue
 
-        # you can add your crop/flip here if needed, e.g.:
-        # frame = frame[:320, :]
-        # frame = cv2.flip(frame, 0)
-        # frame = cv2.flip(frame, 1)
+        frame = frame[:320][:]
+        frame = cv2.flip(frame, 0)
+        frame = cv2.flip(frame, 1)
 
         # run detection
         results = model(frame, imgsz=IMG_SIZE, conf=CONF_THR)
         annotated = results[0].plot()
-        bgr = cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR)
 
-        cv2.imshow("Live Detections", bgr)
+        cv2.imshow("Live Detections", annotated)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
