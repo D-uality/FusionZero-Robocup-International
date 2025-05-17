@@ -33,7 +33,13 @@ def start_display():
 
 def show(frame: np.ndarray, name: str = "Display"):
     global _display_queue
-    if _display_queue is not None and _display_queue.qsize() < 10:
+    if _display_queue is not None:
+        # Clear all items except the most recent one
+        while not _display_queue.empty():
+            try:
+                _display_queue.get_nowait()
+            except:
+                break
         _display_queue.put((frame, name))
 
 def stop_display():
