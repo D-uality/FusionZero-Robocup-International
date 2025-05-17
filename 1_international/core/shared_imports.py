@@ -1,7 +1,8 @@
 import time
 import socket
 import getpass
-from typing import Optional
+from typing import Optional, Deque
+from collections import deque
 import operator
 import os
 import sys
