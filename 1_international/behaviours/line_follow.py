@@ -34,6 +34,7 @@ class RobotState():
         }
          
         self.last_uphill = 0
+        self.last_downhill = 1000
         
 class LineFollower():
     def __init__(self):
@@ -50,12 +51,9 @@ class LineFollower():
         self.min_green_area = 1000
         self.base_black = 50
         self.light_black = 80
-        self.lightest_black = 100
+        self.lightest_black = 120
         self.silver = 253
 
-        self.camera = camera
-        self.motors = motors
-        
         self.prev_side = None
         self.last_angle = 90
         self.angle = 90
@@ -131,24 +129,35 @@ class LineFollower():
                 self.turn = 0
 
         if robot_state.trigger["seasaw"]:
-            for i in range(20):
-                self.motors.run(-20+i, -20+i, 0.05)
+            for i in range(30):
+                motors.run(-30+i, -30+i, 0.04)
         elif self.green_signal == "Double":
             v1 = 40
             v2 = -40
+            f=0
             t=2.5
+            b=0
             if robot_state.trigger["tilt_left"]:
                 v1 = 50
-                v2 = -30
+                v2 = -20
                 t=3
+                if robot_state.trigger["uphill"]:
+                    f=0.5
+                    b=0
             elif robot_state.trigger["tilt_right"]:
-                v1 = -30
+                v1 = -20
                 v2 = 50
                 t=3
+                if robot_state.trigger["uphill"]:
+                    f=0.5
+                    b=0
             elif robot_state.trigger["uphill"]:
-                motors.run(self.straight_speed, self.straight_speed, 1)
+                f=1.3
+                t=3
 
-            self.motors.run(v1, v2, t)
+            motors.run(self.straight_speed, self.straight_speed, f)
+            motors.run(v1, v2, t)
+            motors.run(-self.straight_speed, -self.straight_speed, b)
             self.angle = 90
             while True:
                 self.image = camera.capture_array()
@@ -160,13 +169,16 @@ class LineFollower():
                 if self.display_image is not None and camera.X11:
                     show(np.uint8(self.display_image), name="line")
                 
-                if self.angle < 90+10 and self.angle > 90-10 and self.angle != 90: break
+                if self.angle < 90+20 and self.angle > 90-20 and self.angle != 90: break
             
         else:
             v1 = self.straight_speed + self.turn
             v2 = self.straight_speed - self.turn
+            if robot_state.last_downhill < 100:
+                v1 = v1 - 20
+                v2 = v2 - 20
 
-            self.motors.run(v1, v2)
+            motors.run(v1, v2)
     
     # GREEN
     def green_check(self):
@@ -219,12 +231,15 @@ class LineFollower():
         top_left, top_right = tuple(top_left), tuple(top_right)
 
         # Average top left and top right points and increase y result
-        x_check = int((top_left[0] + top_right[0]) / 2)
-        y_check = int((top_left[1] + top_right[1]) / 2) - 10
+        x_avg = int((top_left[0] + top_right[0]) / 2)
+        y_avg = int((top_left[1] + top_right[1]) / 2)
+        if y_avg < int(camera.LINE_HEIGHT / 2.5):
+            self.green_signal = "Approach"
+            return None
 
         # Check if point is within image bounds
-        if 0 <= x_check < camera.LINE_WIDTH and 0 <= y_check < camera.LINE_HEIGHT and self.black_mask is not None:
-            if self.black_check((x_check, y_check)):
+        if 0 <= x_avg < camera.LINE_WIDTH and 0 <= y_avg - 10 < camera.LINE_HEIGHT and self.black_mask is not None:
+            if self.black_check((x_avg, y_avg - 10)):
                 return box
 
         return None
@@ -261,12 +276,12 @@ class LineFollower():
         return False
 
     def green_hold(self):
-        if self.green_signal != None and self.green_signal != "Double" and self.prev_green_signal != self.green_signal:
+        if self.green_signal != None and self.green_signal != "Double"  and self.green_signal != "Approach" and self.prev_green_signal != self.green_signal:
             self.last_seen_green = time.perf_counter()
         elif self.green_signal == "Double":
             self.last_seen_green = 0
 
-        if time.perf_counter() - self.last_seen_green < 0.3 and self.prev_green_signal != "Double" and self.prev_green_signal is not None:
+        if time.perf_counter() - self.last_seen_green < 0.3 and self.prev_green_signal != "Double" and self.prev_green_signal != "Approach" and self.prev_green_signal is not None:
             self.green_signal = self.prev_green_signal
 
     def find_green(self):
@@ -275,12 +290,17 @@ class LineFollower():
         green_mask = cv2.inRange(self.hsv_image, (40, 50, 50), (90, 255, 255))
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         green_mask = cv2.erode(green_mask, kernel, iterations=2)
+        green_mask = cv2.dilate(green_mask, kernel, iterations=4)
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
-        for contour in green_contours:
-            if all(p[0][1] > int(self.camera.LINE_HEIGHT / 3) for p in contour) and contour is not None and len(contour) > 0:
-                self.green_contours.append(contour)
+        self.green_contours = green_contours
+        # if len(contours) == 1:
+        #     for contour in green_contours:
+        #         if all(p[0][1] > int(camera.LINE_HEIGHT / 3) for p in contour) and contour is not None and len(contour) > 0:
+        #             self.green_contours.append(contour)
+        # elif len(contours) > 1:
+        #     self.green_contours = green_contours
                 
         if self.green_contours and self.display_image is not None and camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (0, 0, 255), 2)
@@ -305,7 +325,7 @@ class LineFollower():
                 self.prev_side = "Right"
                 point = max(contour, key=lambda p: p[0][0], default=None)
                 ref_point = tuple(point[0])
-            elif ref_point[1] > 10 and (left_edge_points or right_edge_points):
+            elif self.green_signal != "Approach" and ref_point[1] > 10 and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
@@ -335,21 +355,38 @@ class LineFollower():
                 return angle
 
             if self.display_image is not None and camera.X11:
-                cv2.line(self.display_image, ref_point, bottom_center, (0, 0, 255), 2)
+                deviation = abs(self.angle - 90)
+
+                if deviation <= 5:
+                    circle_color = (0, 255, 0)
+                elif deviation <= 20:
+                    ratio = (deviation - 5) / 15
+                    red_component = int(255 * ratio)
+                    circle_color = (0, 255, red_component)
+                elif deviation <= 55:
+                    ratio = (deviation - 20) / 35
+                    green_component = int(255 * (1 - ratio))
+                    circle_color = (0, green_component, 255)
+                else:
+                    circle_color = (0, 0, 255)
+
+                cv2.circle(self.display_image, ref_point, 7, circle_color, 2)
+
     
         return 90
     
     def calculate_top_contour(self, contour, validate):
-        ys = [pt[0][1] for pt in contour]
-        min_y = min(ys)
+        if self.green_signal == "Approach":
+            min_y = 40
+            max_y = 80
+        else:
+            ys = [pt[0][1] for pt in contour]
+            min_y = min(ys)
+            max_y = min_y + 20
 
-        # build your threshold—only 2px below the top
-        threshold_y = min_y + 20
-
-        # select just those points
-        top_points = [pt for pt in contour if pt[0][1] <= threshold_y]
+        top_points = [pt for pt in contour if min_y < pt[0][1] <= max_y]
         if not top_points:
-            return None
+            return camera.LINE_WIDTH // 2, camera.LINE_HEIGHT // 2
 
         # debug‑draw
         if self.display_image is not None and validate is False and camera.X11:
@@ -528,24 +565,25 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
         pitch = gyro_values[0]
         roll  = gyro_values[1]
         
-        robot_state.count["uphill"]     = robot_state.count["uphill"]     + 1 if pitch >=  15 else 0
-        robot_state.count["downhill"]   = robot_state.count["downhill"]   + 1 if pitch <= -15 else 0
+        robot_state.count["uphill"]     = robot_state.count["uphill"]     + 1 if pitch >=  10 else 0
+        robot_state.count["downhill"]   = robot_state.count["downhill"]   + 1 if pitch <= -10 else 0
         
-        robot_state.count["tilt_left"]  = robot_state.count["tilt_left"]  + 1 if roll  <= -15 else 0
-        robot_state.count["tilt_right"] = robot_state.count["tilt_right"] + 1 if roll  >= 15 else 0
+        robot_state.count["tilt_left"]  = robot_state.count["tilt_left"]  + 1 if roll  <= -10 else 0
+        robot_state.count["tilt_right"] = robot_state.count["tilt_right"] + 1 if roll  >= 10 else 0
         
         robot_state.last_uphill = 0 if robot_state.trigger["uphill"] else robot_state.last_uphill + 1
+        robot_state.last_downhill = 0 if robot_state.count["downhill"] > 0 else robot_state.last_downhill + 1
  
 def update_triggers(robot_state: RobotState) -> list[str]:
     prev_triggers = robot_state.trigger
      
     # Counting modifiers
-    if robot_state.count["uphill"] > 30:
+    if robot_state.count["uphill"] > 10:
         robot_state.trigger["uphill"] = True
     else:
         robot_state.trigger["uphill"] = False
          
-    if robot_state.count["downhill"] > 0:
+    if robot_state.count["downhill"] > 10:
         robot_state.trigger["downhill"] = True
     else:
         robot_state.trigger["downhill"] = False
