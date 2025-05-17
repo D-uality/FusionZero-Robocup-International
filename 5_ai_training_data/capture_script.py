@@ -1,19 +1,19 @@
 import cv2, sys, time, datetime, os
 
-DEVICE_PATH = "/dev/video0"
-SAVE_DIR = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data"
+DEVICE_PATH = "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._USB_2.0_Camera_SN0001-video-index0"
+SAVE_DIR = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/captures"
 
 def main() -> None:
     camera = cv2.VideoCapture(DEVICE_PATH, cv2.CAP_V4L2)
     if not camera.isOpened(): sys.exit("Cannot Open Camera!")
 
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     camera.set(cv2.CAP_PROP_FPS, 30)
     camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
     camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-    os.makedirs("captures", exist_ok=True)
+    os.makedirs("/home/frederick/FusionZero-Robocup-International/5_ai_training_data/captures", exist_ok=True)
 
     try:
         while True:
@@ -22,9 +22,11 @@ def main() -> None:
             
             if not ok: continue
             
+            image = image[:int(240/2) + 15][:]
+            image = cv2.flip(image, 0)
+            image = cv2.flip(image, 1)
+            
             # Display image
-            image = cv2.resize(image, (320, 240), interpolation=cv2.INTER_AREA)
-            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)  
             cv2.imshow("image", image)
             
             # exit on q
