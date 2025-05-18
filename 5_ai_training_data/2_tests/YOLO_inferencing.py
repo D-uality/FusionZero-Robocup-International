@@ -4,8 +4,7 @@ import cv2, glob, random, os
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 # Path to your trained TFLite model (plain INT-8)
-MODEL_PATH    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/models/dead_edgetpu.tflite"
-# MODEL_PATH    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/models/dead.tflite"
+MODEL_PATH    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/dead_edgetpu.tflite"
 # Folder containing your val images
 VAL_IMAGES    = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_images/images"
 # Camera device (can be index 0 or your /dev/v4l/... path)
