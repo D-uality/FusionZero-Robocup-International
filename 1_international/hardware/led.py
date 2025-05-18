@@ -5,6 +5,7 @@ class LED():
         self.pin = 13
         
         GPIO.setup(self.pin, GPIO.OUT)
+        GPIO.output(self.pin, GPIO.LOW)
     
     def on(self):
         GPIO.output(self.pin, GPIO.HIGH)

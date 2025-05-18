@@ -66,8 +66,27 @@ class Motors():
             print("I2C TIMEOUT!")
             debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
             print()
+    
+    def run_until(self, v1: float, v2: float, trigger_function: callable, index: int, comparison: str, target_value: int, text: str = "") -> None:
+        if   comparison == "==": comparison_function = operator.eq
+        elif comparison == "<=": comparison_function = operator.le
+        elif comparison == ">=": comparison_function = operator.ge
+        elif comparison == "!=": comparison_function = operator.ne
+
+        while True:
+            value = trigger_function()[index]
+            if value is not None: break
             
-            raise e
+        while True:
+            value = trigger_function()[index]
+            self.run(v1, v2)
+            
+            if value is not None: 
+                debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
+                print()
+                if comparison_function(value, target_value): break
+
+        self.run(0, 0)
         
     def pause(self) -> None:
         self.run(0, 0)
