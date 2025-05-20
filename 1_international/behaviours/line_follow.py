@@ -39,14 +39,8 @@ class RobotState():
 class LineFollower():
     def __init__(self):
         self.straight_speed = 30
-        # PID Control parameters
-        self.Kp = 1.5
-        self.Ki = 0
+        self.turn_mutli = 1.5
 
-        # PID state
-        self.integral = 0
-        self.last_error = 0
-        self.last_time = time.perf_counter()
         self.min_black_area = 1000
         self.min_green_area = 3000
         self.base_black = 50
@@ -101,7 +95,9 @@ class LineFollower():
         elapsed_time = time.perf_counter() - start_time
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
 
-        # print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
+        if self.__timing:
+            print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
+        
         return fps, self.turn, self.green_signal
 
     def __turn(self):
@@ -110,74 +106,35 @@ class LineFollower():
             self.turn = 0
         else:
             if abs(90-self.angle) < 5:
-                self.angle = 90
-
-            # PID Error calculation
-            current_time = time.perf_counter()
-            dt = current_time - self.last_time if self.last_time else 0.01
-
-            error = self.angle - 90
-            self.integral += error * dt
-            # derivative = (error - self.last_error) / dt if dt > 0 else 0
-
-            # PID output
-            self.turn= int(self.Kp * error + self.Ki * self.integral)
-
-            # Update PID state
-            self.last_error = error
-            self.last_time = current_time
-            if abs(self.turn) < 10:
                 self.turn = 0
+            else:
+                self.turn = int(self.turn_multi * (self.angle - 90))
 
         if robot_state.trigger["seasaw"]:
             for i in range(30):
                 motors.run(-30+i, -30+i, 0.04)
         elif self.green_signal == "Double":
-            v1 = 40
-            v2 = -40
-            f=0.3
-            t=2.5
-            b=0
-            b_initial = 0
-            f_after = 0
-            b_after = 0
-            if robot_state.trigger["tilt_left"]:
-                v1 = 50
-                v2 = -20
-                t=3
-                f=0
-                if robot_state.trigger["uphill"]:
-                    f=0.5
-                    b=0
-            elif robot_state.trigger["tilt_right"]:
-                v1 = -20
-                v2 = 50
-                t=3
-                f=0
-                if robot_state.trigger["uphill"]:
-                    f=0.5
-                    b=0
-            elif robot_state.trigger["uphill"]:
-                f=1.3
-                t=3
-            if robot_state.trigger["downhill"]:
-                v1 = v1 - 20
-                v2 = v2 + 20
-                t=4
-                f = 0
-                b = 0
-                b_initial = 1
-                f_after = 0.5
+            v1, v2, t = 40, -40, 2.5
+            f = b = f_after = b_after = 0
 
-            motors.run(-self.straight_speed, -self.straight_speed, b_initial)
+            if robot_state.trigger["tilt_left"]:
+                v1, v2, t = 50, -20, 3
+                f = 0.5 if robot_state.trigger["uphill"] else 0
+            elif robot_state.trigger["tilt_right"]:
+                v1, v2, t = -20, 50, 3,
+                f = 0.5 if robot_state.trigger["uphill"] else 0
+            elif robot_state.trigger["uphill"]:
+                f, t = 1.3, 3
+            if robot_state.trigger["downhill"]:
+                v1 -= 20
+                v2 += 20
+                t = 4
+                b = 1
+
+            motors.run(-self.straight_speed, -self.straight_speed, b)
             motors.run(self.straight_speed, self.straight_speed, f)
             motors.run(v1, v2, t)
-            motors.run(-self.straight_speed, -self.straight_speed, b)
-            self.run_til_camera(v1, v2, 20)
-
-            motors.run(self.straight_speed, self.straight_speed, f_after)
-            motors.run(-self.straight_speed, -self.straight_speed, b_after)
-            
+            self.run_till_camera(v1, v2, 10)
         else:
             v1 = self.straight_speed + self.turn
             v2 = self.straight_speed - self.turn
@@ -185,12 +142,12 @@ class LineFollower():
                 v1 = self.straight_speed + self.turn * 0.7 - 20
                 v2 = self.straight_speed - self.turn * 0.7 - 20
             elif robot_state.trigger["uphill"]:
-                v1 = self.straight_speed + self.turn + 10
-                v2 = self.straight_speed - self.turn + 10
+                v1 += 10
+                v2 += 10
 
             motors.run(v1, v2)
     
-    def run_til_camera(self, v1, v2, threshold):
+    def run_till_camera(self, v1, v2, threshold):
         motors.run(v1, v2)
         self.angle = 90
         while True:
@@ -737,10 +694,10 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
     
-    # Turn in the opposite direction
-    line_follow.run_til_camera(-v1, -v2, 30)
+    line_follow.run_till_camera(-v1, -v2, 30)
 
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
+    global camera
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
 
