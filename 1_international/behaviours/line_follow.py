@@ -84,7 +84,7 @@ class LineFollower():
 
         self.calculate_angle(self.black_contour)
         if self.__timing: t5 = time.perf_counter()
-        
+                
         self.__turn()
 
         if self.display_image is not None and camera.X11:
@@ -243,19 +243,18 @@ class LineFollower():
                 cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), 2)
 
             # Check if any pixel in the region is black
-            if np.any(region == 255):
-                if self.green_contours is not None:
-                    for y in range(y_start, y_end):
-                        for x in range(x_start, x_end):
-                            if self.black_mask[y, x] == 255:
-                                in_any_contour = False
-                                for contour in self.green_contours:
-                                    if cv2.pointPolygonTest(contour, (x, y), False) >= 0:
-                                        in_any_contour = True
-                                        break
-                                if not in_any_contour:
-                                    return True  
+            if not np.any(region == 255) or self.green_contours is None:
+                return False
 
+            for y in range(y_start, y_end):
+                for x in range(x_start, x_end):
+                    if self.black_mask[y, x] != 255:
+                        continue
+                        
+                    in_any_contour = any(cv2.pointPolygonTest(contour, (x, y), False) >= 0 for contour in self.green_contours)
+                    if not in_any_contour:
+                        return True
+        
         return False
 
     def green_hold(self):
@@ -284,32 +283,38 @@ class LineFollower():
 
     # BLACK
     def calculate_angle(self, contour=None, validate=False):
-        ref_point = None
-        if validate == False:
+        # Early return for simple case
+        if not validate:
             self.angle = 90
-        if contour is not None:
-            ref_point = self.calculate_top_contour(contour, validate)
+            if contour is None:
+                return 90
 
+        # Initialize ref_point
+        ref_point = self.calculate_top_contour(contour, validate) if contour is not None else None
+
+        # Handle green signal cases
+        if contour is not None and self.green_signal in ["Left", "Right"]:
+            self.prev_side = self.green_signal
+            point = min(contour, key=lambda p: p[0][0]) if self.green_signal == "Left" else max(contour, key=lambda p: p[0][0])
+            ref_point = tuple(point[0])
+            return self._finalize_angle(ref_point, validate)
+
+        # Edge detection and angle calculation
+        if contour is not None and ref_point is not None:
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 10]
 
-            if self.green_signal == "Left":  
-                self.prev_side = "Left"   
-                point = min(contour, key=lambda p: p[0][0], default=None)
-                ref_point = tuple(point[0])
-            elif self.green_signal == "Right":  
-                self.prev_side = "Right"
-                point = max(contour, key=lambda p: p[0][0], default=None)
-                ref_point = tuple(point[0])
-            elif self.green_signal != "Approach" and ref_point[1] > 50 and (left_edge_points or right_edge_points):
+            # Handle edge cases
+            if ref_point[1] < 30:
+                self.prev_side = None
+                return self._finalize_angle(ref_point, validate)
+
+            if self.green_signal != "Approach" and ref_point[1] > 50 and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
                 if self.prev_side is None:
-                    if self.angle < 90:
-                        self.prev_side = "Left"
-                    elif self.angle > 90:
-                        self.prev_side = "Right"
+                    self.prev_side = "Left" if self.angle < 90 else "Right" if self.angle > 90 else None
 
                 if y_avg_left is not None and (y_avg_right is None or self.prev_side == "Left"):
                     ref_point = (0, y_avg_left)
@@ -317,42 +322,44 @@ class LineFollower():
                 elif y_avg_right is not None:
                     ref_point = (camera.LINE_WIDTH - 1, y_avg_right)
                     self.prev_side = "Right"
-            elif ref_point[1] < 30:
-                self.prev_side = None
-                
-        if ref_point is not None:
-            bottom_center = (camera.LINE_WIDTH // 2, camera.LINE_HEIGHT)
-            dx = bottom_center[0] - ref_point[0]
-            dy = bottom_center[1] - ref_point[1]
 
-            # Calculate angle in degrees
-            angle_radians = np.arctan2(dy, dx)
-            angle = int(np.degrees(angle_radians))
-            if validate == False:
-                self.angle = angle
-                self.last_angle = angle
-            else:
-                return angle
+    return self._finalize_angle(ref_point, validate) if ref_point is not None else 90
 
-            if self.display_image is not None and camera.X11:
-                deviation = abs(self.angle - 90)
+    def _finalize_angle(self, ref_point, validate):
+        bottom_center = (camera.LINE_WIDTH // 2, camera.LINE_HEIGHT)
+        dx = bottom_center[0] - ref_point[0]
+        dy = bottom_center[1] - ref_point[1]
 
-                if deviation <= 5:
-                    self.turn_color = (0, 255, 0)
-                elif deviation <= 20:
-                    ratio = (deviation - 5) / 15
-                    red_component = int(255 * ratio)
-                    self.turn_color  = (0, 255, red_component)
-                elif deviation <= 55:
-                    ratio = (deviation - 20) / 35
-                    green_component = int(255 * (1 - ratio))
-                    self.turn_color = (0, green_component, 255)
-                else:
-                    self.turn_color = (0, 0, 255)
+        angle_radians = np.arctan2(dy, dx)
+        angle = int(np.degrees(angle_radians))
 
-                cv2.circle(self.display_image, ref_point, 10, self.turn_color, 2)
+        if not validate:
+            self.angle = angle
+            self.last_angle = angle
+            self._update_display(ref_point, angle)
+        else:
+            return angle
 
-        return 90
+        return angle if validate else 90
+
+    def _update_display(self, ref_point, angle):
+        if self.display_image is None or not camera.X11:
+            return
+
+        deviation = abs(angle - 90)
+        
+        if deviation <= 5:
+            self.turn_color = (0, 255, 0)
+        elif deviation <= 20:
+            ratio = (deviation - 5) / 15
+            self.turn_color = (0, 255, int(255 * ratio))
+        elif deviation <= 55:
+            ratio = (deviation - 20) / 35
+            self.turn_color = (0, int(255 * (1 - ratio)), 255)
+        else:
+            self.turn_color = (0, 0, 255)
+
+        cv2.circle(self.display_image, ref_point, 10, self.turn_color, 2)
     
     def calculate_top_contour(self, contour, validate):
         ys = [pt[0][1] for pt in contour]
@@ -500,21 +507,17 @@ def main(start_time) -> None:
     update_triggers(robot_state)
 
     # red_check(robot_state)
-    if time.perf_counter() - start_time > 3:
+    # if time.perf_counter() - start_time > 3:
         # line_follow.find_silver()
-        line_follow.find_red()
+        # line_follow.find_red()
 
-    # if robot_state.count["silver"] >= 5:
-    #     print("Silver Found!")
-    #     motors.pause()
-    #     robot_state.count["silver"] = 0
-        # # Found evacuation zone
-        # evacuation_zone.main()
-        
-        # # Line follow with camera
-        # robot_state.trigger["evacuation_zone"] = True
-    
-    if robot_state.count["red"] >= 10:
+    if robot_state.count["silver"] >= 5:
+        print("Silver Found!")
+        motors.pause()
+        robot_state.count["silver"] = 0
+        evacuation_zone.main()
+        robot_state.trigger["evacuation_zone"] = True
+    elif robot_state.count["red"] >= 10:
         print("Red Found!")
         motors.run(0, 0, 8)
         robot_state.count["red"] = 0
@@ -522,7 +525,6 @@ def main(start_time) -> None:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow)
     else:
-        # Line Follow
         led.on()
         fps, error, green_signal = line_follow.follow()
 
@@ -532,8 +534,7 @@ def main(start_time) -> None:
 
         debug([f" ".join(active_triggers), str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
-        # Update the loop count
-        robot_state.main_loop_count += 1
+    robot_state.main_loop_count += 1
 
 def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
@@ -554,8 +555,7 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
  
 def update_triggers(robot_state: RobotState) -> list[str]:
     prev_triggers = robot_state.trigger
-     
-    # Counting modifiers
+
     if robot_state.count["uphill"] > 10:
         robot_state.trigger["uphill"] = True
     else:
@@ -565,7 +565,6 @@ def update_triggers(robot_state: RobotState) -> list[str]:
         robot_state.trigger["downhill"] = True
     else:
         robot_state.trigger["downhill"] = False
-    
          
     if robot_state.count["tilt_left"] > 0:
         robot_state.trigger["tilt_left"] = True
@@ -577,18 +576,14 @@ def update_triggers(robot_state: RobotState) -> list[str]:
     else:
         robot_state.trigger["tilt_right"] = False
     
-     
-    # Seasaw modifier
     if robot_state.last_uphill <= 20 and robot_state.count["downhill"] > 0:
         robot_state.trigger["downhill"] = False
         robot_state.trigger["seasaw"] = True
         robot_state.last_uphill = 100
     else:
         robot_state.trigger["seasaw"] = False
-     
-    # If there has been a change in modifiers
+
     if robot_state.trigger != prev_triggers:
-        # Check if the current trigger has been the same for AT LEAST 10 loops
         if robot_state.main_loop_count <= 10:
             robot_state.triggers = prev_triggers
 
