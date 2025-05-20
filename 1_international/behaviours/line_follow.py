@@ -440,8 +440,7 @@ class LineFollower():
             if len(close_contours) > 1:
                 for contour in close_contours:
                     highest_point = max(contour, key=lambda p: p[0][1])
-                    if highest_point[0][1] > camera.LINE_HEIGHT / 2:
-                        tallest_contours.append(contour)
+                    if highest_point[0][1] > camera.LINE_HEIGHT / 2: tallest_contours.append(contour)
             elif len(close_contours) == 1:
                 self.black_contour = close_contours[0]
 
@@ -675,7 +674,6 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
             error = 0
 
         if sum(touch_values) < 2:
-            # motors.run(-v1, -v2, 0.3)
             motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 10, "TURNING BACK TILL OBSTACLE")
             motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.15)
 
