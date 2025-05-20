@@ -2,21 +2,21 @@ from core.shared_imports import GPIO, time
 start_time = time.perf_counter()
 
 from core.listener import ModeListener
-# from core.utilities import debug, DisplayManager
-from core.utilities import debug
+from core.utilities import debug, get_saved_frames, save_video, stop_display
 
 import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
+record = False
+
 listener = ModeListener()
-# display_manager = DisplayManager()
 
 def main() -> None:
     motors.run(0, 0)
     led.off()
     start_time = time.perf_counter()
-    
+
     try:
         listener.run()
         # display_manager.start()
@@ -44,5 +44,7 @@ def main() -> None:
 
     finally:
         GPIO.cleanup()
+        stop_display()
+        if record: save_video(get_saved_frames())
 
 if __name__ == "__main__": main()

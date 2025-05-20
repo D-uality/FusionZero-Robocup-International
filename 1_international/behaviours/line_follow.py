@@ -48,10 +48,10 @@ class LineFollower():
         self.last_error = 0
         self.last_time = time.perf_counter()
         self.min_black_area = 1000
-        self.min_green_area = 1000
+        self.min_green_area = 3000
         self.base_black = 50
         self.light_black = 80
-        self.lightest_black = 120
+        self.lightest_black = 100
         self.silver = 253
         
         self.turn_color = (0, 255, 0)
@@ -140,7 +140,7 @@ class LineFollower():
             b=0
             b_initial = 0
             f_after = 0
-            b_after = 0.5
+            b_after = 0
             if robot_state.trigger["tilt_left"]:
                 v1 = 50
                 v2 = -20
@@ -163,7 +163,7 @@ class LineFollower():
             if robot_state.trigger["downhill"]:
                 v1 = v1 - 20
                 v2 = v2 + 20
-                t=3.5
+                t=4
                 f = 0
                 b = 0
                 b_initial = 1
@@ -182,11 +182,11 @@ class LineFollower():
             v1 = self.straight_speed + self.turn
             v2 = self.straight_speed - self.turn
             if robot_state.last_downhill < 100:
-                v1 = self.straight_speed + self.turn * 0.6 - 20
-                v2 = self.straight_speed - self.turn * 0.6 - 20
+                v1 = self.straight_speed + self.turn * 0.7 - 20
+                v2 = self.straight_speed - self.turn * 0.7 - 20
             elif robot_state.trigger["uphill"]:
-                v1 = self.straight_speed + self.turn * 0.5 + 20
-                v2 = self.straight_speed - self.turn * 0.5 + 20
+                v1 = self.straight_speed + self.turn + 10
+                v2 = self.straight_speed - self.turn + 10
 
             motors.run(v1, v2)
     
@@ -307,7 +307,7 @@ class LineFollower():
         elif self.green_signal == "Double":
             self.last_seen_green = 0
 
-        if time.perf_counter() - self.last_seen_green < 0.3 and self.prev_green_signal != "Double" and self.prev_green_signal != "Approach" and self.prev_green_signal is not None:
+        if time.perf_counter() - self.last_seen_green < 0.5 and self.prev_green_signal != "Double" and self.prev_green_signal != "Approach" and self.prev_green_signal is not None:
             self.green_signal = self.prev_green_signal
 
     def find_green(self):
@@ -316,7 +316,7 @@ class LineFollower():
         green_mask = cv2.inRange(self.hsv_image, (40, 50, 50), (90, 255, 255))
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         green_mask = cv2.erode(green_mask, kernel, iterations=2)
-        green_mask = cv2.dilate(green_mask, kernel, iterations=4)
+        green_mask = cv2.dilate(green_mask, kernel, iterations=10)
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
@@ -332,7 +332,6 @@ class LineFollower():
             self.angle = 90
         if contour is not None:
             ref_point = self.calculate_top_contour(contour, validate)
-            print(ref_point[1])
 
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 10]
@@ -405,7 +404,7 @@ class LineFollower():
             max_y = 80
         else:
             min_y = min(ys)
-            max_y = min_y + 40
+            max_y = min_y + 20
 
         top_points = [pt for pt in contour if min_y <= pt[0][1] <= max_y]
         if not top_points:
@@ -713,16 +712,15 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()
-        if colour_values[colour_pin] <= 30 and time.perf_counter() - start_time > 0.5:
+        if colour_values[colour_pin] <= 30 and time.perf_counter() - start_time > 1.5:
             break
 
         if laser_value is not None:
             error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.straight_speed)), int(-1*line_follow.straight_speed))
+            if laser_value > 20:
+                motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.2)
         else:
             error = 0
-
-        if laser_value > 20:
-            motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.2)
 
         if sum(touch_values) < 2:
             # motors.run(-v1, -v2, 0.3)

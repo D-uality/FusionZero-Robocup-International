@@ -7,9 +7,12 @@ def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
 
 _display_process = None
 _display_queue = None
+_manager = mp.Manager()
+_saved_frames = _manager.list()
 
 def _display_worker(queue: mp.Queue):
     window_last_frame_time = {}
+    counter = 0
 
     while True:
         item = queue.get()
@@ -21,6 +24,10 @@ def _display_worker(queue: mp.Queue):
                 cv2.imshow(window_name, frame)
                 cv2.waitKey(1)
                 window_last_frame_time[window_name] = True
+
+                if counter % 2 == 0:
+                    _saved_frames.append(frame.copy())
+                counter += 1
 
     cv2.destroyAllWindows()
 
@@ -50,3 +57,22 @@ def stop_display():
         _display_process.join()
     _display_process = None
     _display_queue = None
+
+def get_saved_frames():
+    return _saved_frames
+
+def save_video(frames: list[np.ndarray], filename: str = "output.mp4", fps: int = 15):
+    if not frames:
+        print("[save_video] No frames to save.")
+        return
+
+    height, width = frames[0].shape[:2]
+    out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+
+    for frame in frames:
+        if frame.shape[:2] != (height, width):
+            frame = cv2.resize(frame, (width, height))
+        out.write(frame)
+
+    out.release()
+    print(f"[save_video] Video saved to {filename}")
