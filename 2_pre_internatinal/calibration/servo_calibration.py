@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-calibration_values = open("/home/fusion/FusionZero-Robocup-International/code/calibration/calibration_values.txt", "r")
+calibration_values = open("/home/frederick/FusionZero-Robocup-International/2_pre_internatinal/calibration/calibration_values.txt", "r")
 allTimes = calibration_values.read().split("\n")
 
 negativeGradients  = []
@@ -20,7 +20,7 @@ for time in allTimes:
     # Read the calibration_values.txt
     times = time.strip().split(' ')
     times = list(map(float, times))
-
+    
     times = np.array(times)
     omega = 10 * np.pi / times
     frequencies, omega = omega, frequencies
