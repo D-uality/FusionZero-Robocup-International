@@ -1,10 +1,65 @@
-from core.shared_imports import time
+from core.shared_imports import time, np, cv2, Optional, YOLO
 from hardware.robot import *
 from core.utilities import *
 
 start_display()
 
-class WallFollow:
+class EvacuationState():
+    def __init__(self):
+        self.victims_saved = 0
+        
+class Search():
+    def __init__(self):
+        self.X11 = True
+        self.debug = False
+        
+        self.model_path = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/dead_edgetpu.tflite"
+        self.input_shape = 640
+        self.model = YOLO(self.model_path, task='detect')
+        self.confidence_threshold = 0.3
+    
+    def classic_live(self, image: np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
+        spectral_threshold = 200
+
+        kernal_size = 7
+        spectral_highlights = cv2.inRange(image, (spectral_threshold, spectral_threshold, spectral_threshold), (255, 255, 255))
+        spectral_highlights = cv2.dilate(spectral_highlights, np.ones((kernal_size, kernal_size), np.uint8), iterations=1)
+
+        contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours: return [None, image]
+
+        valid_contours = []
+        for contour in contours:
+            _, y, w, h = cv2.boundingRect(contour)
+            if self.debug: print(cv2.contourArea(contour))
+            
+            # look for contours in the top quarter
+            if (y + h/2 < 50
+                and cv2.contourArea(contour) < 1500):
+                valid_contours.append(contour)
+        
+        if len(valid_contours) == 0: return [None, image]
+
+        largest_contour = max(valid_contours, key=cv2.contourArea)
+        x, _, w, _ = cv2.boundingRect(largest_contour)
+        
+        if self.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
+        return [int(x + w/2), image]
+    
+    def ai_dead(self, image:np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
+        results = self.model(image, imgsz=self.input_shape, conf=self.confidence_threshold, verbose=False)
+        
+        xywh = results[0].boxes.xywh
+        cx_list = xywh[:, 0].cpu().numpy().tolist()
+        
+        if not cx_list: return [None, image]
+        x = cx_list[0] if last_x is None else min(cx_list, key=lambda cx: abs(cx - last_x))
+        
+        image = results[0].plot()        
+        return [int(x), image]
+
+class WallFollow():
     OFFSET = 3
 
     def __init__(self, kP: float, base_speed: int):
@@ -37,11 +92,79 @@ class WallFollow:
 
         motors.run(left_speed, right_speed)
         debug([f"{error:.2f}", f"{raw_turn:.2f}", f"{left_speed:.2f} {right_speed:.2f}"],[30, 20, 10])
-
-def main() -> None:
-    # wall_follower = WallFollow(kP=1.2, base_speed=30)
+        
+def locate(searcher: Search) -> list[int, str]:
+    wall_follower = WallFollow(kP=1.2, base_speed=30)
     
-    # while True:
-    #     wall_follower.update()
+    while True:
+        image = evac_camera.capture_image()
+        
+        live_x, _ = searcher.classic_live(image)
+        if live_x is not None: return [live_x, "live"]
+        
+        dead_x, _ = searcher.ai_dead(image)
+        if dead_x is not None: return [dead_x, "dead"]
+        
+        wall_follower.update()
+        show(image, "image")
 
-    motors.run(30, 30)
+def route(searcher: Search, last_x: int, search_type: str) -> bool:
+    base_speed = 30 if search_type == "live" else 20
+    kP = 0.2
+    min_distance = 0
+    
+    while True:
+        distance = laser_sensors.read([1])[0]
+        image = evac_camera.capture_image()
+        
+        if search_type == "live":
+            x, image = searcher.classic_live(image, last_x)
+        else:
+            x, image = searcher.ai_dead(image, last_x)
+        
+        if x is None: return False
+        if distance < 10: break
+        
+        min_distance = min(min_distance, distance)
+        scalar = 0.5 + (distance - 15) * (0.5 / 85)
+        
+        error = evac_camera.width / 2 - x
+        turn = kP * error
+        
+        v1 = scalar * base_speed - turn
+        v2 = scalar * base_speed + turn
+        
+        if search_type == "live":
+            motors.run(v1, v2)
+        else:
+            delay = 0.001 * min_distance + 0.1 if error > 10 else 0.5
+            v1 = min(40, max(v1, -10))
+            v2 = min(40, max(v2, -10))
+
+            motors.run(v1, v2, delay)
+            motors.run(0, 0)
+        
+        debug( [ f"{distance}", f"{search_type} {x} {last_x}", f"{error} {turn:.2f}", f"{v1:.2f} {v2:.2f}"], [5, 15, 10, 10] )
+        show(image, "image")
+        last_x = x
+        
+    return True
+        
+def main() -> None:
+    evac_state = EvacuationState()
+    searcher = Search()
+    
+    while True:
+        x, search_type = locate(searcher)
+        
+        route_success = route(searcher, x, search_type)
+        if not route_success:
+            image = evac_camera.capture_image()
+            show(image, "image")
+            
+            print("ROUTING FAILED!")
+            motors.pause()
+            
+            
+        print("ROUTING SUCCESS!")
+        motors.pause()

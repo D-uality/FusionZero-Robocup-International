@@ -22,10 +22,8 @@ class EvacuationCamera():
         while True:
             ok, image = self.camera.read()
             if ok: break
-
-            print(ok)
         
-        image = image[:int(self.height/2) + 15][:]
+        image = image[:int(0.5208333333 * self.height), :]
         
         image = cv2.flip(image, 0)
         image = cv2.flip(image, 1)

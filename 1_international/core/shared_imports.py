@@ -17,6 +17,8 @@ from random import randint
 from RPi import GPIO
 from picamera2 import Picamera2
 from libcamera import Transform
+from ultralytics import YOLO
+
 import board
 import adafruit_vl53l1x
 from adafruit_servokit import ServoKit

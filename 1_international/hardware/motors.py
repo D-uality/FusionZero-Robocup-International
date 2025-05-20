@@ -3,7 +3,6 @@ from core.utilities import debug
 
 class Motors():
     def __init__(self) -> None:
-        self.servo_pins = [14, 13, 12, 10]
         self.pca = ServoKit(channels=16)
     
         username = getpass.getuser()
@@ -11,13 +10,23 @@ class Motors():
         user_at_host = f"{username}@{hostname}"
         
         if user_at_host == "frederick@raspberrypi":
+            self.servo_pins = [14, 13, 12, 10]
             self.stop_angles = [97, 96, 96, 97]
             self.negative_gradients = [1.17106, 1.15876, 0.50274, 0.53452]
-            self.negative_intercepts = [-3.8658, -1.5444, -2.8559, -2.4646]
-            self.positive_gradients = [0.87580, 0.82601, 1.78133, 1.81726]
+            self.negative_intercepts = [-1.8658, -1.5444, -2.8559, -2.4646]
+            self.positive_gradients = [0.87580, 0.82601, 0.78133, 0.81726]
             self.positive_intercepts = [4.6227, 4.3606, 3.9117, 3.4639]
             
+            order = [2, 3, 0, 1]
+
+            self.servo_pins = [self.servo_pins[i] for i in order]
+            self.negative_gradients  = [self.negative_gradients[i]  for i in order]
+            self.negative_intercepts = [self.negative_intercepts[i] for i in order]
+            self.positive_gradients  = [self.positive_gradients[i]  for i in order]
+            self.positive_intercepts = [self.positive_intercepts[i] for i in order]
+
         elif user_at_host == "aidan@fusionzero":
+            self.servo_pins = [14, 13, 12, 10]
             self.stop_angles = [88, 89, 88, 89]
             self.negative_gradients = [0.70106, 0.70440, 0.66426, 0.69425]
             self.negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
