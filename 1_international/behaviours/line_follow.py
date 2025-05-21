@@ -1,7 +1,6 @@
 from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
 from core.utilities import *
 from hardware.robot import *
-# from main import display_manager
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
