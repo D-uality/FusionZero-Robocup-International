@@ -2,7 +2,7 @@ from core.shared_imports import GPIO, time
 start_time = time.perf_counter()
 
 from core.listener import ModeListener
-from core.utilities import debug, get_saved_frames, save_video, stop_display
+from core.utilities import debug, get_saved_frames, save_vfr_video, stop_display
 
 import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
@@ -45,6 +45,6 @@ def main() -> None:
     finally:
         GPIO.cleanup()
         stop_display()
-        if record: save_video(get_saved_frames())
+        if record: save_vfr_video(get_saved_frames())
 
 if __name__ == "__main__": main()

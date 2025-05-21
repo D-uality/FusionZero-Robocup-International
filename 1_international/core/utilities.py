@@ -1,19 +1,17 @@
-from core.shared_imports import mp, cv2, np
+from core.shared_imports import mp, cv2, np, time
 
 # Print Function
 def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
     print(f" {separator} ".join(formatted_cells))
 
+# Global variables for display and frame storage
 _display_process = None
 _display_queue = None
 _manager = mp.Manager()
-_saved_frames = _manager.list()
+_saved_frames = _manager.list()  # Stores (frame, timestamp) tuples
 
 def _display_worker(queue: mp.Queue):
-    window_last_frame_time = {}
-    counter = 0
-
     while True:
         item = queue.get()
         if item is None:
@@ -23,31 +21,29 @@ def _display_worker(queue: mp.Queue):
             if isinstance(frame, np.ndarray):
                 cv2.imshow(window_name, frame)
                 cv2.waitKey(1)
-                window_last_frame_time[window_name] = True
-
-                if counter % 2 == 0:
-                    _saved_frames.append(frame.copy())
-                counter += 1
 
     cv2.destroyAllWindows()
 
 def start_display():
     global _display_process, _display_queue
     if _display_process is None:
-        _display_queue = mp.Queue(maxsize=10)
+        _display_queue = mp.Queue(maxsize=2)  # Small queue to minimize lag
         _display_process = mp.Process(target=_display_worker, args=(_display_queue,), daemon=True)
         _display_process.start()
 
-def show(frame: np.ndarray, name: str = "Display"):
+def show(frame: np.ndarray, name: str = "Display", display):
     global _display_queue
-    if _display_queue is not None:
-        # Clear all items except the most recent one
+    if _display_queue is not None and display:
+        # Clear queue to prioritize the latest frame
         while not _display_queue.empty():
             try:
                 _display_queue.get_nowait()
             except:
                 break
         _display_queue.put((frame, name))
+    
+    # Save EVERY frame with its timestamp
+    _saved_frames.append((frame.copy(), time.perf_counter()))
 
 def stop_display():
     global _display_process, _display_queue
@@ -59,20 +55,45 @@ def stop_display():
     _display_queue = None
 
 def get_saved_frames():
-    return _saved_frames
+    return _saved_frames  # Returns list of (frame, timestamp) tuples
 
-def save_video(frames: list[np.ndarray], filename: str = "output.mp4", fps: int = 15):
-    if not frames:
-        print("[save_video] No frames to save.")
+def save_vfr_video(frames_with_timestamps: list[tuple[np.ndarray, float]], filename: str = "output_vfr.mp4"):
+    if not frames_with_timestamps:
+        print("[save_vfr_video] No frames to save.")
         return
 
-    height, width = frames[0].shape[:2]
-    out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+    # Step 1: Write frames to temporary directory
+    temp_dir = "temp_frames"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    for i, (frame, _) in enumerate(frames_with_timestamps):
+        cv2.imwrite(f"{temp_dir}/frame_{i:04d}.png", frame)
 
-    for frame in frames:
-        if frame.shape[:2] != (height, width):
-            frame = cv2.resize(frame, (width, height))
-        out.write(frame)
+    # Step 2: Generate timestamps.txt for FFmpeg
+    with open("timestamps.txt", "w") as f:
+        for i in range(len(frames_with_timestamps) - 1):
+            frame, timestamp = frames_with_timestamps[i]
+            next_timestamp = frames_with_timestamps[i + 1][1]
+            duration = next_timestamp - timestamp
+            f.write(f"file '{temp_dir}/frame_{i:04d}.png'\n")
+            f.write(f"duration {duration:.6f}\n")
+        # Last frame (no duration)
+        f.write(f"file '{temp_dir}/frame_{len(frames_with_timestamps)-1:04d}.png'\n")
 
-    out.release()
-    print(f"[save_video] Video saved to {filename}")
+    # Step 3: Run FFmpeg to create VFR video
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-f", "concat",
+        "-i", "timestamps.txt",
+        "-vsync", "vfr",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264",
+        "-crf", "18",
+        filename
+    ]
+    subprocess.run(ffmpeg_cmd, check=True)
+
+    # Cleanup
+    shutil.rmtree(temp_dir)
+    os.remove("timestamps.txt")
+    print(f"[save_vfr_video] VFR video saved to {filename}")

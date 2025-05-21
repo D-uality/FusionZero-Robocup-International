@@ -88,7 +88,7 @@ class LineFollower():
         self.__turn()
 
         if self.display_image is not None and camera.X11:
-            show(np.uint8(self.display_image), name="line")
+            show(np.uint8(self.display_image), name="line", camera.X11)
 
         if self.__timing: t6 = time.perf_counter()
 
@@ -158,7 +158,7 @@ class LineFollower():
             self.calculate_angle(self.black_contour)
 
             if self.display_image is not None and camera.X11:
-                show(np.uint8(self.display_image), name="line")
+                show(np.uint8(self.display_image), name="line", camera.X11)
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
         motors.run(0, 0)
