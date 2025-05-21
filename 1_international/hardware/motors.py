@@ -1,5 +1,5 @@
 from core.shared_imports import time, ServoKit, operator, socket, getpass
-from core.utilities import debug
+from core.utilities import debug, show
 from hardware.robot import camera
 
 pca = ServoKit(channels=16)
@@ -64,9 +64,8 @@ class Motors():
             if delay > 0:
                 while True:
                     capture_start = time.perf_counter()
-                    camera.capture_array()
-                    delay_after_capture = delay - (time.perf_counter - capture_start)
-                    if delay_after_capture < 0: break
+                    show(np.uint8(camera.capture_array()), display=camera.X11)
+                    if delay - (time.perf_counter - capture_start) < 0: break
         except Exception as e:  
             print("I2C TIMEOUT!")
             debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])

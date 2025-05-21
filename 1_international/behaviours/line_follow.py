@@ -110,8 +110,8 @@ class LineFollower():
                 self.turn = int(self.turn_multi * (self.angle - 90))
 
         if robot_state.trigger["seasaw"]:
-            for i in range(30):
-                motors.run(-30+i, -30+i, 0.04)
+            for i in range(5):
+                motors.run(-30+i*6, -30+i*6, 0.25)
         elif self.green_signal == "Double":
             v1, v2, t = 40, -40, 2.5
             f = b = f_after = b_after = 0
@@ -623,12 +623,12 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     # Over turn passed obstacle
     # oled_display.text("Turning till obstacle", 0, 10, size=10)
     motors.run(v1, v2, 1)
-    for i in range(50):
+    for i in range(25):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
     
     # oled_display.text("Turning past obstacle", 0, 20, size=10)
-    for i in range(25):
+    for i in range(10):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
 
@@ -659,6 +659,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     target_distance = 1
 
     while True:
+        show(np.uint8(camera.capture_array()), name="line", display=camera.X11) 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()
@@ -694,6 +695,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
     elif comparison == ">=": comparison_function = operator.ge
 
     while True:
+        show(np.uint8(camera.capture_array()), name="line", display=camera.X11) 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
 
