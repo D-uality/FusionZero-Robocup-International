@@ -38,7 +38,7 @@ class RobotState():
 class LineFollower():
     def __init__(self):
         self.straight_speed = 30
-        self.turn_mutli = 1.5
+        self.turn_multi = 1.5
 
         self.min_black_area = 1000
         self.min_green_area = 3000
@@ -87,7 +87,7 @@ class LineFollower():
         self.__turn()
 
         if self.display_image is not None and camera.X11:
-            show(np.uint8(self.display_image), name="line", camera.X11)
+            show(np.uint8(self.display_image), camera.X11, name="line")
 
         if self.__timing: t6 = time.perf_counter()
 
@@ -157,7 +157,7 @@ class LineFollower():
             self.calculate_angle(self.black_contour)
 
             if self.display_image is not None and camera.X11:
-                show(np.uint8(self.display_image), name="line", camera.X11)
+                show(np.uint8(self.display_image), camera.X11, name="line")
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
         motors.run(0, 0)
@@ -322,7 +322,7 @@ class LineFollower():
                     ref_point = (camera.LINE_WIDTH - 1, y_avg_right)
                     self.prev_side = "Right"
 
-    return self._finalize_angle(ref_point, validate) if ref_point is not None else 90
+        return self._finalize_angle(ref_point, validate) if ref_point is not None else 90
 
     def _finalize_angle(self, ref_point, validate):
         bottom_center = (camera.LINE_WIDTH // 2, camera.LINE_HEIGHT)
@@ -659,7 +659,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     target_distance = 1
 
     while True:
-        show(np.uint8(camera.capture_array()), name="line", display=camera.X11) 
+        show(np.uint8(camera.capture_array()), camera.X11, name="line") 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()
@@ -695,7 +695,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
     elif comparison == ">=": comparison_function = operator.ge
 
     while True:
-        show(np.uint8(camera.capture_array()), name="line", display=camera.X11) 
+        show(np.uint8(camera.capture_array()), camera.X11, name="line") 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
 

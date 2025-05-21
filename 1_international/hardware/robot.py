@@ -8,8 +8,8 @@ from hardware.led import LED
 
 laser_sensors = LaserSensors()
 touch_sensors = TouchSensors()
-motors = Motors()
 camera = Camera()
+motors = Motors(camera)
 colour_sensors = ColourSensors()
 gyroscope = Gyroscope()
 led = LED()

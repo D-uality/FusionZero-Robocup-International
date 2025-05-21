@@ -1,13 +1,14 @@
 from core.shared_imports import time, ServoKit, operator, socket, getpass
 from core.utilities import debug, show
-from hardware.robot import camera
 
 pca = ServoKit(channels=16)
 
 class Motors():
-    def __init__(self) -> None:
+    def __init__(self, camera) -> None:
         self.servo_pins = [14, 13, 12, 10]
-    
+
+        self.camera = camera
+        
         username = getpass.getuser()
         hostname = socket.gethostname()
         user_at_host = f"{username}@{hostname}"

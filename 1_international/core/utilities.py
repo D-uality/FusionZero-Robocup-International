@@ -1,4 +1,6 @@
-from core.shared_imports import mp, cv2, np, time
+from core.shared_imports import mp, cv2, np, time, os
+import shutil
+import subprocess
 
 # Print Function
 def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
@@ -12,6 +14,10 @@ _manager = mp.Manager()
 _saved_frames = _manager.list()  # Stores (frame, timestamp) tuples
 
 def _display_worker(queue: mp.Queue):
+    window_last_frame_time = {}
+    frame_count = 0
+    last_time = time.time()
+    
     while True:
         item = queue.get()
         if item is None:
@@ -21,17 +27,25 @@ def _display_worker(queue: mp.Queue):
             if isinstance(frame, np.ndarray):
                 cv2.imshow(window_name, frame)
                 cv2.waitKey(1)
+                frame_count += 1
+
+                current_time = time.time()
+                elapsed = current_time - last_time
+                if elapsed >= 1.0:
+                    print(f"[FPS] {frame_count} frames/sec")
+                    frame_count = 0
+                    last_time = current_time
 
     cv2.destroyAllWindows()
 
 def start_display():
     global _display_process, _display_queue
     if _display_process is None:
-        _display_queue = mp.Queue(maxsize=2)  # Small queue to minimize lag
+        _display_queue = mp.Queue(maxsize=10)
         _display_process = mp.Process(target=_display_worker, args=(_display_queue,), daemon=True)
         _display_process.start()
 
-def show(frame: np.ndarray, name: str = "Display", display):
+def show(frame: np.ndarray, display, name: str = "Display"):
     global _display_queue
     if _display_queue is not None and display:
         # Clear queue to prioritize the latest frame
