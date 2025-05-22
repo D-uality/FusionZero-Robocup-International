@@ -94,6 +94,15 @@ def save_vfr_video(frames_with_timestamps: list[tuple[np.ndarray, float]], filen
         # Last frame (no duration)
         f.write(f"file '{temp_dir}/frame_{len(frames_with_timestamps)-1:04d}.png'\n")
 
+    name, ext = os.path.splitext(filename)
+    counter = 0
+    while True:
+        new_name = f"{name}_{counter}{ext}"
+        if not os.path.exists(new_name):
+            filename = new_name
+            break
+        counter += 1
+
     # Step 3: Run FFmpeg to create VFR video
     ffmpeg_cmd = [
         "ffmpeg",

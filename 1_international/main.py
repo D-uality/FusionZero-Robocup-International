@@ -19,7 +19,6 @@ def main() -> None:
 
     try:
         listener.run()
-        # display_manager.start()
         
         debug( ["INITIALISATION", f"{time.perf_counter() - start_time:.2f}"], [24, 50] )
         

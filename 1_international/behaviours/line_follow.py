@@ -361,29 +361,51 @@ class LineFollower():
         cv2.circle(self.display_image, ref_point, 10, self.turn_color, 2)
     
     def calculate_top_contour(self, contour, validate):
-        ys = [pt[0][1] for pt in contour]
-        if self.green_signal == "Approach":
-            min_y = 40
-            max_y = 80
-        else:
-            min_y = min(ys)
-            max_y = min_y + 20
-
-        top_points = [pt for pt in contour if min_y <= pt[0][1] <= max_y]
-        if not top_points:
+        if contour is None:
             return camera.LINE_WIDTH // 2, 0
 
-        # debug‑draw
-        if self.display_image is not None and validate is False and camera.X11:
-            for pt in top_points:
-                x, y = pt[0]
-                cv2.circle(self.display_image, (x, y), radius=3, color=(0, 0, 255), thickness=-1)
+        # Step 1: Create a mask from the contour
+        contour_mask = np.zeros_like(self.gray_image, dtype=np.uint8)
+        cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
 
-        # average them
-        x_avg = int(sum(pt[0][0] for pt in top_points) / len(top_points))
-        y_avg = int(sum(pt[0][1] for pt in top_points) / len(top_points))
+        # Step 2: Define the vertical scan band
+        min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
+        max_y = min_y + 10
+
+        # Step 3: Filter points in y-range
+        roi_mask = np.zeros_like(self.gray_image, dtype=np.uint8)
+        roi_mask[min_y:max_y, :] = 255
+        masked = cv2.bitwise_and(contour_mask, roi_mask)
+
+        # Step 4: Extract (x, y) of mask pixels
+        ys, xs = np.where(masked == 255)
+        if len(xs) == 0:
+            return camera.LINE_WIDTH // 2, 0
+
+        points = list(zip(xs, ys))
+
+        # Step 5: Pick the point closest in angle to previous angle
+        if len(points) > 1:
+            angles = [self._finalize_angle(pt, True) for pt in points]
+            closest_index = min(range(len(angles)), key=lambda i: abs(angles[i] - self.last_angle))
+            main_point = points[closest_index]
+
+            # Filter horizontally close points
+            points = [pt for pt in points if abs(pt[0] - main_point[0]) < 50]
+        else:
+            main_point = points[0]
+
+        # # Debug draw
+        # if self.display_image is not None and not validate and camera.X11:
+        #     for i, pt in enumerate(points):
+        #         if i % 200 == 0:
+        #             cv2.circle(self.display_image, pt, radius=3, color=(0, 0, 255), thickness=-1)
+
+        # Average remaining points
+        x_avg = int(np.mean([pt[0] for pt in points]))
+        y_avg = int(np.mean([pt[1] for pt in points]))
         return x_avg, y_avg
-    
+
     def find_black(self):
         self.black_contour = None
         self.black_mask = None
@@ -416,8 +438,8 @@ class LineFollower():
 
         # Apply morphological cleanup
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
-        # black_mask = cv2.erode(black_mask, kernel, iterations=5)
-        black_mask = cv2.dilate(black_mask, kernel, iterations=2)
+        black_mask = cv2.erode(black_mask, kernel, iterations=2)
+        black_mask = cv2.dilate(black_mask, kernel, iterations=5)
 
         # Contour detection
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -591,7 +613,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
         if left_value is not None: break
     
     while True:
-        right_value = laser_sensors.read([1])[0]
+        right_value = laser_sensors.read([2])[0]
         if right_value is not None: break
 
     side_values = [left_value, right_value]
@@ -613,7 +635,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     if direction == "cw":
         v1 = -line_follow.straight_speed
         v2 =  line_follow.straight_speed * 0.8
-        laser_pin = 1
+        laser_pin = 2
     else:
         v1 =  line_follow.straight_speed * 0.8
         v2 = -line_follow.straight_speed
@@ -641,7 +663,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     if direction == "cw":
         v1 =  line_follow.straight_speed
         v2 = -line_follow.straight_speed
-        laser_pin = 1
+        laser_pin = 2
         colour_pin = 2
     else:
         v1 = -line_follow.straight_speed
@@ -656,7 +678,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
 
     start_time = time.perf_counter()
     wall_multi = 8
-    target_distance = 1
+    target_distance = 5
 
     while True:
         show(np.uint8(camera.capture_array()), camera.X11, name="line") 
@@ -668,13 +690,9 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
 
         if laser_value is not None:
             error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.straight_speed)), int(-1*line_follow.straight_speed))
-            if laser_value > 20:
-                motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.2)
-        else:
-            error = 0
 
         if sum(touch_values) < 2:
-            motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 10, "TURNING BACK TILL OBSTACLE")
+            motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING BACK TILL OBSTACLE")
             motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.15)
 
         print(error)
@@ -687,7 +705,7 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
     
-    line_follow.run_till_camera(-v1, -v2, 30)
+    line_follow.run_till_camera(-v1, -v2, 10)
 
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
     global camera
