@@ -8,7 +8,7 @@ class EvacuationState():
     def __init__(self):
         self.victims_saved = 0
         self.X11 = True
-        self.approach_distance = 7.5
+        self.approach_distance = 5.5
         self.base_speed = 30
         
 class Search():
@@ -158,7 +158,7 @@ def route(searcher: Search, last_x: int, search_type: str) -> bool:
         
     return True
 
-def align(searcher: Search, search_type: str, centre_tolorance: int, distance_tolorance) -> bool:
+def align(searcher: Search, search_type: str, centre_tolorance: int, distance_tolorance: int) -> bool:
     last_x = None
     # Align to centre
     # while True:
@@ -178,40 +178,49 @@ def align(searcher: Search, search_type: str, centre_tolorance: int, distance_to
     #     debug( ["ALIGNING [CENTRE]", f"{x}"], [25, 15])
     #     if evac_state.X11: show(image, "image")
     #     last_x = x
-        
+    
+    # Align to centre
+    initial_distance = 0
     while True:
         initial_distance = laser_sensors.read([1])[0]
         if initial_distance is not None: break
-    
-    v1, v2 = -evac_state.base_speed, evac_state.base_speed
-    pass_values = []
+            
+    while True:
+        motors.run(-20, 20)
+        distance = laser_sensors.read([1])[0]
+        
+        if distance > initial_distance + centre_tolorance: break
+        
+        debug( ["ALIGNING [CENTRE]", "TURNING TILL NOT", f"{distance}"], [15, 15, 15])
+
+    motors.run(0, 0, 0.3)
+
+    t0 = time.perf_counter()
+    motors.run(20, -20, 0.3)
     
     while True:
+        motors.run(20, -20)
         distance = laser_sensors.read([1])[0]
-        pass_values.append(distance)
         
-        motors.run(v1, v2, 0.003)
-        motors.run(0, 0, 0.1)
+        if distance > initial_distance + centre_tolorance: break
         
-        print(pass_values[-3:])
+        debug( ["ALIGNING [CENTRE]", "RECORDING TIME", f"{distance}"], [15, 15, 15])
+    
+    t1 = time.perf_counter()
         
-        if distance > initial_distance + 5:
-            v1, v2 = v2, v1
-            pass_values = []
-            
-        if len(pass_values) >= 3:
-            if pass_values[-2] > pass_values[-3] and pass_values[-2] > pass_values[-1]:
-                break
+    motors.run(-20, 20, (t1-t0)/2)
+    motors.run(0, 0)
         
     # Move to set distance
+    time_step = 0.002
     while True:
         distance = laser_sensors.read([1])[0]
         
-        if   distance > evac_state.approach_distance + distance_tolorance: motors.run( 20,  20, 0.003)
-        elif distance < evac_state.approach_distance - distance_tolorance: motors.run(-20, -20, 0.002)
+        if   distance > evac_state.approach_distance + distance_tolorance: motors.run( 20,  20, time_step)
+        elif distance < evac_state.approach_distance - distance_tolorance: motors.run(-20, -20, time_step)
         else:                                                              break
         
-        motors.run(0, 0, 0.1)
+        motors.run(0, 0, time_step * 2)
         
         debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
         
@@ -266,7 +275,7 @@ def main() -> None:
         
         motors.run(0, 0, 1)
 
-        align_success = align(searcher, search_type, 5, 0.2)
+        align_success = align(searcher, search_type, 4, 0.2)
         if not align_success:
             print("FAILED ALIGNMENT")
             motors.pause()
