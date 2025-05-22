@@ -7,10 +7,12 @@ start_display()
 class EvacuationState():
     def __init__(self):
         self.victims_saved = 0
+        self.X11 = True
+        self.approach_distance = 7.5
+        self.base_speed = 30
         
 class Search():
     def __init__(self):
-        self.X11 = True
         self.debug = False
         
         self.model_path = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/dead_edgetpu.tflite"
@@ -44,7 +46,7 @@ class Search():
         largest_contour = max(valid_contours, key=cv2.contourArea)
         x, _, w, _ = cv2.boundingRect(largest_contour)
         
-        if self.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
+        if evac_state.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
         return [int(x + w/2), image]
     
     def ai_dead(self, image:np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
@@ -95,9 +97,15 @@ class WallFollow():
         
 def locate(searcher: Search) -> list[int, str]:
     wall_follower = WallFollow(kP=1.2, base_speed=30)
+    base_speed = 30
     
     while True:
         image = evac_camera.capture_image()
+        touch_values = touch_sensors.read()
+        
+        if sum(touch_values) != 2:
+            motors.run(-base_speed, -base_speed, 0.5)
+            motors.run( base_speed, -base_speed, 0.8)
         
         live_x, _ = searcher.classic_live(image)
         if live_x is not None: return [live_x, "live"]
@@ -105,11 +113,12 @@ def locate(searcher: Search) -> list[int, str]:
         dead_x, _ = searcher.ai_dead(image)
         if dead_x is not None: return [dead_x, "dead"]
         
-        wall_follower.update()
-        show(image, "image")
+        motors.run(base_speed, base_speed)
+        # wall_follower.update()
+        if evac_state.X11: show(image, "image")
 
 def route(searcher: Search, last_x: int, search_type: str) -> bool:
-    base_speed = 30 if search_type == "live" else 20
+    base_speed = 30 if search_type == "live" else 25
     kP = 0.2
     min_distance = 0
     
@@ -117,16 +126,15 @@ def route(searcher: Search, last_x: int, search_type: str) -> bool:
         distance = laser_sensors.read([1])[0]
         image = evac_camera.capture_image()
         
-        if search_type == "live":
-            x, image = searcher.classic_live(image, last_x)
-        else:
-            x, image = searcher.ai_dead(image, last_x)
+        if search_type == "live": x, image = searcher.classic_live(image, last_x)
+        else:                     x, image = searcher.ai_dead(image, last_x)
         
         if x is None: return False
-        if distance < 10: break
+        if distance is None: continue
+        if distance < evac_state.approach_distance: break
         
         min_distance = min(min_distance, distance)
-        scalar = 0.5 + (distance - 15) * (0.5 / 85)
+        scalar = 0.5 + (distance - evac_state.approach_distance) * (0.5 / 85)
         
         error = evac_camera.width / 2 - x
         turn = kP * error
@@ -137,7 +145,7 @@ def route(searcher: Search, last_x: int, search_type: str) -> bool:
         if search_type == "live":
             motors.run(v1, v2)
         else:
-            delay = 0.001 * min_distance + 0.1 if error > 10 else 0.5
+            delay = 0.15 if error > 10 else 0.3
             v1 = min(40, max(v1, -10))
             v2 = min(40, max(v2, -10))
 
@@ -145,26 +153,129 @@ def route(searcher: Search, last_x: int, search_type: str) -> bool:
             motors.run(0, 0)
         
         debug( [ f"{distance}", f"{search_type} {x} {last_x}", f"{error} {turn:.2f}", f"{v1:.2f} {v2:.2f}"], [5, 15, 10, 10] )
-        show(image, "image")
+        if evac_state.X11: show(image, "image")
         last_x = x
         
     return True
+
+def align(searcher: Search, search_type: str, centre_tolorance: int, distance_tolorance) -> bool:
+    last_x = None
+    # Align to centre
+    # while True:
+    #     image = evac_camera.capture_image()
         
+    #     if search_type == "live": x, image = searcher.classic_live(image, last_x)
+    #     else:                     x, image = searcher.ai_dead(image, last_x)
+        
+    #     if x is None: return False
+        
+    #     if   x > int(evac_camera.width / 2) + centre_tolorance: motors.run( 30, -30, 0.005)
+    #     elif x < int(evac_camera.width / 2) - centre_tolorance: motors.run(-30,  30, 0.005)
+    #     else:                                                   break
+        
+    #     motors.run(0, 0, 0.005)
+        
+    #     debug( ["ALIGNING [CENTRE]", f"{x}"], [25, 15])
+    #     if evac_state.X11: show(image, "image")
+    #     last_x = x
+        
+    while True:
+        initial_distance = laser_sensors.read([1])[0]
+        if initial_distance is not None: break
+    
+    v1, v2 = -evac_state.base_speed, evac_state.base_speed
+    pass_values = []
+    
+    while True:
+        distance = laser_sensors.read([1])[0]
+        pass_values.append(distance)
+        
+        motors.run(v1, v2, 0.003)
+        motors.run(0, 0, 0.1)
+        
+        print(pass_values[-3:])
+        
+        if distance > initial_distance + 5:
+            v1, v2 = v2, v1
+            pass_values = []
+            
+        if len(pass_values) >= 3:
+            if pass_values[-2] > pass_values[-3] and pass_values[-2] > pass_values[-1]:
+                break
+        
+    # Move to set distance
+    while True:
+        distance = laser_sensors.read([1])[0]
+        
+        if   distance > evac_state.approach_distance + distance_tolorance: motors.run( 20,  20, 0.003)
+        elif distance < evac_state.approach_distance - distance_tolorance: motors.run(-20, -20, 0.002)
+        else:                                                              break
+        
+        motors.run(0, 0, 0.1)
+        
+        debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
+        
+    return True
+
+def grab() -> bool:
+    # Fill the avaliable slot
+    
+    if claw.spaces[0] == "":
+        # Left
+        motors.run(30, 0, 0.3)
+        motors.run(0, 0)
+        
+        # Cup
+        claw.close(180)
+        claw.lift(0, 0.02)
+        time.sleep(0.3)
+        
+        # Lift
+        claw.close(90)
+        claw.lift(180, 0.02)
+        
+        claw.spaces[0] = "live"
+        
+    elif claw.spaces[1] == "":
+        # Right
+        motors.run(0, 30, 0.3)
+        motors.run(0, 0)
+        
+        # Cup
+        claw.close(0)
+        claw.lift(0, 0.02)
+        time.sleep(0.3)
+        
+        # Lift
+        claw.close(90)
+        claw.lift(180, 0.02)
+        
+        claw.spaces[0] = "live"
+    else: return False
+
+evac_state = EvacuationState()
+
 def main() -> None:
-    evac_state = EvacuationState()
     searcher = Search()
     
     while True:
         x, search_type = locate(searcher)
         
         route_success = route(searcher, x, search_type)
-        if not route_success:
-            image = evac_camera.capture_image()
-            show(image, "image")
-            
-            print("ROUTING FAILED!")
+        if not route_success: continue
+        
+        motors.run(0, 0, 1)
+
+        align_success = align(searcher, search_type, 5, 0.2)
+        if not align_success:
+            print("FAILED ALIGNMENT")
             motors.pause()
-            
-            
-        print("ROUTING SUCCESS!")
-        motors.pause()
+            continue
+        
+        print("ALIGN SUCCESS!")
+    
+        motors.run(0, 0, 1)
+        
+        grab()
+    
+    # motors.run(30, -30)

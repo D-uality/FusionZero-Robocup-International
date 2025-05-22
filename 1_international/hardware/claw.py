@@ -5,7 +5,9 @@ class Claw():
     def __init__(self):
         self.lifter_pin = 9
         self.closer_pin = 8
-        self.pca= ServoKit(channels=16)
+        self.pca = ServoKit(channels=16)
+        
+        self.spaces = ["", ""]
         
         self.pca.servo[self.lifter_pin].angle = 160
         self.pca.servo[self.closer_pin].angle = 90
