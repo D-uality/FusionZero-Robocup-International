@@ -6,10 +6,13 @@ start_display()
 
 class EvacuationState():
     def __init__(self):
-        self.victims_saved = 0
         self.X11 = True
-        self.approach_distance = 5.5
+        
+        self.victims_saved = 0
         self.base_speed = 30
+        
+        self.approach_distance = 7
+        self.align_distance = 4
         
 class Search():
     def __init__(self):
@@ -21,33 +24,45 @@ class Search():
         self.confidence_threshold = 0.3
     
     def classic_live(self, image: np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
-        spectral_threshold = 200
+        spectral_threshold = 230
+        kernel_size = 7
 
-        kernal_size = 7
+        if last_x is not None:
+            x0 = max(0, last_x - 75)
+            x1 = min(image.shape[1], last_x + 75)
+            image = image[:, x0:x1]
+
         spectral_highlights = cv2.inRange(image, (spectral_threshold, spectral_threshold, spectral_threshold), (255, 255, 255))
-        spectral_highlights = cv2.dilate(spectral_highlights, np.ones((kernal_size, kernal_size), np.uint8), iterations=1)
+        spectral_highlights = cv2.dilate(spectral_highlights, np.ones((kernel_size, kernel_size), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
         if not contours: return [None, image]
 
-        valid_contours = []
+        valid = []
         for contour in contours:
-            _, y, w, h = cv2.boundingRect(contour)
-            if self.debug: print(cv2.contourArea(contour))
+            x, y, w, h = cv2.boundingRect(contour)
+            area = cv2.contourArea(contour)
             
-            # look for contours in the top quarter
-            if (y + h/2 < 50
-                and cv2.contourArea(contour) < 1500):
-                valid_contours.append(contour)
-        
-        if len(valid_contours) == 0: return [None, image]
+            if y + h/2 > 5 and y + h/2 < 150 and area < 3000:
+                cx = x + w/2
+                valid.append((contour, cx))
 
-        largest_contour = max(valid_contours, key=cv2.contourArea)
-        x, _, w, _ = cv2.boundingRect(largest_contour)
+        if not valid: return [None, image]
+
+        if last_x is None:
+            largest = max(valid, key=lambda t: cv2.contourArea(t[0]))[0]
+            bx, _, bw, _ = cv2.boundingRect(largest)
+            
+        else:
+            best = min(valid, key=lambda t: abs(t[1]))[0]
+            bx, _, bw, _ = cv2.boundingRect(best)
+
+        if evac_state.X11: cv2.drawContours(image, [best if last_x is not None else largest], -1, (0, 255, 0), 1)
+
+        center_x = bx + bw/2
+        if last_x is not None: center_x += (last_x - 50)
         
-        if evac_state.X11: cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
-        return [int(x + w/2), image]
+        return [int(center_x), image]
     
     def ai_dead(self, image:np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
         results = self.model(image, imgsz=self.input_shape, conf=self.confidence_threshold, verbose=False)
@@ -58,7 +73,7 @@ class Search():
         if not cx_list: return [None, image]
         x = cx_list[0] if last_x is None else min(cx_list, key=lambda cx: abs(cx - last_x))
         
-        image = results[0].plot()        
+        image = results[0].plot()
         return [int(x), image]
 
 class WallFollow():
@@ -105,7 +120,7 @@ def locate(searcher: Search) -> list[int, str]:
         
         if sum(touch_values) != 2:
             motors.run(-base_speed, -base_speed, 0.5)
-            motors.run( base_speed, -base_speed, 0.8)
+            motors.run( base_speed, -base_speed, 1.3)
         
         live_x, _ = searcher.classic_live(image)
         if live_x is not None: return [live_x, "live"]
@@ -116,6 +131,7 @@ def locate(searcher: Search) -> list[int, str]:
         motors.run(base_speed, base_speed)
         # wall_follower.update()
         if evac_state.X11: show(image, "image")
+        debug([f"LOCATING"], [15])
 
 def route(searcher: Search, last_x: int, search_type: str) -> bool:
     base_speed = 30 if search_type == "live" else 25
@@ -145,7 +161,7 @@ def route(searcher: Search, last_x: int, search_type: str) -> bool:
         if search_type == "live":
             motors.run(v1, v2)
         else:
-            delay = 0.15 if error > 10 else 0.3
+            delay = 0.15
             v1 = min(40, max(v1, -10))
             v2 = min(40, max(v2, -10))
 
@@ -158,67 +174,58 @@ def route(searcher: Search, last_x: int, search_type: str) -> bool:
         
     return True
 
-def align(searcher: Search, search_type: str, centre_tolorance: int, distance_tolorance: int) -> bool:
-    last_x = None
-    # Align to centre
-    # while True:
-    #     image = evac_camera.capture_image()
-        
-    #     if search_type == "live": x, image = searcher.classic_live(image, last_x)
-    #     else:                     x, image = searcher.ai_dead(image, last_x)
-        
-    #     if x is None: return False
-        
-    #     if   x > int(evac_camera.width / 2) + centre_tolorance: motors.run( 30, -30, 0.005)
-    #     elif x < int(evac_camera.width / 2) - centre_tolorance: motors.run(-30,  30, 0.005)
-    #     else:                                                   break
-        
-    #     motors.run(0, 0, 0.005)
-        
-    #     debug( ["ALIGNING [CENTRE]", f"{x}"], [25, 15])
-    #     if evac_state.X11: show(image, "image")
-    #     last_x = x
-    
-    # Align to centre
+def find_centre(centre_tolorance: int, direction: int = 1):
+    time_step = 0.003
     initial_distance = 0
     while True:
         initial_distance = laser_sensors.read([1])[0]
         if initial_distance is not None: break
             
+    distances = []
+    
     while True:
-        motors.run(-20, 20)
         distance = laser_sensors.read([1])[0]
+        if distance is None: continue
         
-        if distance > initial_distance + centre_tolorance: break
+        if distance not in distances: distances.append(distance)
+        
+        motors.run(-20 * direction, 20 * direction, time_step)
+        motors.run(              0,              0, time_step * 3)
+        
+        if len(distances) >= 3:
+            if distances[-1] > distances[-2] and distances[-3] > distances[-2]: return True
+        if distance > initial_distance + centre_tolorance:                      return False
         
         debug( ["ALIGNING [CENTRE]", "TURNING TILL NOT", f"{distance}"], [15, 15, 15])
 
-    motors.run(0, 0, 0.3)
-
-    t0 = time.perf_counter()
-    motors.run(20, -20, 0.3)
-    
-    while True:
-        motors.run(20, -20)
-        distance = laser_sensors.read([1])[0]
-        
-        if distance > initial_distance + centre_tolorance: break
-        
-        debug( ["ALIGNING [CENTRE]", "RECORDING TIME", f"{distance}"], [15, 15, 15])
-    
-    t1 = time.perf_counter()
-        
-    motors.run(-20, 20, (t1-t0)/2)
-    motors.run(0, 0)
-        
-    # Move to set distance
+def align(centre_tolorance: int, distance_tolorance: int) -> bool:
     time_step = 0.002
+    
     while True:
         distance = laser_sensors.read([1])[0]
+        if distance is None: continue
         
-        if   distance > evac_state.approach_distance + distance_tolorance: motors.run( 20,  20, time_step)
-        elif distance < evac_state.approach_distance - distance_tolorance: motors.run(-20, -20, time_step)
-        else:                                                              break
+        if   distance > evac_state.align_distance + distance_tolorance: motors.run( 20,  20, time_step)
+        elif distance < evac_state.align_distance - distance_tolorance: motors.run(-20, -20, time_step)
+        else:                                                           break
+        
+        motors.run(0, 0, time_step * 3)
+        
+        debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
+    
+    direction = 1
+    while not find_centre(centre_tolorance, direction):
+        direction *= -1
+    
+    motors.run(0, 0, 0.3)
+        
+    while True:
+        distance = laser_sensors.read([1])[0]
+        if distance is None: continue
+        
+        if   distance > evac_state.align_distance + distance_tolorance: motors.run( 20,  20, time_step)
+        elif distance < evac_state.align_distance - distance_tolorance: motors.run(-20, -20, time_step)
+        else:                                                           break
         
         motors.run(0, 0, time_step * 2)
         
@@ -228,10 +235,11 @@ def align(searcher: Search, search_type: str, centre_tolorance: int, distance_to
 
 def grab() -> bool:
     # Fill the avaliable slot
+    motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.3)
     
     if claw.spaces[0] == "":
         # Left
-        motors.run(30, 0, 0.3)
+        motors.run(evac_state.base_speed, -evac_state.base_speed, 0.25)
         motors.run(0, 0)
         
         # Cup
@@ -247,7 +255,7 @@ def grab() -> bool:
         
     elif claw.spaces[1] == "":
         # Right
-        motors.run(0, 30, 0.3)
+        motors.run(-evac_state.base_speed, evac_state.base_speed, 0.25)
         motors.run(0, 0)
         
         # Cup
@@ -259,13 +267,18 @@ def grab() -> bool:
         claw.close(90)
         claw.lift(180, 0.02)
         
-        claw.spaces[0] = "live"
+        claw.spaces[1] = "live"
     else: return False
 
 evac_state = EvacuationState()
 
 def main() -> None:
     searcher = Search()
+    
+    # Warmup Camera
+    for _ in range(0, 5): image = evac_camera.capture_image()
+    # Warup TPU
+    searcher.ai_dead(image)
     
     while True:
         x, search_type = locate(searcher)
@@ -275,16 +288,9 @@ def main() -> None:
         
         motors.run(0, 0, 1)
 
-        align_success = align(searcher, search_type, 4, 0.2)
-        if not align_success:
-            print("FAILED ALIGNMENT")
-            motors.pause()
-            continue
-        
-        print("ALIGN SUCCESS!")
-    
+        align_success = align(10, 0.1)
+        if not align_success: continue
+            
         motors.run(0, 0, 1)
         
         grab()
-    
-    # motors.run(30, -30)
