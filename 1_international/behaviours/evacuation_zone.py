@@ -23,7 +23,7 @@ class Search():
         self.model = YOLO(self.model_path, task='detect')
         self.confidence_threshold = 0.3
     
-    def classic_live(self, image: np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
+    def classic_live(self, image: np.ndarray, last_x: Optional[int]) -> list[np.ndarray, Optional[int]]:
         spectral_threshold = 230
         kernel_size = 7
 
@@ -64,7 +64,7 @@ class Search():
         
         return [int(center_x), image]
     
-    def ai_dead(self, image:np.ndarray, last_x: Optional[int] = None) -> list[np.ndarray, Optional[int]]:
+    def ai_dead(self, image:np.ndarray, last_x: Optional[int]) -> list[np.ndarray, Optional[int]]:
         results = self.model(image, imgsz=self.input_shape, conf=self.confidence_threshold, verbose=False)
         
         xywh = results[0].boxes.xywh
@@ -75,6 +75,67 @@ class Search():
         
         image = results[0].plot()
         return [int(x), image]
+    
+    def red_triangle(self, image: np.ndarray) -> Optional[int]:
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        
+        # Adjusting: V_min | H_min=0, H_max=10, S_min=230, S_max=255, V_min=46, V_max=255
+        # Adjusting: S_min | H_min=170, H_max=179, S_min=230, S_max=255, V_min=0, V_max=255
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        mask_lower = cv2.inRange(hsv_image, (0, 230, 46), (10, 255, 255))
+        mask_upper = cv2.inRange(hsv_image, (170, 230, 0), (179, 255, 255))
+        mask = cv2.bitwise_or(mask_lower, mask_upper)
+        mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+        
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # If no contours are found, return None
+        if not contours: return None, None, None, None
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # If the largest contour is too small, return None
+        if cv2.contourArea(largest_contour) < 1200: return None, None, None, None
+
+        # Get the bounding rectangle of the largest contour
+        x, y, w, h = cv2.boundingRect(largest_contour)
+        
+        if h > w: return None
+
+        # Display debug information
+        if evac_state.X11:
+            cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
+            cv2.circle(image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
+
+        return int(x + w/2)
+        
+    def green_triangle(self, image: np.ndarray) -> Optional[int]:
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        
+        # Adjusting: V_min | H_min=0, H_max=10, S_min=230, S_max=255, V_min=46, V_max=255
+        # Adjusting: S_min | H_min=170, H_max=179, S_min=230, S_max=255, V_min=0, V_max=255
+        mask = cv2.inRange(hsv_image, (50, 120, 15), (70, 255, 255))
+        mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+        
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # If no contours are found, return None
+        if not contours: return None, None, None, None
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # If the largest contour is too small, return None
+        if cv2.contourArea(largest_contour) < 1200: return None, None, None, None
+
+        # Get the bounding rectangle of the largest contour
+        x, y, w, h = cv2.boundingRect(largest_contour)
+        
+        if h > w: return None
+
+        # Display debug information
+        if evac_state.X11:
+            cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
+            cv2.circle(image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
+
+        return int(x + w/2)
 
 class WallFollow():
     OFFSET = 3
@@ -110,7 +171,7 @@ class WallFollow():
         motors.run(left_speed, right_speed)
         debug([f"{error:.2f}", f"{raw_turn:.2f}", f"{left_speed:.2f} {right_speed:.2f}"],[30, 20, 10])
         
-def locate(searcher: Search) -> list[int, str]:
+def locate(searcher: Search) -> tuple[int, str]:
     wall_follower = WallFollow(kP=1.2, base_speed=30)
     base_speed = 30
     
@@ -122,12 +183,37 @@ def locate(searcher: Search) -> list[int, str]:
             motors.run(-base_speed, -base_speed, 0.5)
             motors.run( base_speed, -base_speed, 1.3)
         
-        live_x, _ = searcher.classic_live(image)
-        if live_x is not None: return [live_x, "live"]
+        if   claw.spaces[0] == "" and claw.spaces[1] == "":
+            live_x, _ = searcher.classic_live(image)
+            if live_x is not None: return live_x, "live"
+            
+            dead_x, _ = searcher.ai_dead(image)
+            if dead_x is not None: return dead_x, "dead"
         
-        dead_x, _ = searcher.ai_dead(image)
-        if dead_x is not None: return [dead_x, "dead"]
+        elif claw.spaces[0] != "" and claw.spaces[1] != "":
+            if evac_state.victims_saved <= 2:
+                green_x = searcher.green_triangle(image)
+                if green_x is not None: return green_x
+                
+            else:
+                red_x = searcher.red_triangle(image)
+                if red_x is not None: return red_x
         
+        else:
+            if evac_state.victims_saved <= 2 and "live" in claw.spaces:
+                green_x = searcher.green_triangle(image)
+                if green_x is not None: return green_x
+                
+            elif "dead" in claw.spaces:
+                red_x = searcher.red_triangle(image)
+                if red_x is not None: return red_x
+            
+            live_x, _ = searcher.classic_live(image)
+            if live_x is not None: return live_x, "live"
+            
+            dead_x, _ = searcher.ai_dead(image)
+            if dead_x is not None: return dead_x, "dead"
+            
         motors.run(base_speed, base_speed)
         # wall_follower.update()
         if evac_state.X11: show(image, "image")
