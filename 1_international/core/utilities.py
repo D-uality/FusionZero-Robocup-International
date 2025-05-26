@@ -1,7 +1,7 @@
 from core.shared_imports import mp, cv2, np
 
 # Print Function
-def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
+def debug(data: list[str], coloumn_widths: list[int], separator: str = "|") -> None:
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
     print(f" {separator} ".join(formatted_cells))
 
