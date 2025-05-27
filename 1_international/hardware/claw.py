@@ -43,14 +43,12 @@ class Claw():
     def close(self, angle: int) -> None:
         self.__pca.servo[self.__closer_pin].angle = angle
     
-    def read(self) -> list[str]:
+    def read(self):
         values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
         
-        spaces = ["", ""]
+        for i in range(0, len(self.spaces)):
+            if   values[i] < 160: self.spaces[i] = ""
+            elif values[i] < 230: self.spaces[i] = "dead"
+            else:                 self.spaces[i] = "live"
         
-        for i in range(0, len(spaces)):
-            if   values[i] <  30: spaces[i] = ""
-            elif values[i] < 124: spaces[i] = "dead"
-            else:                 spaces[i] = "live"
-            
-        return spaces
+        return self.spaces

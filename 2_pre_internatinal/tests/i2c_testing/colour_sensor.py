@@ -15,9 +15,9 @@ adc = ADC.ADS7830(i2c)
 # Function to read all channels
 def read_all_channels():
     analog_readings = []
-    for channel in range(8):
+    for channel in range(6, 8):
         analog_readings.append(int(AnalogIn(adc, channel).value / 256))
-        # time.sleep(0.001)
+        time.sleep(0.001)
 
     return analog_readings
     

@@ -12,8 +12,8 @@ class EvacuationState():
         self.victims_saved = 0
         self.base_speed = 30
         
-        self.approach_distance = 7
-        self.align_distance = 4
+        self.approach_distance = 3
+        self.align_distance = 3
         
 class Search():
     def __init__(self):
@@ -79,33 +79,32 @@ class Search():
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         
         if triangle == "red":
-            # Adjusting: V_min | H_min=0, H_max=10, S_min=230, S_max=255, V_min=46, V_max=255
-            # Adjusting: S_min | H_min=170, H_max=179, S_min=230, S_max=255, V_min=0, V_max=255
-            hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            mask_lower = cv2.inRange(hsv_image, (0, 230, 46), (10, 255, 255))
-            mask_upper = cv2.inRange(hsv_image, (170, 230, 0), (179, 255, 255))
+            mask_lower = cv2.inRange(hsv_image, (0, 200, 0), (20, 255, 255))
+            mask_upper = cv2.inRange(hsv_image, (160, 200, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
-            mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
         
         else:
-            # Adjusting: V_min | H_min=0, H_max=10, S_min=230, S_max=255, V_min=46, V_max=255
-            # Adjusting: S_min | H_min=170, H_max=179, S_min=230, S_max=255, V_min=0, V_max=255
             mask = cv2.inRange(hsv_image, (50, 120, 15), (70, 255, 255))
-            mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+            
+        mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
         
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # If no contours are found, return None
-        if not contours: return None, None, None, None
+        if not contours: return None
+        
+        if self.debug: 
+            for contour in contours: print(cv2.contourArea(contour))
+        
         largest_contour = max(contours, key=cv2.contourArea)
 
         # If the largest contour is too small, return None
-        if cv2.contourArea(largest_contour) < 1200: return None, None, None, None
+        if cv2.contourArea(largest_contour) < 4500: return None
 
         # Get the bounding rectangle of the largest contour
         x, y, w, h = cv2.boundingRect(largest_contour)
         
-        if h > w: return None
+        if h > w or y + h/2 > evac_camera.height / 2: return None
 
         # Display debug information
         if evac_state.X11:
@@ -128,7 +127,7 @@ class Movement():
             v1 =  evac_state.base_speed
             v2 =  evac_state.base_speed
         
-        elif self.state == "turning":
+        elif self.state == "touch":
             v1 =  evac_state.base_speed
             v2 = -evac_state.base_speed
         
@@ -136,29 +135,30 @@ class Movement():
         
         # Update state
         if self.state == "forwards" and sum(touch_sensors.read()) != 2:
-            self.state = "turning"
+            motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.5)
+            self.state = "touch"
             self.t0 = time.perf_counter()
             
-        elif self.state == "turning" and time.perf_counter() - time.perf_counter() - self.t0 > 1.5:
+        elif self.state == "touch" and time.perf_counter() - self.t0 > 1.5:
             self.state = "forwards"
             
         return v1, v2
     
-    def route(self, kP: float, x: int, distance: float, last_distance: float, time_step: float = 0) -> tuple[int]:
+    def route(self, kP: float, x: int, distance: float, last_distance: float, time_step: float = 0) -> tuple[int]:        
         Y_INTERCEPT = 0.5
-        MAXIMUM = 85
+        MAXIMUM = 100
         MAX_VELOCITY = 40
         MIN_VELOCITY = -10
         
         min_distance = min(distance, last_distance)
         
-        scalar = (Y_INTERCEPT / MAXIMUM) * min_distance + Y_INTERCEPT 
+        scalar = (Y_INTERCEPT / MAXIMUM) * min_distance + Y_INTERCEPT
         error = evac_camera.width / 2 - x
+
+        turn = kP * error
         
-        turn = (kP * error) * scalar
-        
-        v1 = evac_state.base_speed + turn
-        v2 = evac_state.base_speed - turn
+        v1 = (evac_state.base_speed - turn) * scalar
+        v2 = (evac_state.base_speed + turn) * scalar
         
         v1 = min(MAX_VELOCITY, max(v1, MIN_VELOCITY))
         v2 = min(MAX_VELOCITY, max(v2, MIN_VELOCITY))
@@ -166,7 +166,7 @@ class Movement():
         motors.run(v1, v2, time_step)
         if time_step != 0: motors.run(0, 0)
         
-        return v1, v2
+        return v1, v2, min_distance
     
     def wall_follow(self) -> tuple[int]:
         touch_values = touch_sensors.read()
@@ -199,13 +199,9 @@ def analyse(image: np.ndarray, search_type: str = "default", last_x: Optional[in
     triangles_enable = True
     
     # Determine what to search for based on claw state
-    if claw.spaces[0] == "" and claw.spaces == "":   triangles_enable = False
-    elif claw.spaces[0] != "" and claw.spaces != "": victims_enable   = False
-    
-    if triangles_enable and search_type in ["red", "green", "default"]:
-        x = search.triangle(image, "green" if evac_state.victims_saved <= 2 else "red")
-        if x is not None: return x, "green" if evac_state.victims_saved <= 2 else "red"
-    
+    if   claw.spaces[0] == "" and claw.spaces[1] == "": triangles_enable = False
+    elif claw.spaces[0] != "" and claw.spaces[1] != "": victims_enable   = False
+        
     if victims_enable:
         if search_type in ["live", "default"]:
             live_x = search.classic_live(image, last_x)
@@ -214,7 +210,12 @@ def analyse(image: np.ndarray, search_type: str = "default", last_x: Optional[in
         if search_type in ["dead", "default"]:
             dead_x = search.ai_dead(image, last_x)
             if dead_x is not None: return dead_x, "dead"
-        
+            
+    if triangles_enable and search_type in ["red", "green", "default"]:
+        x = search.triangle(image, "green" if evac_state.victims_saved <= 2 else "red")
+        if x is not None: return x, "green" if evac_state.victims_saved <= 2 else "red"
+    
+    
     return None, ""
 
 def locate() -> tuple[int, str]:
@@ -224,7 +225,7 @@ def locate() -> tuple[int, str]:
         image = evac_camera.capture_image()
         
         # Exit if target found
-        x, search_type = analyse(search, image)
+        x, search_type = analyse(image)
         if x is not None: return x, search_type
             
         v1, v2 = movement.random()
@@ -233,32 +234,30 @@ def locate() -> tuple[int, str]:
         if evac_state.debug: debug( [f"LOCATING", f"{v1} {v2}"], [15, 15] )
 
 def route(last_x: int, search_type: str) -> bool:
-    last_x = 0
     last_distance = 100
     
     while True:
         # Take measurements
         distance = laser_sensors.read([1])[0]
         image = evac_camera.capture_image()
-        
-        # Exit conditions
-        if   search_type in ["live", "dead"] and distance < evac_state.approach_distance: break
-        elif search_type in ["red", "green"] and sum(touch_sensors.read()) == 0:          break        
+        x, search_type = analyse(image, search_type, last_x)
         
         # Error handling
         if distance is None: continue
         if        x is None: return False
         
-        # Route with kP
-        min_distance_found = min(min_distance_found, distance)
-        x, search_type = analyse(image, search_type, last_x)
+        # Exit conditions
+        if   search_type in ["live", "dead"] and distance < evac_state.approach_distance: break
+        elif search_type in ["red", "green"] and sum(touch_sensors.read()) != 2:          break        
         
+        # Route with kP        
         time_step = 0.15 if search_type == "dead" else 0
-        v1, v2, last_distance = movement.route(1.3, x, distance, last_distance, time_step)
+        v1, v2, last_distance = movement.route(0.2, x, distance, last_distance, time_step)
         
         last_x = x
         
-        debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"{v1:.2f} {v2:.2f}"], [15, 15, 20, 20] )
+        if evac_state.X11:   show(image, "image")
+        if evac_state.debug: debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"{v1:.2f} {v2:.2f}"], [15, 15, 20, 20] )
 
     return True
 
@@ -277,7 +276,7 @@ def find_centre(centre_tolorance: int, direction: int = 1):
         
         if distance not in distances: distances.append(distance)
         
-        motors.run(-20 * direction, 20 * direction, time_step)
+        motors.run(-20 * direction, 20 * direction,     time_step)
         motors.run(              0,              0, time_step * 3)
         
         if len(distances) >= 3:
@@ -287,7 +286,7 @@ def find_centre(centre_tolorance: int, direction: int = 1):
         debug( ["ALIGNING [CENTRE]", "TURNING TILL NOT", f"{distance}"], [15, 15, 15])
 
 def align(centre_tolorance: int, distance_tolorance: int) -> bool:
-    time_step = 0.002
+    time_step = 0.02
     
     while True:
         distance = laser_sensors.read([1])[0]
@@ -315,49 +314,79 @@ def align(centre_tolorance: int, distance_tolorance: int) -> bool:
         elif distance < evac_state.align_distance - distance_tolorance: motors.run(-20, -20, time_step)
         else:                                                           break
         
-        motors.run(0, 0, time_step * 2)
+        motors.run(0, 0, time_step * 3)
         
         debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
         
     return True
 
-def grab() -> None:
+def grab() -> bool:
+    # Left: -1, Right: 1
     insert = -1 if claw.spaces[0] == "" else 1
     
+    debug( ["GRAB", "SETUP"], [15, 15] )
     # Setup
-    motors.run(         -evac_state.base_speed,          -evac_state.base_speed, 0.3)
-    motors.run( evac_state.base_speed * insert, -evac_state.base_speed * insert)
+    motors.run(         -evac_state.base_speed,         -evac_state.base_speed,  0.15)
+    motors.run(-evac_state.base_speed * insert, evac_state.base_speed * insert, 0.25)
     motors.run(0, 0)
     
+    debug( ["GRAB", "CUP"], [15, 15] )
     # Cup
     claw.close(180 if insert == -1 else 0)
-    claw.lift(0, 0.05)
+    claw.lift(0, 0.005)
     time.sleep(0.3)
     
+    debug( ["GRAB", "LIFT"], [15, 15] )
     # Lift
     claw.close(90)
-    claw.lift(180, 0.05)
+    claw.lift(180, 0.005)
     time.sleep(0.3)
     
-    results = claw.read()
-    claw.spaces[0 if insert == -1 else 1] = results[0 if insert == -1 else 1]
+    debug( ["GRAB", "VALIDATE"], [15, 15] )
+    claw.read()
+    debug( ["GRAB", f"{claw.spaces}"], [15, 15] )
+    
+    if claw.spaces[0 if insert == -1 else 1] != "": return True
+    else:                                           return False
 
 def dump(search_type: str) -> None:
+    TIME_STEP = 0.2
+    
+    motors.run(0, 0)
+    claw.read()
+    
     # Determine angles to visit
     dump_type: str    
     if   search_type == "green": dump_type = "live"
     else:                        dump_type = "dead"
-    angles = [180 if i == 0 else 0 for i, space in enumerate(claw.spaces) if space == dump_type]
+    
+    print(claw.spaces)
+    
+    angles = []
+    if claw.spaces[0] == dump_type: angles.append(180)
+    if claw.spaces[1] == dump_type: angles.append(0)
 
+    print(angles)
+    
     # Dump
     claw.lift(90)
-    for angle in angles:
+    
+    for i, angle in enumerate(angles):
         claw.close(angle)
-        claw.lift(100, 0.002)
-        claw.lift(90, 0.002)
+        claw.spaces[i] = ""
+        
+        for _ in range(0, 2):
+            claw.lift(80)
+            time.sleep(TIME_STEP)
+            claw.lift(90)
+            time.sleep(TIME_STEP)
+
         time.sleep(0.3)
         
+        evac_state.victims_saved += 1
+        
     claw.close(90)
+    claw.lift(180)
     
 evac_state = EvacuationState()
 search = Search()
@@ -366,7 +395,7 @@ movement = Movement()
 def main() -> None:    
     # Warmup camera and TPU
     for _ in range(0, 5): image = evac_camera.capture_image()
-    search.ai_dead(image)
+    search.ai_dead(image, None)
     
     while True:
         x, search_type = locate()
@@ -376,12 +405,8 @@ def main() -> None:
         
         # If it is a triangle
         if search_type in ["red", "green"]:
-            motors.run(-evac_state.base_speed, -evac_state.base_speed, 3)
-            route_success = route(x, search_type)
-            if not route_success: continue
-            
-            dump_success = dump(search_type)
-            if not dump_success: continue
+            motors.run(evac_state.base_speed, evac_state.base_speed, 0.3)          
+            dump(search_type)
             
             motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
             motors.run( evac_state.base_speed, -evac_state.base_speed, 1.5)
@@ -391,4 +416,9 @@ def main() -> None:
             align_success = align(10, 0.1)
             if not align_success: continue
                     
-            grab()
+            grab_success = grab()
+            if not grab_success:
+                motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
+                continue
+            
+            motors.run(evac_state.base_speed, -evac_state.base_speed, 1)

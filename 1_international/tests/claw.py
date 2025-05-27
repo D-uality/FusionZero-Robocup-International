@@ -7,17 +7,33 @@ from core.utilities import *
 
 start_display()
 
+def camera_claw():
+    image = evac_camera.capture_image()
+    show(image, "image")
+    mode, angle = list(map(int, input("Enter [Mode Angle]: ").split(" ")))
+    
+    if mode == 0:
+        claw.lift(angle)
+        
+    else:
+        claw.close(angle)
+
+def set_claw():
+    mode, angle = list(map(int, input("Enter [Mode Angle]: ").split(" ")))
+    
+    if mode == 0:
+        claw.lift(angle)
+        
+    else:
+        claw.close(angle)
+
+
+def read_claw():
+    claw.read()
+
 try:
     while True:
-        image = evac_camera.capture_image()
-        show(image, "image")
-        mode, angle = list(map(int, input("Enter [Mode Angle]: ").split(" ")))
-        
-        if mode == 0:
-            claw.lift(angle)
-            
-        else:
-            claw.close(angle)
+        read_claw()
         
 except:
     pass
