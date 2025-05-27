@@ -35,7 +35,13 @@ def main() -> None:
                 
                 gyro_values = gyroscope.read()
                 gyro_values = gyro_values if gyro_values is not None else ""
-                debug(["MODE 2", f"Touch: {touch_sensors.read()}" f"Lasers: {laser_sensors.read()}", f"Gyro: {gyro_values}"], [30, 15, 15, 15])
+                debug( [
+                    "READING", 
+                    " ".join(list(map(str, touch_sensors.read()))),
+                    " ".join(list(map(str, laser_sensors.read()))), 
+                    " ".join(list(map(str, gyro_values)))
+                    ], [25, 20, 20, 20]
+                )
 
             elif listener.mode.value == 9: listener.exit_event.set()
 
