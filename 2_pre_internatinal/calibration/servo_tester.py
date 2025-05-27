@@ -10,10 +10,15 @@ def run(v1, v2, delay=0):
 
     calculatedAngles = [0, 0, 0, 0]
 
-    negativeGradients  = [0.7, 0.7, 0.7, 0.7]
-    negativeIntercepts = [-3, -3, -3, -3]
-    positiveGradients  = [0.7, 0.7, 0.7, 0.7]
-    positiveIntercepts = [3, 3, 3, 3]
+    negativeGradients  = [-0.96727, -0.90880, -0.90704, -0.77515]
+    negativeIntercepts = [0.54149, 0.49693, 0.25736, 0.51568]
+    positiveGradients  = [-1.00445, -0.93679, -0.72308, -0.78219]
+    positiveIntercepts = [-0.55059, -0.25260, -0.53597, -0.43908]
+
+    # [0.7, 0.7, 0.7, 0.7]
+    # [-3, -3, -3, -3]
+    # [0.7, 0.7, 0.7, 0.7]
+    # [3, 3, 3, 3]
 
     # negativeGradients  = [0.80872, 0.87105, 0.68875, 0.79321]
     # negativeIntercepts = [-3.3078, -5.3841, -2.8756, -1.1818]

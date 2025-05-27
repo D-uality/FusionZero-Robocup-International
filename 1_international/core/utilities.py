@@ -1,7 +1,7 @@
 from core.shared_imports import mp, cv2, np
 
 # Print Function
-def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
+def debug(data: list[str], coloumn_widths: list[int], separator: str = "|") -> None:
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
     print(f" {separator} ".join(formatted_cells))
 
@@ -9,21 +9,26 @@ _display_process = None
 _display_queue = None
 
 def _display_worker(queue: mp.Queue):
-    window_last_frame_time = {}
+    try:
+        window_last_frame_time = {}
 
-    while True:
-        item = queue.get()
-        if item is None:
-            break
-        if isinstance(item, tuple) and len(item) == 2:
-            frame, window_name = item
-            if isinstance(frame, np.ndarray):
-                cv2.imshow(window_name, frame)
-                cv2.waitKey(1)
-                window_last_frame_time[window_name] = True
+        while True:
+            item = queue.get()
+            if item is None:
+                break
+            if isinstance(item, tuple) and len(item) == 2:
+                frame, window_name = item
+                if isinstance(frame, np.ndarray):
+                    cv2.imshow(window_name, frame)
+                    cv2.waitKey(1)
+                    window_last_frame_time[window_name] = True
 
-    cv2.destroyAllWindows()
-
+    except KeyboardInterrupt:
+        pass
+    
+    finally:
+        cv2.destroyAllWindows()
+        
 def start_display():
     global _display_process, _display_queue
     if _display_process is None:

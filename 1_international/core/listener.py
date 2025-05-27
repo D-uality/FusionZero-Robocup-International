@@ -4,17 +4,14 @@ class ModeListener():
     def __init__(self, initial_mode: int = 0) -> None:
         self.__button_pin = 22
         
-        # shared state
         self.mode        = mp.Value("i", initial_mode)
         self.exit_event  = mp.Event()
         self.input_queue = mp.Queue()
 
-        # create - but don’t start—child processes
         self.__process_console = mp.Process(target=self.__input_listener,  daemon=True)
         self.__process_button  = mp.Process(target=self.__button_listener, daemon=True)
         
     def start(self) -> None:
-        # Start the child processes
         self.__process_console.start()
         self.__process_button.start()
 
@@ -39,33 +36,35 @@ class ModeListener():
         Thread(target=input_thread, daemon=True).start()
 
     def __input_listener(self) -> None:
-        valid = {"0", "1", "2", "9"}
-        while not self.exit_event.is_set():
-            if not self.input_queue.empty():
-                mode = self.input_queue.get()
-                
-                if mode in valid:
-                    mode = int(mode)
+        try:
+            valid = {"0", "1", "2", "3", "9"}
+            while not self.exit_event.is_set():
+                if not self.input_queue.empty():
+                    mode = self.input_queue.get()
                     
-                else:
-                    mode = 1
+                    mode = int(mode) if mode in valid else 1                    
+                    self.mode.value = mode
                     
-                self.mode.value = mode
-                
-                if mode == 9:
-                    self.exit_event.set()
+                    if mode == 9: self.exit_event.set()
+                    
+        except KeyboardInterrupt:
+            pass
 
     def __button_listener(self) -> None:
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.__button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        try:
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(self.__button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        prev_pressed = (GPIO.input(self.__button_pin) == GPIO.LOW)
+            prev_pressed = (GPIO.input(self.__button_pin) == GPIO.LOW)
 
-        while not self.exit_event.is_set():
-            pressed = (GPIO.input(self.__button_pin) == GPIO.LOW)
-            
-            if pressed != prev_pressed:
-                self.mode.value = 1 if pressed else 0
-                prev_pressed = pressed
+            while not self.exit_event.is_set():
+                pressed = (GPIO.input(self.__button_pin) == GPIO.LOW)
+                
+                if pressed != prev_pressed:
+                    self.mode.value = 1 if pressed else 0
+                    prev_pressed = pressed
 
-            time.sleep(0.05)
+                time.sleep(0.05)
+        
+        except KeyboardInterrupt:
+            pass

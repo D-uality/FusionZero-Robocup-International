@@ -46,7 +46,7 @@ class LineFollower():
         self.lightest_black = 100
         self.silver = 253
 
-        self.camera = camera
+        self.camera = None
         self.motors = motors
 
         self.last_angle = 90

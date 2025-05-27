@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from ultralytics import YOLO
-import cv2, glob, random, os
+import cv2, glob, random, os, time
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 # Path to your trained TFLite model (plain INT-8)
@@ -50,6 +50,7 @@ def main():
 
     print("Starting live camera inference. Press 'q' to quit.")
     while True:
+        t0 = time.perf_counter()
         ret, frame = cap.read()
         if not ret: continue
 
@@ -61,7 +62,11 @@ def main():
         results = model(frame, imgsz=IMG_SIZE, conf=CONF_THR)
         annotated = results[0].plot()
 
+        print(f"fps: {1/(time.perf_counter() - t0):.2f}")
+
         cv2.imshow("Live Detections", annotated)
+        
+        
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
