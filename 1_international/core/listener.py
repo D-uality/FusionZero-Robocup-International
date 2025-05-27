@@ -26,11 +26,7 @@ class ModeListener():
         # Start a thread in the main process to handle user input
         def input_thread() -> None:
             while not self.exit_event.is_set():
-                print("[0] Nothing")
-                print("[1] Line follow")
-                print("[9] Exit program")
-                
-                mode = input("Enter mode: ")
+                mode = input()
                 self.input_queue.put(mode)
 
         Thread(target=input_thread, daemon=True).start()

@@ -36,7 +36,7 @@ class Motors():
         self.pca.servo[self.servo_pins[2]].angle = self.stop_angles[2]
         self.pca.servo[self.servo_pins[3]].angle = self.stop_angles[3]
 
-        debug(["INITIALISATION", "MOTORS", "✓"], [24, 14, 50])
+        debug(["INITIALISATION", "MOTORS", "✓"], [25, 25, 50])
     
     def run(self, v1: float, v2: float, delay: float = 0) -> None:
         if self.user_at_host == "frederick@raspberrypi": v1, v2 = v2, v1
@@ -67,7 +67,7 @@ class Motors():
                 time.sleep(delay)
         except Exception as e:  
             print("I2C TIMEOUT!")
-            debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
+            debug(["INITIALISATION", "MOTORS", f"{e}"], [25, 25, 50])
             print()
             
             raise e

@@ -3,8 +3,7 @@ from core.utilities import debug
 
 class LaserSensors():
     def __init__(self):
-        # self.x_shut_pins = [23, 24, 25]  # Left, Middle, Right
-        self.x_shut_pins = [23, 24]  # Left, Right
+        self.x_shut_pins = [23, 24, 25]
         self.tof_sensors = []
         
         for pin in self.x_shut_pins:
@@ -31,7 +30,7 @@ class LaserSensors():
                 if pin_number < len(self.x_shut_pins) - 1:
                     sensor_i2c.set_address(pin_number + 0x30)
 
-                debug(["INITIALISATION", f"LASERS {pin_number}", "✓"], [24, 14, 50])
+                debug(["INITIALISATION", f"LASERS {pin_number}", "✓"], [25, 25, 50])
                 break
 
             except Exception as e:
