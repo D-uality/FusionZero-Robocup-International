@@ -1,42 +1,56 @@
-from core.shared_imports import time, ServoKit
+from core.shared_imports import time, ServoKit, ADC, board, AnalogIn
 from core.utilities import debug
 
 class Claw():
     def __init__(self):
-        self.lifter_pin = 9
-        self.closer_pin = 8
-        self.pca = ServoKit(channels=16)
+        self.__i2c = board.I2C()
+        self.__ADC = ADC.ADS7830(self.__i2c)
+        
+        self.__lifter_pin = 9
+        self.__closer_pin = 8
+        self.__pca = ServoKit(channels=16)
+        
+        self.__pca.servo[self.__lifter_pin].angle = 160
+        self.__pca.servo[self.__closer_pin].angle = 90
         
         self.spaces = ["", ""]
         
-        self.pca.servo[self.lifter_pin].angle = 160
-        self.pca.servo[self.closer_pin].angle = 90
-        
         debug(["INITIALISATION", "CLAW", "✓"], [24, 14, 50])
-        
+    
     def lift(self, target_angle: int, time_delay: float = 0) -> None:
         if target_angle < 20: target_angle = 20
         if target_angle > 160: target_angle = 160
-        current_angle = self.pca.servo[self.lifter_pin].angle
+        current_angle = self.__pca.servo[self.__lifter_pin].angle
 
         if current_angle == target_angle: return None
 
         if current_angle > target_angle:
             while current_angle > target_angle:
                 current_angle -= 1
-                self.pca.servo[self.lifter_pin].angle = current_angle
+                self.__pca.servo[self.__lifter_pin].angle = current_angle
                 time.sleep(time_delay)
 
         elif current_angle < target_angle:
             while current_angle < target_angle:
                 current_angle += 1
-                self.pca.servo[self.lifter_pin].angle = current_angle
+                self.__pca.servo[self.__lifter_pin].angle = current_angle
                 time.sleep(time_delay)
 
         else:
-            self.pca.servo[self.lifter_pin].angle = target_angle
+            self.__pca.servo[self.__lifter_pin].angle = target_angle
             time.sleep(time_delay)
         
     def close(self, angle: int) -> None:
-        self.pca.servo[self.closer_pin].angle = angle
+        self.__pca.servo[self.__closer_pin].angle = angle
+    
+    def read(self) -> list[str]:
+        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
         
+        spaces = ["", ""]
+        
+        for i in range(0, len(spaces)):
+            if   values[i] <  30: spaces[i] = ""
+            elif values[i] < 124: spaces[i] = "dead"
+            else:                 spaces[i] = "live"
+            
+        return spaces

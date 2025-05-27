@@ -321,43 +321,44 @@ def align(centre_tolorance: int, distance_tolorance: int) -> bool:
         
     return True
 
-def grab() -> bool:
-    # Fill the avaliable slot
-    motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.3)
+def grab() -> None:
+    insert = -1 if claw.spaces[0] == "" else 1
     
-    if claw.spaces[0] == "":
-        # Left
-        motors.run(evac_state.base_speed, -evac_state.base_speed, 0.25)
-        motors.run(0, 0)
-        
-        # Cup
-        claw.close(180)
-        claw.lift(0, 0.02)
-        time.sleep(0.3)
-        
-        # Lift
-        claw.close(90)
-        claw.lift(180, 0.02)
-        
-        claw.spaces[0] = "live"
-        
-    elif claw.spaces[1] == "":
-        # Right
-        motors.run(-evac_state.base_speed, evac_state.base_speed, 0.25)
-        motors.run(0, 0)
-        
-        # Cup
-        claw.close(0)
-        claw.lift(0, 0.02)
-        time.sleep(0.3)
-        
-        # Lift
-        claw.close(90)
-        claw.lift(180, 0.02)
-        
-        claw.spaces[1] = "live"
-    else: return False
+    # Setup
+    motors.run(         -evac_state.base_speed,          -evac_state.base_speed, 0.3)
+    motors.run( evac_state.base_speed * insert, -evac_state.base_speed * insert)
+    motors.run(0, 0)
+    
+    # Cup
+    claw.close(180 if insert == -1 else 0)
+    claw.lift(0, 0.05)
+    time.sleep(0.3)
+    
+    # Lift
+    claw.close(90)
+    claw.lift(180, 0.05)
+    time.sleep(0.3)
+    
+    results = claw.read()
+    claw.spaces[0 if insert == -1 else 1] = results[0 if insert == -1 else 1]
 
+def dump(search_type: str) -> None:
+    # Determine angles to visit
+    dump_type: str    
+    if   search_type == "green": dump_type = "live"
+    else:                        dump_type = "dead"
+    angles = [180 if i == 0 else 0 for i, space in enumerate(claw.spaces) if space == dump_type]
+
+    # Dump
+    claw.lift(90)
+    for angle in angles:
+        claw.close(angle)
+        claw.lift(100, 0.002)
+        claw.lift(90, 0.002)
+        time.sleep(0.3)
+        
+    claw.close(90)
+    
 evac_state = EvacuationState()
 search = Search()
 movement = Movement()
@@ -368,16 +369,26 @@ def main() -> None:
     search.ai_dead(image)
     
     while True:
-        x, search_type = locate(search)
+        x, search_type = locate()
         
-        route_success = route(search_type, x)
+        route_success = route(x, search_type)
         if not route_success: continue
         
-        motors.run(0, 0, 1)
-
-        align_success = align(10, 0.1)
-        if not align_success: continue
+        # If it is a triangle
+        if search_type in ["red", "green"]:
+            motors.run(-evac_state.base_speed, -evac_state.base_speed, 3)
+            route_success = route(x, search_type)
+            if not route_success: continue
             
-        motors.run(0, 0, 1)
+            dump_success = dump(search_type)
+            if not dump_success: continue
+            
+            motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
+            motors.run( evac_state.base_speed, -evac_state.base_speed, 1.5)
         
-        grab()
+        # Align only if we're picking up
+        if search_type in ["live", "dead"]:
+            align_success = align(10, 0.1)
+            if not align_success: continue
+                    
+            grab()
