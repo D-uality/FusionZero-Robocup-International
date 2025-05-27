@@ -37,7 +37,7 @@ class RobotState():
         
 class LineFollower():
     def __init__(self):
-        self.straight_speed = 30
+        self.speed = 30
         self.turn_multi = 1.5
 
         self.min_black_area = 1000
@@ -125,21 +125,21 @@ class LineFollower():
             elif robot_state.trigger["uphill"]:
                 f, t = 1.3, 3
             if robot_state.trigger["downhill"]:
-                v1 -= 20
-                v2 += 20
+                v1 -= 10
+                v2 += 10
                 t = 4
                 b = 1
 
-            motors.run(-self.straight_speed, -self.straight_speed, b)
-            motors.run(self.straight_speed, self.straight_speed, f)
+            motors.run(-self.speed, -self.speed, b)
+            motors.run(self.speed, self.speed, f)
             motors.run(v1, v2, t)
             self.run_till_camera(v1, v2, 10)
         else:
-            v1 = self.straight_speed + self.turn
-            v2 = self.straight_speed - self.turn
+            v1 = self.speed + self.turn
+            v2 = self.speed - self.turn
             if robot_state.last_downhill < 100:
-                v1 = self.straight_speed + self.turn * 0.7 - 20
-                v2 = self.straight_speed - self.turn * 0.7 - 20
+                v1 = self.speed + self.turn * 0.7 - 20
+                v2 = self.speed - self.turn * 0.7 - 20
             elif robot_state.trigger["uphill"]:
                 v1 += 10
                 v2 += 10
@@ -608,6 +608,7 @@ def update_triggers(robot_state: RobotState) -> list[str]:
             robot_state.triggers = prev_triggers
 
 def avoid_obstacle(line_follow: LineFollower) -> None:    
+    motors.run(-line_follow.speed, -line_follow.speed, 0.2)
     while True:
         left_value = laser_sensors.read([0])[0]
         if left_value is not None: break
@@ -633,12 +634,12 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     # Turn until appropriate laser sees obstacle
     v1 = v2 = laser_pin = 0
     if direction == "cw":
-        v1 = -line_follow.straight_speed
-        v2 =  line_follow.straight_speed * 0.8
+        v1 = -line_follow.speed
+        v2 =  line_follow.speed * 0.8
         laser_pin = 2
     else:
-        v1 =  line_follow.straight_speed * 0.8
-        v2 = -line_follow.straight_speed
+        v1 =  line_follow.speed * 0.8
+        v2 = -line_follow.speed
         laser_pin = 0
 
     # SETUP
@@ -661,18 +662,18 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
 
     # Circle obstacle
     if direction == "cw":
-        v1 =  line_follow.straight_speed
-        v2 = -line_follow.straight_speed
+        v1 =  line_follow.speed
+        v2 = -line_follow.speed
         laser_pin = 2
         colour_pin = 2
     else:
-        v1 = -line_follow.straight_speed
-        v2 =  line_follow.straight_speed
+        v1 = -line_follow.speed
+        v2 =  line_follow.speed
         laser_pin = 0
         colour_pin = 2
 
     # oled_display.text("Circle Obstacle: Starting", 0, 40, size=10)
-    circle_obstacle(line_follow.straight_speed, line_follow.straight_speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
+    circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
 
     motors.run(0, 0, 0.15)
 
@@ -689,17 +690,17 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
             break
 
         if laser_value is not None:
-            error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.straight_speed)), int(-1*line_follow.straight_speed))
+            error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.speed)), int(-1*line_follow.speed))
 
         if sum(touch_values) < 2:
-            motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING BACK TILL OBSTACLE")
-            motors.run(line_follow.straight_speed, line_follow.straight_speed, 0.15)
+            motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 25, "TURNING BACK TILL OBSTACLE")
+            motors.run(line_follow.speed, line_follow.speed, 0.1)
 
         print(error)
         if direction == "cw":
-            motors.run(line_follow.straight_speed + error, line_follow.straight_speed - error)
+            motors.run(line_follow.speed + error, line_follow.speed - error)
         else:
-            motors.run(line_follow.straight_speed - error, line_follow.straight_speed + error)
+            motors.run(line_follow.speed - error, line_follow.speed + error)
 
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
