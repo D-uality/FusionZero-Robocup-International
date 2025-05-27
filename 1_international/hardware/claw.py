@@ -15,7 +15,7 @@ class Claw():
         
         self.spaces = ["", ""]
         
-        debug(["INITIALISATION", "CLAW", "✓"], [24, 14, 50])
+        debug(["INITIALISATION", "CLAW", "✓"], [25, 25, 50])
     
     def lift(self, target_angle: int, time_delay: float = 0) -> None:
         if target_angle < 20: target_angle = 20

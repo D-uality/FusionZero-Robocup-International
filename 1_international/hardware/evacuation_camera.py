@@ -1,4 +1,5 @@
 from core.shared_imports import cv2, np
+from core.utilities import debug
 
 class EvacuationCamera():
     def __init__(self):
@@ -17,6 +18,8 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FPS, 30)
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        
+        debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
 
     def capture_image(self) -> np.ndarray:
         while True:

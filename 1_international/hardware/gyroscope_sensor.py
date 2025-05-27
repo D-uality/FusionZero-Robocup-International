@@ -17,7 +17,7 @@ class Gyroscope():
         self.gyroscope.enable_feature(BNO_REPORT_MAGNETOMETER)
         self.gyroscope.enable_feature(BNO_REPORT_ROTATION_VECTOR)
         
-        debug(["INITIALISATION", "GYROSCOPE", "✓"], [24, 24, 50])
+        debug(["INITIALISATION", "GYROSCOPE", "✓"], [25, 25, 50])
 
         self.read()
 

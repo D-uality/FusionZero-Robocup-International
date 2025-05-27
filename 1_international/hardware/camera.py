@@ -1,5 +1,7 @@
-from core.shared_imports import cv2, np, Picamera2, Transform
+from core.shared_imports import cv2, np, Picamera2, Transform, os
 from core.utilities import debug
+
+os.environ["LIBCAMERA_LOG_LEVELS"] = "2"
 
 class Camera():
     def __init__(self):
@@ -33,7 +35,7 @@ class Camera():
         self.camera.configure(camera_config)
         self.camera.start()
         
-        debug(["INITIALISATION", "CAMERA", "✓"], [24, 15, 50])
+        debug(["INITIALISATION", "CAMERA", "✓"], [25, 25, 50])
         print()
             
     def capture_array(self) -> np.ndarray:
@@ -64,13 +66,13 @@ class Camera():
         if self.camera:
             self.camera.close()
             self.camera = None
-            debug(["TERMINATION", "CAMERA", "✓"], [24, 15, 50])
+            debug(["TERMINATION", "CAMERA", "✓"], [25, 25, 50])
             print()
             # oled_display.reset()
             # oled_display.text("Camera: ✓", 0, 40)
             # oled_display.show()
         else:
-            debug(["TERMINATION", "CAMERA", "X"], [24, 15, 50])
+            debug(["TERMINATION", "CAMERA", "X"], [25, 25, 50])
             print()
             # oled_display.reset()
             # oled_display.text("Camera: X", 0, 40)
