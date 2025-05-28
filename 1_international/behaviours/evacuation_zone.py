@@ -15,6 +15,8 @@ class EvacuationState():
         self.approach_distance = 3
         self.align_distance = 3
         
+        self.wall_threshold = 15
+        
 class Search():
     def __init__(self):
         self.debug = False
@@ -321,18 +323,38 @@ def align(centre_tolorance: int, distance_tolorance: int) -> bool:
     return True
 
 def grab() -> bool:
+    START_ANGLE = -140
+    END_ANGLE   = -180
+    
+    # Determine whether we need to reposition
+    side_distances = laser_sensors.read([0, 2])
+    
+    reposition = False
+    for distance in side_distances:
+        if distance < evac_state.wall_threshold:
+            reposition = True
+            break
+        
+    if reposition:
+        # Left: - 1, Right: 1
+        reposition_direction = 1 if side_distances[0] > side_distances[1] else -1
+        
+        for angle in range(START_ANGLE, END_ANGLE, -1):
+            motors.steer(30, angle)
+            time.sleep( (3) / (START_ANGLE - END_ANGLE) )
+    
     # Left: -1, Right: 1
-    insert = -1 if claw.spaces[0] == "" else 1
+    pickup_direction = -1 if claw.spaces[0] == "" else 1
     
     debug( ["GRAB", "SETUP"], [15, 15] )
     # Setup
     motors.run(         -evac_state.base_speed,         -evac_state.base_speed,  0.15)
-    motors.run(-evac_state.base_speed * insert, evac_state.base_speed * insert, 0.25)
+    motors.run(-evac_state.base_speed * pickup_direction, evac_state.base_speed * pickup_direction, 0.25)
     motors.run(0, 0)
     
     debug( ["GRAB", "CUP"], [15, 15] )
     # Cup
-    claw.close(180 if insert == -1 else 0)
+    claw.close(180 if pickup_direction == -1 else 0)
     claw.lift(0, 0.005)
     time.sleep(0.3)
     
@@ -346,8 +368,8 @@ def grab() -> bool:
     claw.read()
     debug( ["GRAB", f"{claw.spaces}"], [15, 15] )
     
-    if claw.spaces[0 if insert == -1 else 1] != "": return True
-    else:                                           return False
+    if claw.spaces[0 if pickup_direction == -1 else 1] != "": return True
+    else:                                                     return False
 
 def dump(search_type: str) -> None:
     TIME_STEP = 0.2
@@ -360,13 +382,12 @@ def dump(search_type: str) -> None:
     if   search_type == "green": dump_type = "live"
     else:                        dump_type = "dead"
     
-    print(claw.spaces)
-    
+    # Find the angles to visit    
     angles = []
     if claw.spaces[0] == dump_type: angles.append(180)
     if claw.spaces[1] == dump_type: angles.append(0)
-
-    print(angles)
+    
+    debug( [f"DUMP", f"Spaces: {claw.spaces}"], [] )
     
     # Dump
     claw.lift(90)

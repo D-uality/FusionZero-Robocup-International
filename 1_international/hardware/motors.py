@@ -1,4 +1,4 @@
-from core.shared_imports import time, ServoKit, operator, socket, getpass
+from core.shared_imports import time, ServoKit, socket, getpass, math
 from core.utilities import debug
 
 class Motors():
@@ -31,10 +31,8 @@ class Motors():
             print(self.user_at_host)
             raise ValueError(f"Unknown hostname: {hostname}")
        
-        self.pca.servo[self.servo_pins[0]].angle = self.stop_angles[0]
-        self.pca.servo[self.servo_pins[1]].angle = self.stop_angles[1]
-        self.pca.servo[self.servo_pins[2]].angle = self.stop_angles[2]
-        self.pca.servo[self.servo_pins[3]].angle = self.stop_angles[3]
+        for i in range(0, 4):
+            self.pca.servo[self.servo_pins[i]].angle = self.stop_angles[i]
 
         debug(["INITIALISATION", "MOTORS", "✓"], [25, 25, 50])
     
@@ -54,23 +52,27 @@ class Motors():
         for i in range(2, 4):
             if   (v2 < self.negative_intercepts[i]): calculated_angles[i] = self.negative_gradients[i] * v2 + self.negative_intercepts[i]
             elif (v2 > self.positive_intercepts[i]): calculated_angles[i] = self.positive_gradients[i] * v2 + self.positive_intercepts[i]
-            else:                                   calculated_angles[i] = 0
+            else:                                    calculated_angles[i] = 0
 
             calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
+        
         try:
-            self.pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+60), 90-40)
-            self.pca.servo[self.servo_pins[1]].angle = max(min(self.stop_angles[1] + calculated_angles[1], 90+60), 90-40)
-            self.pca.servo[self.servo_pins[2]].angle = max(min(self.stop_angles[2] + calculated_angles[2], 90+40), 90-40)
-            self.pca.servo[self.servo_pins[3]].angle = max(min(self.stop_angles[3] + calculated_angles[3], 90+40), 90-40)
+            for i in range(0, 4): self.pca.servo[self.servo_pins[i]].angle = max(min(self.stop_angles[i] + calculated_angles[i], 90+60), 90-40)
 
             if delay > 0:
                 time.sleep(delay)
-        except Exception as e:  
-            print("I2C TIMEOUT!")
-            debug(["INITIALISATION", "MOTORS", f"{e}"], [25, 25, 50])
-            print()
-            
-            raise e
+                
+        except Exception as e:
+            debug(["I2C TIMEOUT", "MOTORS", f"{e}"], [25, 25, 50])
+                    
+    def steer(self, v: float, angle: float, delay: float = 0):
+        angle += 90
+        angle = max(min(angle, 180), -180)
+        
+        v1 = v * math.cos(math.radians(angle))
+        v2 = v * math.sin(math.radians(angle))
+        
+        self.run(v1, v2, delay)
         
     def pause(self) -> None:
         self.run(0, 0)
