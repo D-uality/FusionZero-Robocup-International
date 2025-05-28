@@ -39,5 +39,4 @@ from adafruit_bno08x import (
 
 GPIO.setmode(GPIO.BCM)
 
-from core.utilities import debug
-debug( ["INITIALISATION", f"{time.perf_counter() - start_time:.2f}"], [25, 25] )
+print(f"{time.perf_counter() - start_time:.2f}")

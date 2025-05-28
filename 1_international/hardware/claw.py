@@ -44,11 +44,35 @@ class Claw():
         self.__pca.servo[self.__closer_pin].angle = angle
     
     def read(self):
-        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+        LEFT_BASE_DEFAULT = 164
+        LEFT_UPPER_DEFUALT = 170
+        LEFT_BLACK = 230
         
-        for i in range(0, len(self.spaces)):
-            if   values[i] < 160: self.spaces[i] = ""
-            elif values[i] < 230: self.spaces[i] = "dead"
-            else:                 self.spaces[i] = "live"
+        RIGHT_BASE_DEFAULT = 166
+        RIGHT_UPPER_DEFUALT = 167
+        RIGHT_BLACK = 230
         
+        TRIALS = 15
+        
+        counts = [0, 0]
+        
+        for _ in range(0, TRIALS):
+            values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+            
+            if values[0] <= LEFT_BASE_DEFAULT  or values[0] <= LEFT_UPPER_DEFUALT  and values[1] >= RIGHT_BLACK: counts[0] += 0
+            elif values[0] >= LEFT_BLACK: counts[0] += 1
+            else: counts[0] -= 1
+            
+            if values[1] <= RIGHT_BASE_DEFAULT or values[1] <= RIGHT_UPPER_DEFUALT and values[0] >=  LEFT_BLACK: counts[1] += 0
+            elif values[1] >= RIGHT_BLACK: counts[1] += 1
+            else: counts[1] -= 1
+        
+        counts[0] = counts[0] / TRIALS
+        counts[1] = counts[1] / TRIALS
+        
+        for i, count in enumerate(counts):
+            if   count >  0.5: self.spaces[i] = "live"
+            elif count < -0.5: self.spaces[i] = "dead"
+            else:              self.spaces[i] = ""
+                
         return self.spaces

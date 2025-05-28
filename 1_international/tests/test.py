@@ -21,14 +21,12 @@ def evac_image():
     
     show(image, "image")
 
-def test_dump():
-    dump("green")
-
 try:
     search = Search()
     
-    input()
-    dump("green")
+    while True:
+        claw.read()
+        print(claw.spaces)
 
 except KeyboardInterrupt:
     pass

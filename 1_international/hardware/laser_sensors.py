@@ -3,7 +3,8 @@ from core.utilities import debug
 
 class LaserSensors():
     def __init__(self):
-        self.x_shut_pins = [23, 24, 25]
+        # self.x_shut_pins = [24, 25]
+        self.x_shut_pins = [25, 24]
         self.tof_sensors = []
         
         for pin in self.x_shut_pins:
