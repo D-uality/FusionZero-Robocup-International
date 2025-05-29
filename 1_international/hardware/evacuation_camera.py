@@ -3,7 +3,7 @@ from core.utilities import debug
 
 class EvacuationCamera():
     def __init__(self):
-        self.width = 320  * 2
+        self.width  = 320 * 2
         self.height = 240 * 2
         
         device = "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._USB_2.0_Camera_SN0001-video-index0"
@@ -23,8 +23,13 @@ class EvacuationCamera():
 
     def capture_image(self) -> np.ndarray:
         while True:
-            ok, image = self.camera.read()
+            try:
+                ok, image = self.camera.read()
+            except:
+                print("FAILED TO CAPTURE IMAGE! 1")
             if ok: break
+            
+            print("FAILED TO CAPTURE IMAGE! 2")
         
         image = image[:int(0.5208333333 * self.height), :]
         

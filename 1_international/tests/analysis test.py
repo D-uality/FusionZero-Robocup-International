@@ -24,9 +24,8 @@ def evac_image():
 try:
     search = Search()
     
-    while True:
-        claw.read()
-        print(claw.spaces)
+    while True:        
+        evac_image()
 
 except KeyboardInterrupt:
     pass

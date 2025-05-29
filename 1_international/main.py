@@ -3,9 +3,9 @@ from core.shared_imports import GPIO, time
 from core.listener import ModeListener
 from core.utilities import debug
 
+from hardware.robot import *
 import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
-from hardware.robot import *
 
 listener = ModeListener()
 
@@ -51,10 +51,10 @@ def main() -> None:
     finally:
         GPIO.cleanup()
         evac_camera.release()
+        camera.close()
         
         claw.lift(160)
         claw.close(90)
-        
         motors.run(0, 0)
 
 if __name__ == "__main__": main()
