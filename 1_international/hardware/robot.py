@@ -9,7 +9,7 @@ from hardware.evacuation_camera import EvacuationCamera
 from hardware.claw import Claw
 
 motors = Motors()
-laser_sensors = LaserSensors()
+laser_sensors = LaserSensors(motors)
 touch_sensors = TouchSensors()
 camera = Camera()
 colour_sensors = ColourSensors()

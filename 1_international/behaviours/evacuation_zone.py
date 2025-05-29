@@ -11,10 +11,13 @@ class EvacuationState():
         
         self.victims_saved = 0
         self.base_speed = 30
+        self.fast_speed = 45
         
         self.live_approach_distance = 3
         self.dead_approach_distance = 6
         self.align_distance = 3
+        
+        self.minimum_align_distance = 20
         
 class Search():
     def __init__(self):
@@ -125,12 +128,12 @@ class Movement():
         # Set speeds
         v1 = v2 = 0
         if self.state == "forwards":
-            v1 =  evac_state.base_speed
-            v2 =  evac_state.base_speed
+            v1 =  evac_state.fast_speed
+            v2 =  evac_state.fast_speed
         
         elif self.state == "touch":
-            v1 =  evac_state.base_speed
-            v2 = -evac_state.base_speed
+            v1 =  evac_state.fast_speed
+            v2 = -evac_state.fast_speed
         
         motors.run(v1, v2)
         
@@ -158,8 +161,9 @@ class Movement():
 
         turn = kP * error
         
-        v1 = (evac_state.base_speed - turn) * scalar
-        v2 = (evac_state.base_speed + turn) * scalar
+        if search_type in ["live", "dead"]:
+            v1 = (evac_state.base_speed if search_type in ["live", "dead"] else evac_state.fast_speed - turn) * scalar
+            v2 = (evac_state.base_speed if search_type in ["live", "dead"] else evac_state.fast_speed + turn) * scalar
         
         v1 = min(MAX_VELOCITY, max(v1, MIN_VELOCITY))
         v2 = min(MAX_VELOCITY, max(v2, MIN_VELOCITY))
@@ -205,16 +209,16 @@ def analyse(image: np.ndarray, search_type: str = "default", last_x: Optional[in
     live_count = claw.spaces.count("live")
     dead_count = claw.spaces.count("dead")
     
-    if evac_state.victims_saved + live_count < 2:         live_enable = True
-    if dead_count < 1:                                    dead_enable = True
+    if evac_state.victims_saved + live_count < 2:         live_enable  = True
+    if dead_count < 1:                                    dead_enable  = True
     if live_count > 0:                                    green_enable = True
-    if dead_count == 1 and evac_state.victims_saved == 2: red_enable = True
+    if dead_count == 1 and evac_state.victims_saved == 2: red_enable   = True
         
-    if search_type in ["live", "default"] and live_enable:
+    if search_type in ["live", "green", "default"] and live_enable:
         live_x = search.classic_live(image, last_x)
         if live_x is not None: return live_x, "live"
 
-    if search_type in ["dead", "default"] and dead_enable:
+    if search_type in ["dead", "green", "default"] and dead_enable:
         try:    dead_x = search.ai_dead(image, last_x)
         except: print("TPU FAILED")
         if dead_x is not None: return dead_x, "dead"
@@ -260,7 +264,7 @@ def route(last_x: int, search_type: str) -> bool:
         # Exit conditions
         if   search_type in ["live"]         and distance < evac_state.live_approach_distance: return True
         elif search_type in ["dead"]         and distance < evac_state.dead_approach_distance: return True
-        elif search_type in ["red", "green"] and distance < evac_state.dead_approach_distance: break        
+        elif search_type in ["red", "green"] and distance < evac_state.dead_approach_distance: break
         
         # Route with kP        
         time_step = 0.15 if search_type == "dead" else 0
@@ -280,6 +284,7 @@ def route(last_x: int, search_type: str) -> bool:
 def find_centre(centre_tolorance: int, direction: int = 1):
     time_step = 0.003
     initial_distance = 0
+    
     while True:
         initial_distance = laser_sensors.read([1])[0]
         if initial_distance is not None: break
@@ -307,7 +312,8 @@ def align(centre_tolorance: int, distance_tolorance: int) -> bool:
     
     while True:
         distance = laser_sensors.read([1])[0]
-        if distance is None: continue
+        if distance is None:             continue
+        if distance > 30:                break
         if time.perf_counter() - t0 > 3: return False
         
         if   distance > evac_state.align_distance + distance_tolorance: motors.run( 20,  20, time_step)
@@ -339,6 +345,8 @@ def align(centre_tolorance: int, distance_tolorance: int) -> bool:
     return True
 
 def grab() -> bool:
+    if "" not in claw.spaces: return False
+    
     # Left: -1, Right: 1
     insert = -1 if claw.spaces[0] == "" else 1
     

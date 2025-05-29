@@ -1,14 +1,17 @@
 from core.shared_imports import GPIO, board, time, adafruit_vl53l1x, Optional
 from core.utilities import debug
+from hardware.motors import Motors
 
 class LaserSensors():
-    def __init__(self):
+    def __init__(self, motors: Motors):
         # self.x_shut_pins = [24, 25]
         self.__x_shut_pins = [25, 24]
         self.__tof_sensors = []
         
         self.__fails = 0
         self.__last_values = [0, 0, 0]
+        
+        self.__motors = motors
         
         self.__setup()
 
@@ -29,13 +32,16 @@ class LaserSensors():
         for attempt in range(1, attempts + 1):
             try:
                 GPIO.output(x_shut_pin, GPIO.HIGH)
-                time.sleep(0.1)
+                time.sleep(0.2)
 
-                sensor_i2c = adafruit_vl53l1x.VL53L1X(board.I2C())
-                self.__tof_sensors.append(sensor_i2c)
+                sensor = adafruit_vl53l1x.VL53L1X(board.I2C())
+                sensor.distance_mode = 1 
+                sensor.timing_budget = 33
+
+                self.__tof_sensors.append(sensor)
 
                 if pin_number < len(self.__x_shut_pins) - 1:
-                    sensor_i2c.set_address(pin_number + 0x30)
+                    sensor.set_address(pin_number + 0x30)
 
                 debug(["INITIALISATION", f"LASERS {pin_number}", "✓"], [25, 25, 50])
                 break
@@ -48,12 +54,10 @@ class LaserSensors():
                     time.sleep(0.1)
 
     def read(self, pins=None) -> list[int]:
-        print(self.__fails)
         if self.__fails > 5:
-            
             print("LASER SENSORS FAILED!")
             self.__setup()
-            
+            self.__motors.run(0, 0)
             self.__fails = 0
         
         values = []
@@ -68,7 +72,8 @@ class LaserSensors():
                 print(f"Error reading sensor: {e}")
                 values.append(None)
 
-        self.__fails += 1 if not all(values) and not all(self.__last_values) else 0
+        
+        self.__fails = self.__fails + 1 if None in values and None in self.__last_values else 0
         self.__last_values = values
         
         return values

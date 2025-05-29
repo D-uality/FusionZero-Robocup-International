@@ -66,14 +66,36 @@ class Motors():
             debug(["I2C TIMEOUT", "MOTORS", f"{e}"], [25, 25, 50])
                     
     def steer(self, v: float, angle: float, delay: float = 0):
-        angle += 90
-        angle = max(min(angle, 180), -180)
-        
-        v1 = v * math.cos(math.radians(angle))
-        v2 = v * math.sin(math.radians(angle))
-        
+        """
+        Steer the vehicle by adjusting left and right motor speeds based on a target angle.
+
+        The "inner" wheel speed is linearly blended from +v at 0° steering (both wheels forward)
+        to -v at ±90° (pivot in place), and clamped beyond that.
+        """
+        angle = max(min(angle, 90), -90)
+
+        ratio = 1.0 - 2.0 * (abs(angle) / 90.0)
+        ratio = max(-1.0, min(1.0, ratio))
+
+        if angle >= 0: v1, v2 =         v, v * ratio
+        else:          v1, v2 = v * ratio,         v
+
         self.run(v1, v2, delay)
         
+    def ease(self, v: float, start_angle: float, end_angle: float, step: int, max_time: float):
+        angles = list(range(start_angle, end_angle, step))
+        N = len(angles)
+        if N < 2: raise ValueError("Need at least two angles for easing profile.")
+
+        # Calculate weights using a sine curve for ease-in, ease-out
+        weights = [math.sin(math.pi * i / (N - 1)) for i in range(N)]
+        total_weight = sum(weights)
+        normalized_weights = [w / total_weight for w in weights]
+        times = [w * max_time for w in normalized_weights]
+
+        for angle, t in zip(angles, times):
+            self.steer(v, angle, t)
+
     def pause(self) -> None:
         self.run(0, 0)
         input()
