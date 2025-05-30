@@ -138,8 +138,8 @@ class LineFollower():
             v1 = self.speed + self.turn
             v2 = self.speed - self.turn
             if robot_state.last_downhill < 100:
-                v1 = self.speed + self.turn * 0.7 - 20
-                v2 = self.speed - self.turn * 0.7 - 20
+                v1 = self.speed + self.turn * 0.4 - 20
+                v2 = self.speed - self.turn * 0.4 - 20
             elif robot_state.trigger["uphill"]:
                 v1 += 10
                 v2 += 10
@@ -543,7 +543,7 @@ def main(start_time) -> None:
         robot_state.count["red"] = 0
     elif robot_state.count["touch"] > 5:
         robot_state.count["touch"] = 0
-        avoid_obstacle(line_follow)
+        avoid_obstacle(line_follow, robot_state)
     else:
         led.on()
         fps, error, green_signal = line_follow.follow()
@@ -607,8 +607,12 @@ def update_triggers(robot_state: RobotState) -> list[str]:
         if robot_state.main_loop_count <= 10:
             robot_state.triggers = prev_triggers
 
-def avoid_obstacle(line_follow: LineFollower) -> None:    
+def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:    
     motors.run(-line_follow.speed, -line_follow.speed, 0.2)
+    if robot_state.count["downhill"] > 3:
+        motors.run(-line_follow.speed-10, -line_follow.speed-10, 1)
+
+    motors.run(0, 0)
     while True:
         left_value = laser_sensors.read([0])[0]
         if left_value is not None: break
@@ -633,27 +637,35 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
 
     # Turn until appropriate laser sees obstacle
     v1 = v2 = laser_pin = 0
+
     if direction == "cw":
         v1 = -line_follow.speed
         v2 =  line_follow.speed * 0.8
         laser_pin = 2
+        if robot_state.count["downhill"] > 3:
+            v1 = -line_follow.speed * 0.7
     else:
         v1 =  line_follow.speed * 0.8
         v2 = -line_follow.speed
         laser_pin = 0
+        if robot_state.count["downhill"] > 3:
+            v2 = -line_follow.speed * 0.7
 
     # SETUP
     # Over turn passed obstacle
     # oled_display.text("Turning till obstacle", 0, 10, size=10)
     motors.run(v1, v2, 1)
+    if robot_state.count["downhill"] > 3:
+        motors.run(v1, v2, 2)
     for i in range(25):
         motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
         motors.run(1.2 * v1, 1.2 * v2, 0.01)
     
     # oled_display.text("Turning past obstacle", 0, 20, size=10)
-    for i in range(10):
-        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
-        motors.run(1.2 * v1, 1.2 * v2, 0.01)
+    if robot_state.count["downhill"] < 3:
+        for i in range(10):
+            motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
+            motors.run(1.2 * v1, 1.2 * v2, 0.01)
 
     # Turn back onto obstacle
     # oled_display.text("Turning till obstacle", 0, 30, size=10)
@@ -680,8 +692,12 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
     start_time = time.perf_counter()
     wall_multi = 8
     target_distance = 5
+    if robot_state.count["downhill"] < 3:
+        wall_multi = 10
+        target_distance = 0
 
     while True:
+        update_triggers(robot_state)
         show(np.uint8(camera.capture_array()), camera.X11, name="line") 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
@@ -690,17 +706,26 @@ def avoid_obstacle(line_follow: LineFollower) -> None:
             break
 
         if laser_value is not None:
-            error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.speed)), int(-1*line_follow.speed))
+            if robot_state.count["downhill"] < 3:
+                error = max(min(int(wall_multi * (laser_value - target_distance)), int(1*line_follow.speed)), int(-1*line_follow.speed))
+            else:
+                error = max(min(int(wall_multi * (laser_value - target_distance)), int(2*line_follow.speed)), int(-2*line_follow.speed))
+
+        if robot_state.count["downhill"] < 3:
+            if robot_state.count["tilt_left"] > 0 and robot_state.count["tilt_right"] > 0 and time.perf_count() - last_time:
+                last_time = time.perf_counter()
+                motors.run(-line_follow.speed, -line_follow.speed, 0.1)
 
         if sum(touch_values) < 2:
             motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 25, "TURNING BACK TILL OBSTACLE")
-            motors.run(line_follow.speed, line_follow.speed, 0.1)
+            if robot_state.count["downhill"] < 3:
+                motors.run(line_follow.speed, line_follow.speed, 0.1)
 
         print(error)
         if direction == "cw":
-            motors.run(line_follow.speed + error, line_follow.speed - error)
+            motors.run(line_follow.speed + error, max(0, line_follow.speed - error))
         else:
-            motors.run(line_follow.speed - error, line_follow.speed + error)
+            motors.run(max(0, line_follow.speed - error), line_follow.speed + error)
 
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
