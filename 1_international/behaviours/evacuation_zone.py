@@ -10,12 +10,15 @@ class EvacuationState():
         self.debug = True
         
         self.victims_saved = 0
-        self.base_speed = 30
-        self.fast_speed = 45
+        self.base_speed  = 35
+        self.fast_speed  = 45
+        self.align_speed = 30
+        self.grab_speed  = 30
         
-        self.live_approach_distance = 3
-        self.dead_approach_distance = 6
-        self.align_distance = 3
+        self.live_approach_distance     = 4
+        self.dead_approach_distance     = 7
+        self.triangle_approach_distance = 6.5
+        self.align_distance = 4
         
         self.minimum_align_distance = 20
         
@@ -29,7 +32,7 @@ class Search():
         self.confidence_threshold = 0.3
     
     def classic_live(self, image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 250
+        THRESHOLD = 245
         KERNAL_SIZE = 7
         CROP_SIZE = 75
 
@@ -68,7 +71,11 @@ class Search():
         return int(center_x)
     
     def ai_dead(self, image:np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        results = self.model(image, imgsz=self.input_shape, conf=self.confidence_threshold, verbose=False)
+        try:    results = self.model(image, imgsz=self.input_shape, conf=self.confidence_threshold, verbose=False)
+        except OSError or IOError: 
+            print("TPU CRASHED")
+            motors.run(0, 0)
+            time.sleep(1) 
         
         xywh = results[0].boxes.xywh
         cx_list = xywh[:, 0].cpu().numpy().tolist()
@@ -83,8 +90,8 @@ class Search():
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         
         if triangle == "red":
-            mask_lower = cv2.inRange(hsv_image, (0, 200, 0), (20, 255, 255))
-            mask_upper = cv2.inRange(hsv_image, (160, 200, 0), (179, 255, 255))
+            mask_lower = cv2.inRange(hsv_image, (  0, 120, 0), ( 20, 255, 255))
+            mask_upper = cv2.inRange(hsv_image, (160, 120, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
         
         else:
@@ -128,22 +135,22 @@ class Movement():
         # Set speeds
         v1 = v2 = 0
         if self.state == "forwards":
-            v1 =  evac_state.fast_speed
-            v2 =  evac_state.fast_speed
+            v1 =  evac_state.base_speed
+            v2 =  evac_state.base_speed
         
         elif self.state == "touch":
-            v1 =  evac_state.fast_speed
-            v2 = -evac_state.fast_speed
+            v1 =  evac_state.base_speed * 0.65
+            v2 = -evac_state.base_speed * 0.65
         
         motors.run(v1, v2)
         
         # Update state
         if self.state == "forwards" and sum(touch_sensors.read()) != 2:
-            motors.run(-evac_state.base_speed * 1.5, -evac_state.base_speed * 1.5, 0.8)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
             self.state = "touch"
             self.t0 = time.perf_counter()
             
-        elif self.state == "touch" and time.perf_counter() - self.t0 > 1.5:
+        elif self.state == "touch" and time.perf_counter() - self.t0 > 1:
             self.state = "forwards"
             
         return v1, v2
@@ -161,9 +168,8 @@ class Movement():
 
         turn = kP * error
         
-        if search_type in ["live", "dead"]:
-            v1 = (evac_state.base_speed if search_type in ["live", "dead"] else evac_state.fast_speed - turn) * scalar
-            v2 = (evac_state.base_speed if search_type in ["live", "dead"] else evac_state.fast_speed + turn) * scalar
+        v1 = (evac_state.align_speed - turn if search_type in ["live", "dead"] else evac_state.fast_speed - turn) * scalar
+        v2 = (evac_state.align_speed + turn if search_type in ["live", "dead"] else evac_state.fast_speed + turn) * scalar
         
         v1 = min(MAX_VELOCITY, max(v1, MIN_VELOCITY))
         v2 = min(MAX_VELOCITY, max(v2, MIN_VELOCITY))
@@ -206,21 +212,21 @@ def analyse(image: np.ndarray, search_type: str = "default", last_x: Optional[in
     red_enable   = False
     
     claw.read()
-    live_count = claw.spaces.count("live")
-    dead_count = claw.spaces.count("dead")
+    live_count  = claw.spaces.count("live")
+    dead_count  = claw.spaces.count("dead")
+    empty_count = claw.spaces.count("")
     
-    if evac_state.victims_saved + live_count < 2:         live_enable  = True
-    if dead_count < 1:                                    dead_enable  = True
-    if live_count > 0:                                    green_enable = True
-    if dead_count == 1 and evac_state.victims_saved == 2: red_enable   = True
+    if evac_state.victims_saved + live_count < 2 and empty_count != 0: live_enable  = True
+    if dead_count < 1 and empty_count != 0:                            dead_enable  = True
+    if live_count > 0:                                                 green_enable = True
+    if dead_count == 1 and evac_state.victims_saved == 2:              red_enable   = True
         
     if search_type in ["live", "green", "default"] and live_enable:
         live_x = search.classic_live(image, last_x)
         if live_x is not None: return live_x, "live"
 
     if search_type in ["dead", "green", "default"] and dead_enable:
-        try:    dead_x = search.ai_dead(image, last_x)
-        except: print("TPU FAILED")
+        dead_x = search.ai_dead(image, last_x)
         if dead_x is not None: return dead_x, "dead"
     
     if search_type in ["green", "default"] and green_enable:
@@ -262,9 +268,9 @@ def route(last_x: int, search_type: str) -> bool:
         if        x is None: return False
         
         # Exit conditions
-        if   search_type in ["live"]         and distance < evac_state.live_approach_distance: return True
-        elif search_type in ["dead"]         and distance < evac_state.dead_approach_distance: return True
-        elif search_type in ["red", "green"] and distance < evac_state.dead_approach_distance: break
+        if   search_type in ["live"]         and distance < evac_state.live_approach_distance:     return True
+        elif search_type in ["dead"]         and distance < evac_state.dead_approach_distance:     return True
+        elif search_type in ["red", "green"] and distance < evac_state.triangle_approach_distance: break
         
         # Route with kP        
         time_step = 0.15 if search_type == "dead" else 0
@@ -277,74 +283,97 @@ def route(last_x: int, search_type: str) -> bool:
 
     while True:
         if sum(touch_sensors.read()) == 0: break
-        motors.run(evac_state.base_speed, evac_state.base_speed)
+        motors.run(evac_state.fast_speed, evac_state.fast_speed)
+    
+    print("REACHED THIS POINT")
+    return True
+
+def forwards_align(distance_tolorance: float, time_step: float) -> bool:
+    MAX_ALIGN_TIME = 5
+    t0 = time.perf_counter()
+    
+    while True:
+        distance = laser_sensors.read([1])[0]
+        
+        debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
+        
+        if distance is None:                          continue
+        if distance > 30:                             return False
+        if time.perf_counter() - t0 > MAX_ALIGN_TIME: return False
+        
+        if   distance > evac_state.align_distance + distance_tolorance: motors.run( evac_state.align_speed,  evac_state.align_speed, time_step)
+        elif distance < evac_state.align_distance - distance_tolorance: motors.run(-evac_state.align_speed, -evac_state.align_speed, time_step)
+        else:                                                           return True
+        
+        motors.run(0, 0, time_step * 3)
+        
+def sweep(centre_tolorance: float) -> bool:
+    SWEEP_TIME = 0.7
+    distances = []
+    
+    # Setup
+    motors.run(-evac_state.base_speed * 0.85, evac_state.base_speed * 0.85, SWEEP_TIME)
+    
+    t0 = time.perf_counter()
+    while True:
+        distance = laser_sensors.read([1])[0]
+        
+        if time.perf_counter() - t0 > SWEEP_TIME * 2: break
+        if distance is None: continue
+        
+        distances.append(distance)
+        motors.run(evac_state.align_speed * 0.85, -evac_state.align_speed * 0.85)
+        
+    motors.run(0, 0)
+    target_distance = min(distances)
+    
+    # Sweep past to the target distance
+    t0 = time.perf_counter()
+    while True:
+        distance = laser_sensors.read([1])[0]
+        
+        if distance is None: continue
+        if distance < target_distance + centre_tolorance: break
+        if time.perf_counter() - t0 > SWEEP_TIME * 5: return False
+        
+        motors.run(-evac_state.align_speed * 0.85, evac_state.align_speed * 0.85)
+    
+    motors.run(-evac_state.align_speed * 0.85, evac_state.align_speed * 0.85, 0.3)
+    
+    # Sweep back to the target distance
+    t0 = time.perf_counter()
+    while True:
+        distance = laser_sensors.read([1])[0]
+        
+        if distance is None: continue
+        if distance < target_distance + centre_tolorance: break
+        if time.perf_counter() - t0 > SWEEP_TIME * 5: return False
+        
+        motors.run(-evac_state.align_speed * 0.85, evac_state.align_speed * 0.85)
+        
+    # motors.run(0, 0, 0.1)
+    # motors.run(evac_state.align_speed, -evac_state.align_speed, 0.025)
     
     return True
 
-def find_centre(centre_tolorance: int, direction: int = 1):
-    time_step = 0.003
-    initial_distance = 0
-    
-    while True:
-        initial_distance = laser_sensors.read([1])[0]
-        if initial_distance is not None: break
-            
-    distances = []
-    
-    while True:
-        distance = laser_sensors.read([1])[0]
-        if distance is None: continue
-        
-        if distance not in distances: distances.append(distance)
-        
-        motors.run(-20 * direction, 20 * direction,     time_step)
-        motors.run(              0,              0, time_step * 3)
-        
-        if len(distances) >= 3:
-            if distances[-1] > distances[-2] and distances[-3] > distances[-2]: return True
-        if distance > initial_distance + centre_tolorance:                      return False
-        
-        debug( ["ALIGNING [CENTRE]", "TURNING TILL NOT", f"{distance}"], [15, 15, 15])
-
-def align(centre_tolorance: int, distance_tolorance: int) -> bool:
+def align(centre_tolorance: float, distance_tolorance: float) -> bool:
     t0 = time.perf_counter()
-    time_step = 0.02
+    TIME_STEP = 0.02
     
-    while True:
-        distance = laser_sensors.read([1])[0]
-        if distance is None:             continue
-        if distance > 30:                break
-        if time.perf_counter() - t0 > 3: return False
-        
-        if   distance > evac_state.align_distance + distance_tolorance: motors.run( 20,  20, time_step)
-        elif distance < evac_state.align_distance - distance_tolorance: motors.run(-20, -20, time_step)
-        else:                                                           break
-        
-        motors.run(0, 0, time_step * 3)
-        
-        debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
-    
-    direction = 1
-    while not find_centre(centre_tolorance, direction):
-        direction *= -1
-    
+    if not forwards_align(distance_tolorance, TIME_STEP): return False
     motors.run(0, 0, 0.3)
-        
-    while True:
-        distance = laser_sensors.read([1])[0]
-        if distance is None: continue
-        
-        if   distance > evac_state.align_distance + distance_tolorance: motors.run( 20,  20, time_step)
-        elif distance < evac_state.align_distance - distance_tolorance: motors.run(-20, -20, time_step)
-        else:                                                           break
-        
-        motors.run(0, 0, time_step * 3)
-        
-        debug( ["ALIGNING [DISTANCE]", f"{distance}"], [25, 15])
-        
+    if not forwards_align(distance_tolorance, TIME_STEP): return False
+            
+    if not sweep(centre_tolorance): return False
+    
+    if not forwards_align(distance_tolorance, TIME_STEP): return False
+    motors.run(0, 0, 0.3)
+    if not forwards_align(distance_tolorance, TIME_STEP): return False
+    
     return True
 
 def grab() -> bool:
+    claw.read()
     if "" not in claw.spaces: return False
     
     # Left: -1, Right: 1
@@ -352,8 +381,8 @@ def grab() -> bool:
     
     debug( ["GRAB", "SETUP"], [15, 15] )
     # Setup
-    motors.run(         -evac_state.base_speed,         -evac_state.base_speed,  0.15)
-    motors.run(-evac_state.base_speed * insert, evac_state.base_speed * insert, 0.25)
+    motors.run(         -evac_state.grab_speed,         -evac_state.grab_speed, 0.25)
+    motors.run(-evac_state.grab_speed * insert, evac_state.grab_speed * insert, 0.25)
     motors.run(0, 0)
     
     debug( ["GRAB", "CUP"], [15, 15] )
@@ -425,28 +454,30 @@ def main() -> None:
         x, search_type = locate()
         
         route_success = route(x, search_type)
-        if not route_success: continue
+        if not route_success:
+            # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            continue
         
         # If it is a triangle
         if search_type in ["red", "green"]:
             # Reset and move closer again
-            motors.run(-evac_state.base_speed, -evac_state.base_speed, 3)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 1.5)
             route_success = route(x, search_type)
             if not route_success: continue
             
             dump(search_type)
             
-            motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
-            motors.run( evac_state.base_speed, -evac_state.base_speed, 1.5)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
         
         # Align only if we're picking up
         if search_type in ["live", "dead"]:
             align_success = align(10, 0.1)
             if not align_success: continue
-                    
+
+            print("ALIGN SUCCESSFUL")
+            
             grab_success = grab()
             if not grab_success:
-                motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
+                motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
                 continue
-            
-            motors.run(evac_state.base_speed, -evac_state.base_speed, 0.5)

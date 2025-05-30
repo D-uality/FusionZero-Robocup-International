@@ -23,15 +23,12 @@ class EvacuationCamera():
 
     def capture_image(self) -> np.ndarray:
         while True:
-            try:
-                ok, image = self.camera.read()
-            except:
-                print("FAILED TO CAPTURE IMAGE! 1")
+            ok, image = self.camera.read()
             if ok: break
             
             print("FAILED TO CAPTURE IMAGE! 2")
         
-        image = image[:int(0.5208333333 * self.height), :]
+        image = image[:int(0.5 * self.height), :]
         
         image = cv2.flip(image, 0)
         image = cv2.flip(image, 1)

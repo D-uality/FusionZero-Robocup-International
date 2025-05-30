@@ -56,23 +56,25 @@ class Claw():
         
         counts = [0, 0]
         
-        for _ in range(0, TRIALS):
-            values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
-            
-            if values[0] <= LEFT_BASE_DEFAULT  or values[0] <= LEFT_UPPER_DEFUALT  and values[1] >= RIGHT_BLACK: counts[0] += 0
-            elif values[0] >= LEFT_BLACK: counts[0] += 1
-            else: counts[0] -= 1
-            
-            if values[1] <= RIGHT_BASE_DEFAULT or values[1] <= RIGHT_UPPER_DEFUALT and values[0] >=  LEFT_BLACK: counts[1] += 0
-            elif values[1] >= RIGHT_BLACK: counts[1] += 1
-            else: counts[1] -= 1
         
-        counts[0] = counts[0] / TRIALS
-        counts[1] = counts[1] / TRIALS
-        
-        for i, count in enumerate(counts):
-            if   count >  0.5: self.spaces[i] = "live"
-            elif count < -0.5: self.spaces[i] = "dead"
-            else:              self.spaces[i] = ""
+        try:
+            for _ in range(0, TRIALS):
+                values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+                if values[0] <= LEFT_BASE_DEFAULT  or values[0] <= LEFT_UPPER_DEFUALT  and values[1] >= RIGHT_BLACK: counts[0] += 0
+                elif values[0] >= LEFT_BLACK: counts[0] += 1
+                else: counts[0] -= 1
                 
-        return self.spaces
+                if values[1] <= RIGHT_BASE_DEFAULT or values[1] <= RIGHT_UPPER_DEFUALT and values[0] >=  LEFT_BLACK: counts[1] += 0
+                elif values[1] >= RIGHT_BLACK: counts[1] += 1
+                else: counts[1] -= 1
+                
+            counts[0] = counts[0] / TRIALS
+            counts[1] = counts[1] / TRIALS
+            
+            for i, count in enumerate(counts):
+                if   count >  0.5: self.spaces[i] = "live"
+                elif count < -0.5: self.spaces[i] = "dead"
+                else:              self.spaces[i] = ""
+        
+        except RuntimeError as e:
+            print("FAILED TO READ CLAW")

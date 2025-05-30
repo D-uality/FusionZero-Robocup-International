@@ -27,7 +27,7 @@ class LaserSensors():
             sensor.start_ranging()
         
     def __change_address(self, pin_number: int, x_shut_pin: int) -> None:
-        attempts = 5
+        attempts = 10
 
         for attempt in range(1, attempts + 1):
             try:
