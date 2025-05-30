@@ -30,10 +30,12 @@ def set_claw():
 
 def read_claw():
     claw.read()
+    print(claw.spaces)
 
 try:
     while True:
         read_claw()
+        
         
 except:
     pass

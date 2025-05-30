@@ -14,10 +14,11 @@ def evac_image():
     green_x = search.triangle(image, "green")
     red_x = search.triangle(image, "red")
     
-    live_x = search.classic_live(image, None)
-    dead_x = search.ai_dead(image, None)
+    # live_x = search.classic_live(image, None)
+    # dead_x = search.ai_dead(image, None)
     
-    print(green_x, red_x, live_x, dead_x)
+    # print(green_x, red_x, live_x, dead_x)
+    print(green_x, red_x)
     
     show(image, "image")
 
