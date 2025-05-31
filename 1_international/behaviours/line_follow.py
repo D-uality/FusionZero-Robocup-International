@@ -767,11 +767,6 @@ def update_triggers(robot_state: RobotState) -> list[str]:
 #             return False
 
 def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
-    motors.run(-line_follow.speed, -line_follow.speed, 0.4)
-
-    if robot_state.count["downhill"] > 3:
-        motors.run(-line_follow.speed-10, -line_follow.speed-10, 1)
-
     motors.run(0, 0)
     while True:
         left_value = laser_sensors.read([0])[0]
@@ -811,14 +806,22 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     # SETUP
     # Over turn passed obstacle
-    # oled_display.text("Turning till obstacle", 0, 10, size=10)
+    # oled_display.text("Turning till obstacle", 0, 10, size=10
+    motors.run(-line_follow.speed, -line_follow.speed, 0.4)
+
+    if robot_state.count["downhill"] > 3:
+        motors.run(-line_follow.speed-10, -line_follow.speed-10, 0.7)
+
     for i in range(3):
-        motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 20, "TURNING PAST OBSTACLE (MIDDLE)")
+        if robot_state.count["downhill"] > 3:
+            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 20, "TURNING PAST OBSTACLE (MIDDLE)")
+        else:
+            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 15, "TURNING PAST OBSTACLE (MIDDLE)")
         motors.run(v1, v2, 0.01)
     motors.pause()
     motors.run(v1, v2, 0.7)
-    if robot_state.count["downhill"] > 3:
-        motors.run(v1, v2, 1)
+    # if robot_state.count["downhill"] > 3:
+    #     motors.run(v1, v2, 1)
     motors.pause()
 
     # Circle obstacle
@@ -829,10 +832,10 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     initial_sequence = True
 
-    circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence)
+    circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
     while True:
-        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, ">=", 30, "FORWARDS TILL NOT OBSTACLE", initial_sequence): pass
+        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, ">=", 15, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         motors.pause()
         motors.run(-line_follow.speed, -line_follow.speed, 0.4)
@@ -840,19 +843,19 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         motors.pause()
 
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 20, "TURNING TILL OBSTACLE", initial_sequence): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 13, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
         motors.pause()
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 25, "TURNING TILL NOT OBSTACLE", initial_sequence): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.4)
         motors.pause()
         motors.run(0, 0, 0.15)
         motors.pause()
 
-        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 18, "FORWARDS TILL OBSTACLE", initial_sequence): pass
+        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
         motors.pause()
@@ -871,7 +874,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         else:
             line_follow.run_till_camera(-v1+5, -v2-10, 10)
     
-def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = "False") -> bool:
+def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = False, direction: str = "") -> bool:
     global camera
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
@@ -880,6 +883,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         show(np.uint8(camera.capture_array()), camera.X11, name="line") 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
+        touch_values = touch_sensors.read()
 
         debug(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
 
@@ -889,7 +893,14 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
 
         if colour_values[colour_pin] <= 30 and initial_sequence == False:
             return False
-
+        
+        if sum(touch_values) < 2:
+            if v1 < 0 or v2 < 0:
+                if direction == "cw": motors.run(v1, -v2)
+                else: motors.run(-v1, v2)
+            else:
+                if direction == "cw": motors.run(-v1, v2)
+                else: motors.run(v1, -v2)
 """
 TESTING
 """
