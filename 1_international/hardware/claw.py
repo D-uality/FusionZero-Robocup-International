@@ -1,8 +1,11 @@
+from numpy import empty
 from core.shared_imports import time, ServoKit, ADC, board, AnalogIn
 from core.utilities import debug
 
 class Claw():
     def __init__(self):
+        TRIALS = 50
+        
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
         
@@ -14,6 +17,22 @@ class Claw():
         self.__pca.servo[self.__closer_pin].angle = 90
         
         self.spaces = ["", ""]
+        
+        
+        # Calibrate
+        self.__empty_average = [0, 0]
+        
+        for _ in range(0, TRIALS):
+            values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+            for i, value in enumerate(values): self.__empty_average[i] += value
+            
+            time.sleep(0.01)
+        
+        # Find average
+        for i in range(0, len(self.__empty_average)):
+            self.__empty_average[i] = self.__empty_average[i] / TRIALS
+            
+        print(self.__empty_average)
         
         debug(["INITIALISATION", "CLAW", "✓"], [25, 25, 50])
     
@@ -44,37 +63,33 @@ class Claw():
         self.__pca.servo[self.__closer_pin].angle = angle
     
     def read(self):
-        LEFT_BASE_DEFAULT = 164
-        LEFT_UPPER_DEFUALT = 170
-        LEFT_BLACK = 230
-        
-        RIGHT_BASE_DEFAULT = 166
-        RIGHT_UPPER_DEFUALT = 167
-        RIGHT_BLACK = 230
-        
         TRIALS = 15
+        EMPTY_TOLORANCE = 3
+        OPPOSITE_LIVE_TOLORANCE = 3
         
-        counts = [0, 0]
+        averages = [0, 0]
         
-        
-        try:
-            for _ in range(0, TRIALS):
-                values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
-                if values[0] <= LEFT_BASE_DEFAULT  or values[0] <= LEFT_UPPER_DEFUALT  and values[1] >= RIGHT_BLACK: counts[0] += 0
-                elif values[0] >= LEFT_BLACK: counts[0] += 1
-                else: counts[0] -= 1
-                
-                if values[1] <= RIGHT_BASE_DEFAULT or values[1] <= RIGHT_UPPER_DEFUALT and values[0] >=  LEFT_BLACK: counts[1] += 0
-                elif values[1] >= RIGHT_BLACK: counts[1] += 1
-                else: counts[1] -= 1
-                
-            counts[0] = counts[0] / TRIALS
-            counts[1] = counts[1] / TRIALS
+        # try:
+        # Find average reading
+        for _ in range(0, TRIALS):
+            values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+            for i, value in enumerate(values): averages[i] += value
             
-            for i, count in enumerate(counts):
-                if   count >  0.5: self.spaces[i] = "live"
-                elif count < -0.5: self.spaces[i] = "dead"
-                else:              self.spaces[i] = ""
+            time.sleep(0.005)
         
-        except RuntimeError as e:
-            print("FAILED TO READ CLAW")
+        for i, average, in enumerate(averages):
+            average = average / TRIALS
+            print(f"{average:.2f}", end="    ")
+            
+            # If opposite side has live
+            tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE
+            
+            if self.__empty_average[i] - tolorane < average < self.__empty_average[i] + tolorane:
+                self.spaces[i] = ""
+            elif average > 250:
+                self.spaces[i] = "live"
+            else:
+                self.spaces[i] = "dead"
+        
+        # except RuntimeError as e:
+        #     debug( [f"ERROR", f"CLAW", f"{e}"], [30, 20, 50] )
