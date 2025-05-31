@@ -33,18 +33,22 @@ class Search():
     
     def classic_live(self, image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         THRESHOLD = 245
-        KERNAL_SIZE = 7
+        KERNEL_SIZE = 7
         CROP_SIZE = 100
 
-        # Crop image to approximate region for higher performance
+        # Ensure image is not None
+        if image is None or image.size == 0: return None
+        
+        # Crop according to last x
         if last_x is not None:
-            x_lower = max(                0, last_x - CROP_SIZE)
-            x_upper = min(evac_camera.width, last_x + CROP_SIZE)
-            image = image[:, x_lower : x_upper]
-
+            x_lower = max(             0, last_x - CROP_SIZE)
+            x_upper = min(image.shape[1], last_x + CROP_SIZE)
+            
+            if x_upper > x_lower: image = image[:, x_lower : x_upper]
+            
         # Filter for spectral highlights
         spectral_highlights = cv2.inRange(image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
-        spectral_highlights = cv2.dilate (spectral_highlights, np.ones((KERNAL_SIZE, KERNAL_SIZE), np.uint8), iterations=1)
+        spectral_highlights = cv2.dilate (spectral_highlights, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours: return None
@@ -63,7 +67,7 @@ class Search():
         # Find largest contour/closest contour
         best_contour = max(valid, key=lambda t: cv2.contourArea(t[0]))[0] if last_x is None else min(valid, key=lambda t: abs(t[1]))[0]
         x, _, w, _ = cv2.boundingRect(best_contour)
-        center_x = x + w/2 if last_x is None else (x + w/2) + (last_x - CROP_SIZE)
+        center_x = x + w/2 if last_x is None else (x + w/2) + last_x
 
         if evac_state.X11:   cv2.drawContours(image, [best_contour], -1, (0, 255, 0), 1)
         
@@ -76,15 +80,15 @@ class Search():
         DARK_BLACK = 35
         THRESHOLD_BLACK = 100
         THRESHOLD_SILVER = 160
-        INPAINT_RADIUS = 5
+        # INPAINT_RADIUS = 5
         KERNAL_SIZE_1 = 3
         KERNAL_SIZE_2 = 5
         KERNAL_SIZE_3 = 31
         
-        DP =           1  # "Resolution" of the accumulator
+        DP =           1                               # "Resolution" of the accumulator
         MIN_DISTANCE = 300
-        P1 =           55 # Lower -> detect more circles   |  Higher -> detect less circles
-        P2 =           25 # Lower -> accepts more circles  |  Higher -> rejects more circles
+        P1 =           55                              # Lower -> detect more circles   |  Higher -> detect less circles
+        P2 =           25                              # Lower -> accepts more circles  |  Higher -> rejects more circles
         MIN_RADIUS =   20
         MAX_RADIUS =   230
         
@@ -92,11 +96,15 @@ class Search():
         
         working_image = image.copy()
         
+        # Ensure image is not None
+        if working_image is None or working_image.size == 0: return None
+        
         # Crop according to last x
         if last_x is not None:
-            x_lower = max(                0, last_x - CROP_SIZE)
-            x_upper = min(evac_camera.width, last_x + CROP_SIZE)
-            working_image = working_image[:, x_lower : x_upper]
+            x_lower = max(                     0, last_x - CROP_SIZE)
+            x_upper = min(working_image.shape[1], last_x + CROP_SIZE)
+            
+            if x_upper > x_lower: working_image = working_image[:, x_lower : x_upper]
         
         t0 = time.perf_counter()
         # Remove green, replace with grey
@@ -166,8 +174,8 @@ class Search():
         
         # Find the closest circle to last x, or the largest circle if last x is None
         if last_x is not None:
-            closest_circle = min(valid, key=lambda circle: abs(circle[0] - last_x))
-            x = closest_circle[0] + last_x - CROP_SIZE
+            closest_circle = min(valid, key=lambda circle: abs(circle[0] - (last_x - x_lower)))
+            x = closest_circle[0] + x_lower
         else:
             largest_circle = max(valid, key=lambda circle: circle[2])
             x = largest_circle[0]
@@ -399,7 +407,7 @@ def locate() -> tuple[int, str]:
         v1, v2 = movement.random()
         
         if evac_state.X11:   show(image, "image")
-        if evac_state.debug: debug( [f"LOCATING", f"{v1} {v2}", f"search: {search_type}", f"victims: {evac_state.victims_saved}"], [15, 15, 15, 15] )
+        if evac_state.debug: debug( [f"LOCATING", f"{v1} {v2}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str) -> bool:
     last_distance = 100

@@ -60,34 +60,32 @@ class Claw():
         self.__pca.servo[self.__closer_pin].angle = angle
     
     def read(self):
-        # values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
-        # print(values)
         TRIALS = 15
-        EMPTY_TOLORANCE = 3
-        OPPOSITE_LIVE_TOLORANCE = 3
+        EMPTY_TOLORANCE = 7
+        OPPOSITE_LIVE_TOLORANCE = 7
         
         averages = [0, 0]
         
-        # try:
-        # Find average reading
-        for _ in range(0, TRIALS):
-            values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
-            for i, value in enumerate(values): averages[i] += value
+        try:
+            # Find average reading
+            for _ in range(0, TRIALS):
+                values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+                for i, value in enumerate(values): averages[i] += value
+                
+                time.sleep(0.005)
             
-            time.sleep(0.005)
+            for i, average, in enumerate(averages):
+                average = average / TRIALS
+                
+                # If opposite side has live
+                tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE
+                
+                if self.__empty_average[i] - tolorane < average < self.__empty_average[i] + tolorane:
+                    self.spaces[i] = ""
+                elif average > 250:
+                    self.spaces[i] = "live"
+                else:
+                    self.spaces[i] = "dead"
         
-        for i, average, in enumerate(averages):
-            average = average / TRIALS
-            
-            # If opposite side has live
-            tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE
-            
-            if self.__empty_average[i] - tolorane < average < self.__empty_average[i] + tolorane:
-                self.spaces[i] = ""
-            elif average > 250:
-                self.spaces[i] = "live"
-            else:
-                self.spaces[i] = "dead"
-        
-        # except RuntimeError as e:
-        #     debug( [f"ERROR", f"CLAW", f"{e}"], [30, 20, 50] )
+        except RuntimeError as e:
+            debug( [f"ERROR", f"CLAW", f"{e}"], [30, 20, 50] )
