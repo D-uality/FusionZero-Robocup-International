@@ -32,13 +32,14 @@ def read_claw():
     claw.read()
     print(claw.spaces)
 
-try:
-    while True:
-        read_claw()
+# try:
+#     while True:
+#         read_claw()
         
-        
-except:
-    pass
+# except:
+#     print("CRASHED!")
 
-finally:
-    motors.run(0, 0)
+# finally:
+#     motors.run(0, 0)
+while True:
+    read_claw()
