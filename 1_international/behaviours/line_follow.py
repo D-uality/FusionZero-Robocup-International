@@ -406,7 +406,7 @@ class LineFollower():
         y_avg = int(np.mean([pt[1] for pt in points]))
         return x_avg, y_avg
 
-    def find_black(self):
+    def find_black(self): 
         self.black_contour = None
         self.black_mask = None
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
@@ -415,6 +415,7 @@ class LineFollower():
         base_mask = cv2.inRange(self.gray_image, 0, self.base_black)
         light_mask = cv2.inRange(self.gray_image, 0, self.light_black)
         lightest_mask = cv2.inRange(self.gray_image, 0, self.lightest_black)
+
         # Create region masks
         region_mask_lightest = np.zeros_like(self.gray_image, dtype=np.uint8)
         region_mask_light = np.zeros_like(self.gray_image, dtype=np.uint8)
@@ -423,29 +424,40 @@ class LineFollower():
         cv2.fillPoly(region_mask_lightest, [np.int32(camera.lightest_points)], 255)
         cv2.fillPoly(region_mask_light, [np.int32(camera.light_points)], 255)
 
-        # Exclude those regions from the base region
         region_mask_base = cv2.subtract(region_mask_base, region_mask_lightest)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_light)
 
-        # Apply appropriate mask to each region
         masked_lightest = cv2.bitwise_and(lightest_mask, region_mask_lightest)
         masked_light = cv2.bitwise_and(light_mask, region_mask_light)
         masked_base = cv2.bitwise_and(base_mask, region_mask_base)
 
-        # Combine them into the final black mask
         black_mask = cv2.bitwise_or(masked_lightest, masked_light)
         black_mask = cv2.bitwise_or(black_mask, masked_base)
 
-        # Apply morphological cleanup
+        # --- Blue detection in top area ---
+        hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+        top_hsv = hsv_image[0:50, :]  # Only look at the top 50 rows
+
+        lower_blue = np.array([100, 100, 50])
+        upper_blue = np.array([140, 255, 255])
+        blue_mask_top = cv2.inRange(top_hsv, lower_blue, upper_blue)
+
+        # Expand blue_mask_top to full image size (pad zeros below)
+        full_blue_mask = np.zeros_like(black_mask)
+        full_blue_mask[0:50, :] = blue_mask_top
+
+        # Subtract blue from black mask
+        black_mask = cv2.bitwise_and(black_mask, cv2.bitwise_not(full_blue_mask))
+        # --- End blue detection section ---
+
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
         black_mask = cv2.erode(black_mask, kernel, iterations=2)
         black_mask = cv2.dilate(black_mask, kernel, iterations=5)
 
-        # Contour detection
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
+        contours = [cnt for cnt in contours if any(p[0][1] > 50 for p in cnt)]
 
-        # Contour selection logic
         if len(contours) > 1:
             close_contours = []
             for contour in contours:
@@ -461,7 +473,8 @@ class LineFollower():
             if len(close_contours) > 1:
                 for contour in close_contours:
                     highest_point = max(contour, key=lambda p: p[0][1])
-                    if highest_point[0][1] > camera.LINE_HEIGHT / 2: tallest_contours.append(contour)
+                    if highest_point[0][1] > camera.LINE_HEIGHT / 2:
+                        tallest_contours.append(contour)
             elif len(close_contours) == 1:
                 self.black_contour = close_contours[0]
 
@@ -473,7 +486,6 @@ class LineFollower():
         elif len(contours) == 1:
             self.black_contour = contours[0]
 
-        # Final mask drawing
         if self.black_contour is not None:
             contour_mask = np.zeros(self.gray_image.shape[:2], dtype=np.uint8)
             cv2.drawContours(contour_mask, [self.black_contour], -1, color=255, thickness=cv2.FILLED)
@@ -481,8 +493,10 @@ class LineFollower():
 
             if camera.X11:
                 for c in contours:
-                    if c is not self.black_contour: cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), 2)
-                    else: cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
+                    if c is not self.black_contour:
+                        cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), 2)
+                    else:
+                        cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
     
     # SILVER
     def find_silver(self):
@@ -753,7 +767,7 @@ def update_triggers(robot_state: RobotState) -> list[str]:
 #             return False
 
 def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
-    motors.run(-line_follow.speed, -line_follow.speed, 0.2)
+    motors.run(-line_follow.speed, -line_follow.speed, 0.4)
 
     if robot_state.count["downhill"] > 3:
         motors.run(-line_follow.speed-10, -line_follow.speed-10, 1)
@@ -777,7 +791,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     debug(["OBSTACLE", "FINDING SIDE", ", ".join(list(map(str, side_values)))], [24, 50, 14])
     
     # Clockwise if left > right, else random
-    if side_values[0] <= 30 or side_values[1] <= 30:
+    if side_values[0] <= 40 or side_values[1] <= 40:
         direction = "cw" if side_values[0] > side_values[1] else "ccw"
     else:
         direction = "cw" if randint(0, 1) == 0 else "ccw"
@@ -798,21 +812,14 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     # SETUP
     # Over turn passed obstacle
     # oled_display.text("Turning till obstacle", 0, 10, size=10)
-    motors.run(v1, v2, 1)
+    for i in range(3):
+        motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 20, "TURNING PAST OBSTACLE (MIDDLE)")
+        motors.run(v1, v2, 0.01)
+    motors.pause()
+    motors.run(v1, v2, 0.7)
     if robot_state.count["downhill"] > 3:
-        motors.run(v1, v2, 2)
-    for i in range(25):
-        motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, "<=", 20, "TURNING TILL OBSTACLE")
-        motors.run(1.2 * v1, 1.2 * v2, 0.01)
-    
-    # oled_display.text("Turning past obstacle", 0, 20, size=10)
-    if robot_state.count["downhill"] < 3:
-        for i in range(10):
-            motors.run_until(1.2 * v1, 1.2*v2, laser_sensors.read, laser_pin, ">=", 20, "TURNING PAST OBSTACLE")
-            motors.run(1.2 * v1, 1.2 * v2, 0.01)
-
-        motors.run_until(-v1, -v2, laser_sensors.read, laser_pin, "<=", 15, "TURNING TILL OBSTACLE")
-        motors.run(-1.2 * v1, -1.2 * v2, 1)
+        motors.run(v1, v2, 1)
+    motors.pause()
 
     # Circle obstacle
     v1 =  line_follow.speed if direction == "cw" else -line_follow.speed
@@ -822,40 +829,49 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     initial_sequence = True
 
-    circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE")
-    motors.run(line_follow.speed, line_follow.speed, 0.5)
+    circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence)
 
     while True:
-        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, ">=", 20, "FORWARDS TILL NOT OBSTACLE"): pass
+        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, ">=", 30, "FORWARDS TILL NOT OBSTACLE", initial_sequence): pass
         elif not initial_sequence: break
+        motors.pause()
         motors.run(-line_follow.speed, -line_follow.speed, 0.4)
         motors.run(0, 0, 0.15)
+        motors.pause()
 
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 15, "TURNING TILL OBSTACLE"): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 20, "TURNING TILL OBSTACLE", initial_sequence): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
+        motors.pause()
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 18, "TURNING TILL NOT OBSTACLE"): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 25, "TURNING TILL NOT OBSTACLE", initial_sequence): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.4)
+        motors.pause()
         motors.run(0, 0, 0.15)
+        motors.pause()
 
-        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 18, "FORWARDS TILL OBSTACLE"): pass
+        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 18, "FORWARDS TILL OBSTACLE", initial_sequence): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
+        motors.pause()
 
         initial_sequence = False
-
-    debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
-    print()
 
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
-    line_follow.run_till_camera(-v1, -v2, 10)
+    motors.pause()
+    motors.run(line_follow.speed, line_follow.speed, 0.2)
+    motors.pause()
+    for i in range(5):
+        if direction == "cw":
+            line_follow.run_till_camera(-v1-10, -v2+5, 10)
+        else:
+            line_follow.run_till_camera(-v1+5, -v2-10, 10)
     
-def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "") -> bool:
+def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = "False") -> bool:
     global camera
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
@@ -871,7 +887,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         if laser_value is not None:
             if comparison_function(laser_value, target_distance) and laser_value != 0: return True
 
-        if colour_values[colour_pin] <= 30:
+        if colour_values[colour_pin] <= 30 and initial_sequence == False:
             return False
 
 """

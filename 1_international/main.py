@@ -42,6 +42,7 @@ def main() -> None:
             elif listener.mode.value == 9: listener.exit_event.set()
 
     finally:
+        motors.run(0, 0)
         GPIO.cleanup()
         stop_display()
         if record: save_vfr_video(get_saved_frames())
