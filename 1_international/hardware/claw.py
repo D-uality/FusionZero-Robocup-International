@@ -17,8 +17,7 @@ class Claw():
         self.__pca.servo[self.__closer_pin].angle = 90
         
         self.spaces = ["", ""]
-        
-        
+
         # Calibrate
         self.__empty_average = [0, 0]
         
@@ -31,9 +30,7 @@ class Claw():
         # Find average
         for i in range(0, len(self.__empty_average)):
             self.__empty_average[i] = self.__empty_average[i] / TRIALS
-            
-        print(self.__empty_average)
-        
+                    
         debug(["INITIALISATION", "CLAW", "✓"], [25, 25, 50])
     
     def lift(self, target_angle: int, time_delay: float = 0) -> None:
@@ -63,6 +60,8 @@ class Claw():
         self.__pca.servo[self.__closer_pin].angle = angle
     
     def read(self):
+        # values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+        # print(values)
         TRIALS = 15
         EMPTY_TOLORANCE = 3
         OPPOSITE_LIVE_TOLORANCE = 3
@@ -79,7 +78,6 @@ class Claw():
         
         for i, average, in enumerate(averages):
             average = average / TRIALS
-            print(f"{average:.2f}", end="    ")
             
             # If opposite side has live
             tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE

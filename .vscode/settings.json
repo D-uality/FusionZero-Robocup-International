@@ -1,3 +1,4 @@
 {
-    "python.languageServer": "Pylance"
+    "python.languageServer": "Pylance",
+    "python.analysis.autoImportCompletions": false
 }

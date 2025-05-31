@@ -1,4 +1,4 @@
-from core.shared_imports import cv2, np
+from core.shared_imports import cv2, np, time
 from core.utilities import debug
 
 class EvacuationCamera():
@@ -22,16 +22,23 @@ class EvacuationCamera():
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
 
     def capture_image(self) -> np.ndarray:
-        while True:
-            ok, image = self.camera.read()
-            if ok: break
+        image = np.zeros((240, 640, 3), dtype=np.uint8)
+        
+        try:
+            while True:
+                ok, image = self.camera.read()
+                if ok: break
+                
+                print("CAMERA NOT READY!")
             
-            print("FAILED TO CAPTURE IMAGE! 2")
+            image = image[:int(0.48 * self.height), :]
+            
+            image = cv2.flip(image, 0)
+            image = cv2.flip(image, 1)
         
-        image = image[:int(0.5 * self.height), :]
-        
-        image = cv2.flip(image, 0)
-        image = cv2.flip(image, 1)
+        except Exception as e:
+            debug( [f"ERROR", f"CAMERA", f"{e}"], [30, 20, 50] )
+            time.sleep(0.1)
         
         return image
     

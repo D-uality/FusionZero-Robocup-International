@@ -36,7 +36,7 @@ class LaserSensors():
 
                 sensor = adafruit_vl53l1x.VL53L1X(board.I2C())
                 sensor.distance_mode = 1 
-                sensor.timing_budget = 33
+                sensor.timing_budget = 100
 
                 self.__tof_sensors.append(sensor)
 
