@@ -46,6 +46,8 @@ class LineFollower():
         self.light_black = 80
         self.lightest_black = 100
         self.silver = 253
+        self.lower_blue = np.array([100, 100, 100])
+        self.upper_blue = np.array([130, 255, 255])
         
         self.turn_color = (0, 255, 0)
         self.prev_side = None
@@ -55,6 +57,7 @@ class LineFollower():
         self.hsv_image = None
         self.gray_image = None
         self.display_image = None
+        self.blue_contours = None
         self.green_contours = None
         self.green_signal = None
         self.prev_green_signal = None
@@ -82,9 +85,11 @@ class LineFollower():
         if self.__timing: t4 = time.perf_counter()
 
         self.calculate_angle(self.black_contour)
-        if self.__timing: t5 = time.perf_counter()
-                
         self.__turn()
+
+        if self.__timing: t5 = time.perf_counter()
+
+        cv2.drawContours(self.display_image, self.blue_contours, -1, (0, 255, 255), 2)
 
         if self.display_image is not None and camera.X11:
             show(np.uint8(self.display_image), camera.X11, name="line")
@@ -111,29 +116,31 @@ class LineFollower():
 
         if robot_state.trigger["seasaw"]:
             for i in range(5):
-                motors.run(-30+i*6, -30+i*6, 0.25)
+                motors.run(-30+i*6, -30+i*6, 0.20)
         elif self.green_signal == "Double":
-            v1, v2, t = 40, -40, 2.5
+            v1, v2, t = 35, -35, 4
             f = b = f_after = b_after = 0
 
             if robot_state.trigger["tilt_left"]:
-                v1, v2, t = 50, -20, 3
+                v1, v2, t = 40, -15, 3
                 f = 0.5 if robot_state.trigger["uphill"] else 0
             elif robot_state.trigger["tilt_right"]:
-                v1, v2, t = -20, 50, 3,
+                v1, v2, t = -15, 40, 3
                 f = 0.5 if robot_state.trigger["uphill"] else 0
             elif robot_state.trigger["uphill"]:
                 f, t = 1.3, 3
+                v1 = v1
+                v2 = v2 * 1.5
             if robot_state.trigger["downhill"]:
-                v1 -= 10
-                v2 += 10
-                t = 4
+                v1 -= 5
+                v2 += 5
+                t += 2
                 b = 1
 
             motors.run(-self.speed, -self.speed, b)
             motors.run(self.speed, self.speed, f)
             motors.run(v1, v2, t)
-            self.run_till_camera(v1, v2, 10)
+            self.run_till_camera(v1, v2, 15)
         else:
             v1 = self.speed + self.turn
             v2 = self.speed - self.turn
@@ -438,9 +445,7 @@ class LineFollower():
         hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
         top_hsv = hsv_image[0:50, :]  # Only look at the top 50 rows
 
-        lower_blue = np.array([100, 100, 50])
-        upper_blue = np.array([140, 255, 255])
-        blue_mask_top = cv2.inRange(top_hsv, lower_blue, upper_blue)
+        blue_mask_top = cv2.inRange(top_hsv, self.lower_blue, self.upper_blue)
 
         # Expand blue_mask_top to full image size (pad zeros below)
         full_blue_mask = np.zeros_like(black_mask)
@@ -500,21 +505,26 @@ class LineFollower():
     
     # SILVER
     def find_silver(self):
-        if self.gray_image is not None:
-            mask = cv2.inRange(self.gray_image, self.silver, 255)
-            silver_pixels = cv2.countNonZero(mask)
-            total_pixels = self.gray_image.shape[0] * self.gray_image.shape[1]
-            
-            if silver_pixels / total_pixels >= 0.05:
-                robot_state.count["silver"] += 1
-                return
+        if self.hsv_image is None:
+            robot_state.count["silver"] = 0
+            return 
 
-        robot_state.count["silver"] = 0
+        # Create blue mask
+        mask = cv2.inRange(self.hsv_image, self.lower_blue, self.upper_blue)
+
+        # Find contours in the blue mask
+        self.blue_contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Silver detection logic
+        blue_pixels = cv2.countNonZero(mask)
+        total_pixels = self.image.shape[0] * self.image.shape[1]
+        print(f"[DEBUG] Blue pixel ratio: {blue_pixels / total_pixels:.3f} ({blue_pixels} / {total_pixels})")
+        if blue_pixels / total_pixels >= 0.1: robot_state.count["silver"] += 1
+
     
     # RED
     def find_red(self):
         if self.hsv_image is not None:
-            mask = cv2.inRange(self.hsv_image, self.silver, 255)
             mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
             mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
@@ -540,10 +550,9 @@ def main(start_time) -> None:
     ramp_check(robot_state, gyro_values)
     update_triggers(robot_state)
 
-    # red_check(robot_state)
-    # if time.perf_counter() - start_time > 3:
-        # line_follow.find_silver()
-        # line_follow.find_red()
+    if time.perf_counter() - start_time > 3:
+        line_follow.find_silver()
+        line_follow.find_red()
 
     if robot_state.count["silver"] >= 5:
         print("Silver Found!")
@@ -590,12 +599,12 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
 def update_triggers(robot_state: RobotState) -> list[str]:
     prev_triggers = robot_state.trigger
 
-    if robot_state.count["uphill"] > 10:
+    if robot_state.count["uphill"] > 5:
         robot_state.trigger["uphill"] = True
     else:
         robot_state.trigger["uphill"] = False
          
-    if robot_state.count["downhill"] > 10:
+    if robot_state.count["downhill"] > 5:
         robot_state.trigger["downhill"] = True
     else:
         robot_state.trigger["downhill"] = False
@@ -610,7 +619,7 @@ def update_triggers(robot_state: RobotState) -> list[str]:
     else:
         robot_state.trigger["tilt_right"] = False
     
-    if robot_state.last_uphill <= 20 and robot_state.count["downhill"] > 0:
+    if robot_state.last_uphill <= 20 and robot_state.count["downhill"] > 0 and robot_state.count["tilt_right"] < 1 and robot_state.count["tilt_left"] < 1:
         robot_state.trigger["downhill"] = False
         robot_state.trigger["seasaw"] = True
         robot_state.last_uphill = 100
@@ -698,6 +707,8 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
         if robot_state.count["uphill"] < 5:
             motors.run(-line_follow.speed, -line_follow.speed, 0.4)
+        else:
+            motors.run(line_follow.speed, line_follow.speed, 0.4)
         motors.run(0, 0, 0.15)
 
         if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 13, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
@@ -720,7 +731,10 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
     motors.run(line_follow.speed, line_follow.speed, 0.2)
     
-    for i in range(5):
+    if robot_state.count["uphill"] > 5: loops = 1
+    else: loops = 5
+
+    for i in range(loops):
         if direction == "cw":
             line_follow.run_till_camera(-v1-10, -v2+5, 10)
         else:
