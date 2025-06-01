@@ -25,6 +25,7 @@ class EvacuationState():
 class Search():
     def __init__(self):
         self.debug = True
+        self.live_debug = True
         
         self.model_path = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/dead_edgetpu.tflite"
         self.input_shape = 640
@@ -35,19 +36,23 @@ class Search():
         THRESHOLD = 245
         KERNEL_SIZE = 7
         CROP_SIZE = 100
-
+        
+        working_image = image.copy()
+        
         # Ensure image is not None
-        if image is None or image.size == 0: return None
+        if working_image is None or working_image.size == 0: return None
+        
+        x_lower = 0  # new: initialize crop offset
         
         # Crop according to last x
         if last_x is not None:
-            x_lower = max(             0, last_x - CROP_SIZE)
+            x_lower = max(                     0, last_x - CROP_SIZE)
             x_upper = min(image.shape[1], last_x + CROP_SIZE)
             
-            if x_upper > x_lower: image = image[:, x_lower : x_upper]
+            if x_upper > x_lower: working_image = working_image[:, x_lower : x_upper]
             
         # Filter for spectral highlights
-        spectral_highlights = cv2.inRange(image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
+        spectral_highlights = cv2.inRange(working_image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
         spectral_highlights = cv2.dilate (spectral_highlights, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -56,23 +61,25 @@ class Search():
         # Validate contours based on: area, y-position
         valid = []
         for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
+            centre_x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
             
             if y + h/2 > 5 and y + h/2 < 150 and area < 3000:
-                cx = x + w/2
+                cx = centre_x + w/2
                 valid.append((contour, cx))
         if len(valid) == 0: return None
 
         # Find largest contour/closest contour
-        best_contour = max(valid, key=lambda t: cv2.contourArea(t[0]))[0] if last_x is None else min(valid, key=lambda t: abs(t[1]))[0]
-        x, _, w, _ = cv2.boundingRect(best_contour)
-        center_x = x + w/2 if last_x is None else (x + w/2) + last_x
+        best_contour = max(valid, key=lambda t: cv2.contourArea(t[0]))[0] if last_x is None else min(valid, key=lambda t: abs(t[1] - working_image.shape[1]/2))[0]
+        centre_x, _, w, _ = cv2.boundingRect(best_contour)
 
-        if evac_state.X11:   cv2.drawContours(image, [best_contour], -1, (0, 255, 0), 1)
+        if evac_state.X11 and self.live_debug:
+            cv2.drawContours(working_image, [best_contour], -1, (0, 255, 0), 2)
+            show(working_image, "working_image")
         
-        # Find centre x 
-        return int(center_x)
+        # Find centre x
+        centre_x = centre_x + w/2 if last_x is None else x_lower + (centre_x + w/2)
+        return int(centre_x)
     
     def hough_dead(self, image: np.ndarray, last_x: Optional[int], distance: Optional[float] = None) -> Optional[int]:
         CROP_SIZE = 200
@@ -98,6 +105,8 @@ class Search():
         
         # Ensure image is not None
         if working_image is None or working_image.size == 0: return None
+        
+        x_lower = 0  # new: initialize crop offset
         
         # Crop according to last x
         if last_x is not None:
@@ -172,13 +181,14 @@ class Search():
             cv2.circle(working_image, (x, y), r, (0, 255, 0), 1)
             cv2.circle(working_image, (x, y), 1, (0, 0, 255), 1)
         
-        # Find the closest circle to last x, or the largest circle if last x is None
+        # Find the closest circle to the crop center, or the largest circle if last x is None
         if last_x is not None:
-            closest_circle = min(valid, key=lambda circle: abs(circle[0] - (last_x - x_lower)))
+            crop_center = working_image.shape[1] / 2
+            closest_circle = min(valid, key=lambda circle: abs(circle[0] - crop_center))
             x = closest_circle[0] + x_lower
         else:
             largest_circle = max(valid, key=lambda circle: circle[2])
-            x = largest_circle[0]
+            x = largest_circle[0] + x_lower
                 
         if evac_state.X11 and self.debug:   show(working_image, "hough_circles")
         if self.debug: print(f"Green: {(t1-t0)*1000:.1f}ms | Spectral: {(t2-t1)*1000:.1f}ms | Mask: {(t3-t2)*1000:.1f}ms | Hough: {(t4-t3)*1000:.1f}ms | Validation: {(t5-t4)*1000:.1f}ms | Total: {(t5-t0)*1000:.1f}ms")
