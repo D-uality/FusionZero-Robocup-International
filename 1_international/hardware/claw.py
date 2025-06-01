@@ -61,8 +61,8 @@ class Claw():
     
     def read(self):
         TRIALS = 15
-        EMPTY_TOLORANCE = 7
-        OPPOSITE_LIVE_TOLORANCE = 7
+        EMPTY_TOLORANCE = 5
+        OPPOSITE_LIVE_TOLORANCE = 5
         
         averages = [0, 0]
         

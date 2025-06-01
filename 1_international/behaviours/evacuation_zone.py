@@ -17,22 +17,23 @@ class EvacuationState():
         
         self.live_approach_distance     = 7
         self.dead_approach_distance     = 7
-        self.triangle_approach_distance = 6.5
+        self.triangle_approach_distance = 5
         self.align_distance = 4
         
         self.minimum_align_distance = 20
         
 class Search():
     def __init__(self):
-        self.debug = True
-        self.live_debug = True
+        self.debug_live      = False
+        self.debug_dead      = False
+        self.debug_triangles = False
         
         self.model_path = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/dead_edgetpu.tflite"
         self.input_shape = 640
         self.model = YOLO(self.model_path, task='detect')
         self.confidence_threshold = 0.3
     
-    def classic_live(self, image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
+    def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         THRESHOLD = 245
         KERNEL_SIZE = 7
         CROP_SIZE = 100
@@ -61,27 +62,36 @@ class Search():
         # Validate contours based on: area, y-position
         valid = []
         for contour in contours:
-            centre_x, y, w, h = cv2.boundingRect(contour)
+            x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
             
             if y + h/2 > 5 and y + h/2 < 150 and area < 3000:
-                cx = centre_x + w/2
-                valid.append((contour, cx))
+                centre_x = x + w/2
+                valid.append((contour, centre_x))
         if len(valid) == 0: return None
 
         # Find largest contour/closest contour
         best_contour = max(valid, key=lambda t: cv2.contourArea(t[0]))[0] if last_x is None else min(valid, key=lambda t: abs(t[1] - working_image.shape[1]/2))[0]
-        centre_x, _, w, _ = cv2.boundingRect(best_contour)
+        x, _, w, _ = cv2.boundingRect(best_contour)
 
-        if evac_state.X11 and self.live_debug:
+        if evac_state.X11:
+            if x_lower > 0:
+                adjusted_contour = best_contour.copy()
+                adjusted_contour[:,:,0] += x_lower
+                cv2.drawContours(display_image, [adjusted_contour], -1, (0, 255, 0), 2)
+                
+            else:
+                cv2.drawContours(display_image, [best_contour], -1, (0, 255, 0), 2)
+            
+        if evac_state.X11 and self.debug_live:
             cv2.drawContours(working_image, [best_contour], -1, (0, 255, 0), 2)
-            show(working_image, "working_image")
+            show(working_image, "live_working_image")
         
         # Find centre x
-        centre_x = centre_x + w/2 if last_x is None else x_lower + (centre_x + w/2)
+        centre_x = x + w/2 if last_x is None else x_lower + (x + w/2)
         return int(centre_x)
     
-    def hough_dead(self, image: np.ndarray, last_x: Optional[int], distance: Optional[float] = None) -> Optional[int]:
+    def hough_dead(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         CROP_SIZE = 200
         
         DARK_BLACK = 35
@@ -94,13 +104,11 @@ class Search():
         
         DP =           1                               # "Resolution" of the accumulator
         MIN_DISTANCE = 300
-        P1 =           55                              # Lower -> detect more circles   |  Higher -> detect less circles
-        P2 =           25                              # Lower -> accepts more circles  |  Higher -> rejects more circles
+        PARAMETER_1 =  55                              # Lower -> detect more circles   |  Higher -> detect less circles
+        PARAMETER_2 =  25                              # Lower -> accepts more circles  |  Higher -> rejects more circles
         MIN_RADIUS =   20
         MAX_RADIUS =   230
-        
-        OFFSET = 20
-        
+                
         working_image = image.copy()
         
         # Ensure image is not None
@@ -150,11 +158,11 @@ class Search():
         grey_image = cv2.cvtColor(working_image, cv2.COLOR_BGR2GRAY)
         grey_image = cv2.bitwise_and(grey_image, mask)
 
-        if self.debug: show(grey_image, "grey_image")
+        if self.debug_dead: show(grey_image, "pre_processing")
         
         t3 = time.perf_counter()
         # Hough Circle Transform
-        circles = cv2.HoughCircles(grey_image, cv2.HOUGH_GRADIENT, DP, MIN_DISTANCE, param1=P1, param2=P2, minRadius=MIN_RADIUS, maxRadius=MAX_RADIUS)
+        circles = cv2.HoughCircles(grey_image, cv2.HOUGH_GRADIENT, DP, MIN_DISTANCE, param1=PARAMETER_1, param2=PARAMETER_2, minRadius=MIN_RADIUS, maxRadius=MAX_RADIUS)
         if circles is None: return None
         
         t4 = time.perf_counter()
@@ -173,28 +181,35 @@ class Search():
                 and y > 10):
                 valid.append((x, y, r))
         
-        t5 = time.perf_counter()
         if len(valid) == 0: return None
         
-        # Display on image
-        for (x, y, r) in valid:
-            cv2.circle(working_image, (x, y), r, (0, 255, 0), 1)
-            cv2.circle(working_image, (x, y), 1, (0, 0, 255), 1)
-        
+        t5 = time.perf_counter()
         # Find the closest circle to the crop center, or the largest circle if last x is None
         if last_x is not None:
             crop_center = working_image.shape[1] / 2
-            closest_circle = min(valid, key=lambda circle: abs(circle[0] - crop_center))
-            x = closest_circle[0] + x_lower
+            best_circle = min(valid, key=lambda circle: abs(circle[0] - crop_center))
+            centre_x = best_circle[0] + x_lower
+            
         else:
-            largest_circle = max(valid, key=lambda circle: circle[2])
-            x = largest_circle[0] + x_lower
+            best_circle = max(valid, key=lambda circle: circle[2])
+            centre_x = best_circle[0] + x_lower
+            
+        # Display on image
+        if evac_state.X11:
+            _, y, r = best_circle
+            cv2.circle(display_image, (centre_x, y), r, (0, 255, 0), 2)
+            cv2.circle(display_image, (centre_x, y), 1, (0, 255, 0), 2)
+        
+            if self.debug_dead:
+                cv2.circle(working_image, (x, y), r, (0, 255, 0), 2)
+                cv2.circle(working_image, (x, y), 1, (0, 255, 0), 2)
                 
-        if evac_state.X11 and self.debug:   show(working_image, "hough_circles")
-        if self.debug: print(f"Green: {(t1-t0)*1000:.1f}ms | Spectral: {(t2-t1)*1000:.1f}ms | Mask: {(t3-t2)*1000:.1f}ms | Hough: {(t4-t3)*1000:.1f}ms | Validation: {(t5-t4)*1000:.1f}ms | Total: {(t5-t0)*1000:.1f}ms")
+                show(working_image, "dead_working_image")
+                
+        if self.debug_dead: print(f"Green: {(t1-t0)*1000:.1f}ms | Spectral: {(t2-t1)*1000:.1f}ms | Mask: {(t3-t2)*1000:.1f}ms | Hough: {(t4-t3)*1000:.1f}ms | Validation: {(t5-t4)*1000:.1f}ms | Total: {(t5-t0)*1000:.1f}ms")
 
-        return int(x)
-    
+        return int(centre_x)
+
     def classic_dead(self, image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         THRESHOLD = 45
         KERNAL_SIZE = 5
@@ -251,9 +266,12 @@ class Search():
         image = results[0].plot()
         return int(x)
     
-    def triangle(self, image: np.ndarray, triangle: str) -> Optional[int]:
+    def triangle(self, image: np.ndarray, display_image: np.ndarray, triangle: str) -> Optional[int]:
+        KERNEL_SIZE = 3
+        
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         
+        # Select which mask to use
         if triangle == "red":
             mask_lower = cv2.inRange(hsv_image, (  0, 120, 0), ( 20, 255, 255))
             mask_upper = cv2.inRange(hsv_image, (160, 120, 0), (179, 255, 255))
@@ -262,14 +280,12 @@ class Search():
         else:
             mask = cv2.inRange(hsv_image, (50, 120, 15), (70, 255, 255))
             
-        mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
+        mask = cv2.dilate(mask, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
         
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # If no contours are found, return None
         if not contours: return None
         
-        if self.debug: 
+        if self.debug_triangles: 
             for contour in contours: print(cv2.contourArea(contour))
         
         largest_contour = max(contours, key=cv2.contourArea)
@@ -283,9 +299,9 @@ class Search():
         if h > w or y + h/2 > evac_camera.height / 2: return None
 
         # Display debug information
-        if evac_state.X11:
-            cv2.drawContours(image, [largest_contour], -1, (0, 255, 0), 1)
-            cv2.circle(image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
+        if evac_state.X11 and self.debug_triangles:
+            cv2.drawContours(display_image, [largest_contour], -1, (0, 255, 0), 1)
+            cv2.circle(display_image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
 
         return int(x + w/2)
 
@@ -315,7 +331,7 @@ class Movement():
             self.state = "touch"
             self.t0 = time.perf_counter()
             
-        elif self.state == "touch" and time.perf_counter() - self.t0 > 1:
+        elif self.state == "touch" and time.perf_counter() - self.t0 > 3:
             self.state = "forwards"
             
         return v1, v2
@@ -370,7 +386,7 @@ class Movement():
         
         return v1, v2
 
-def analyse(image: np.ndarray, search_type: str = "default", last_x: Optional[int] = None) -> tuple[Optional[int], str]:      
+def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last_x: Optional[int] = None) -> tuple[Optional[int], str]:      
     live_enable  = False
     dead_enable  = False
     green_enable = False
@@ -387,36 +403,41 @@ def analyse(image: np.ndarray, search_type: str = "default", last_x: Optional[in
     if dead_count == 1 and evac_state.victims_saved == 2:              red_enable   = True
             
     if search_type in ["live", "green", "default"] and live_enable:
-        live_x = search.classic_live(image, last_x)
+        live_x = search.classic_live(image, display_image, last_x)
         if live_x is not None: return live_x, "live"
 
     if search_type in ["dead", "green", "default"] and dead_enable:
-        dead_x = search.hough_dead(image, last_x)
+        dead_x = search.hough_dead(image, display_image, last_x)
         if dead_x is not None: return dead_x, "dead"
     
     if search_type in ["green", "default"] and green_enable:
-        x  = search.triangle(image, "green")
+        x  = search.triangle(image, display_image, "green")
         if x is not None: return x, "green"
     
     if search_type in ["red", "default"] and red_enable:
-        x  = search.triangle(image, "red")
+        x  = search.triangle(image, display_image, "red")
         if x is not None: return x, "red"
     
     return None, search_type
 
-def locate() -> tuple[int, str]:
+def locate(search_type: str = "default") -> tuple[int, str]:
     movement = Movement()
     
     while True:
         image = evac_camera.capture_image()
+        display_image = image.copy()
         
         # Exit if target found
-        x, search_type = analyse(image)
+        x, search_type = analyse(image, display_image, search_type)
         if x is not None: return x, search_type
-            
-        v1, v2 = movement.random()
         
-        if evac_state.X11:   show(image, "image")
+        if search_type == "default":
+            v1, v2 = movement.random()
+        else:
+            v1, v2 = evac_state.base_speed, evac_state.base_speed
+            motors.run(v1, v2)
+        
+        if evac_state.X11:   show(display_image, "display")
         if evac_state.debug: debug( [f"LOCATING", f"{v1} {v2}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str) -> bool:
@@ -426,7 +447,9 @@ def route(last_x: int, search_type: str) -> bool:
         # Take measurements
         distance = laser_sensors.read([1])[0]
         image = evac_camera.capture_image()
-        x, search_type = analyse(image, search_type, last_x)
+        display_image = image.copy()
+        
+        x, search_type = analyse(image, display_image, search_type, last_x)
         
         # Error handling
         if distance is None: continue
@@ -440,11 +463,11 @@ def route(last_x: int, search_type: str) -> bool:
         # Route with kP        
         # time_step = 0.15 if search_type == "dead" else 0
         time_step = 0
-        v1, v2, last_distance = movement.route(0.2, x, search_type, distance, last_distance, time_step)
+        v1, v2, last_distance = movement.route(0.25, x, search_type, distance, last_distance, time_step)
         
         last_x = x
         
-        if evac_state.X11:   show(image, "image")
+        if evac_state.X11:   show(display_image, "display")
         if evac_state.debug: debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"{v1:.2f} {v2:.2f}"], [30, 20, 20, 20] )
 
     while True:
@@ -522,7 +545,6 @@ def sweep(centre_tolorance: float) -> bool:
     return True
 
 def align(centre_tolorance: float, distance_tolorance: float) -> bool:
-    t0 = time.perf_counter()
     TIME_STEP = 0.025
     
     if not forwards_align(distance_tolorance, TIME_STEP): return False
@@ -546,7 +568,7 @@ def grab() -> bool:
     
     debug( ["GRAB", "SETUP"], [30, 20] )
     # Setup
-    motors.run(         -evac_state.grab_speed,         -evac_state.grab_speed, 0.25)
+    motors.run(         -evac_state.grab_speed,         -evac_state.grab_speed, 0)
     motors.run(-evac_state.grab_speed * insert, evac_state.grab_speed * insert, 0.25)
     motors.run(0, 0)
     
@@ -628,7 +650,9 @@ def main() -> None:
         # If it is a triangle
         if search_type in ["red", "green"]:
             # Reset and move closer again
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 1.5)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 2)
+            x, search_type = locate(search_type)
+            
             route_success = route(x, search_type)
             if not route_success: continue
             
