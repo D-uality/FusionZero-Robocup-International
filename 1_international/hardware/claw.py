@@ -5,6 +5,7 @@ from core.utilities import debug
 class Claw():
     def __init__(self):
         TRIALS = 50
+        self.debug = False
         
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
@@ -12,6 +13,10 @@ class Claw():
         self.__lifter_pin = 9
         self.__closer_pin = 8
         self.__pca = ServoKit(channels=16)
+        
+        self.a0 = AnalogIn(self.__ADC, 0)
+        self.a1 = AnalogIn(self.__ADC, 1)
+        self.analogs = [self.a0, self.a1]
         
         self.__pca.servo[self.__lifter_pin].angle = 160
         self.__pca.servo[self.__closer_pin].angle = 90
@@ -22,7 +27,7 @@ class Claw():
         self.__empty_average = [0, 0]
         
         for _ in range(0, TRIALS):
-            values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+            values = [int(self.analogs[i].value / 256) for i in range(0, len(self.analogs))]
             for i, value in enumerate(values): self.__empty_average[i] += value
             
             time.sleep(0.01)
@@ -69,14 +74,14 @@ class Claw():
         try:
             # Find average reading
             for _ in range(0, TRIALS):
-                values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+                values = [int(self.analogs[i].value / 256) for i in range(0, len(self.analogs))]
                 for i, value in enumerate(values): averages[i] += value
                 
                 time.sleep(0.005)
             
             for i, average, in enumerate(averages):
                 average = average / TRIALS
-                
+                if self.debug: print(f"{average:.2f}, {self.__empty_average[i]:.2f}", end="     ")
                 # If opposite side has live
                 tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE
                 

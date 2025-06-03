@@ -4,8 +4,7 @@ from hardware.motors import Motors
 
 class LaserSensors():
     def __init__(self, motors: Motors):
-        # self.x_shut_pins = [24, 25]
-        self.__x_shut_pins = [25, 24]
+        self.__x_shut_pins = [23, 24, 25]
         self.__tof_sensors = []
         
         self.__fails = 0
@@ -19,6 +18,7 @@ class LaserSensors():
         for pin in self.__x_shut_pins:
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, GPIO.LOW)
+            time.sleep(0.1)
             
         for pin_number, x_shut_pin in enumerate(self.__x_shut_pins):
             self.__change_address(pin_number, x_shut_pin)

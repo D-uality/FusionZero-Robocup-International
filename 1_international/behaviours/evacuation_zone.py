@@ -547,6 +547,24 @@ def sweep(centre_tolorance: float) -> bool:
 def align(centre_tolorance: float, distance_tolorance: float) -> bool:
     TIME_STEP = 0.025
     
+    while True:
+        side_distance = laser_sensors.read([0])[0]
+        if side_distance is not None: break
+        
+    if side_distance < 10:
+        # motors.ease(-evac_state.fast_speed, 60, 0, -2, 1.5)
+        motors.steer(-evac_state.fast_speed, 65, 2.3)
+        motors.pause()
+        motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 1.5)
+        motors.pause()
+        
+        # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
+        # motors.run(-evac_state.fast_speed,  evac_state.fast_speed, 1)
+        # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 1)
+        # motors.run( evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+        # motors.run(0, 0)
+        return False
+    
     if not forwards_align(distance_tolorance, TIME_STEP): return False
     motors.run(0, 0, 0.3)
     if not forwards_align(distance_tolorance, TIME_STEP): return False
@@ -559,7 +577,7 @@ def align(centre_tolorance: float, distance_tolorance: float) -> bool:
     
     return True
 
-def grab() -> bool:
+def grab() -> bool:    
     claw.read()
     if "" not in claw.spaces: return False
     
@@ -665,8 +683,6 @@ def main() -> None:
         if search_type in ["live", "dead"]:
             align_success = align(10, 0.1)
             if not align_success: continue
-
-            print("ALIGN SUCCESSFUL")
             
             grab_success = grab()
             if not grab_success:
