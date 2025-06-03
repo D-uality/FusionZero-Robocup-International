@@ -274,50 +274,85 @@ class LineFollower():
         motors.run(0, 0, 1)
         motors.run(-self.speed, -self.speed)
 
+        self.__wait_for_black_contour()
+        motors.run(0, 0, 0.5)
+
+        self.__align_to_contour_angle()
+        motors.run(0, 0, 0.3)
+        motors.pause()
+
+        if not self.__move_and_check_black(2):
+            print("No black found, retrying...")
+
+            motors.run(-25, -25, 2)
+            motors.run(0, 0, 0.3)
+
+            self.__align_to_contour_angle()
+            motors.run(0, 0, 0.3)
+            motors.pause()
+
+            if not self.__move_and_check_black(2.3):
+                print("Still no black. Exiting gap handler.")
+
+        print("Gap handling complete.")
+    
+    def __wait_for_black_contour(self):
         while True:
             self.image = camera.capture_array()
             self.display_image = self.image.copy()
             self.find_black()
 
             if self.black_contour is not None:
-                print("hi")
                 if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 3000:
+                    print("Black contour found.")
                     break
 
             if self.display_image is not None and camera.X11:
                 show(np.uint8(self.display_image), camera.X11, name="line")
-        
-        motors.run(0, 0, 0.5)
 
+    def __align_to_contour_angle(self):
         while True:
             self.image = camera.capture_array()
             self.display_image = self.image.copy()
             self.find_black()
 
-            if self.black_contour is None:
+            if self.black_contour is not None:
                 rect = cv2.minAreaRect(self.black_contour)
                 angle = rect[2]
-                if angle < -45:angle += 90
-                elif angle < 0: angle = -angle
 
-                print(f"Gap Angle: {angle:.2f}")
+                if angle < -45:
+                    angle += 90
+                elif angle < 0:
+                    angle = -angle
 
-                if abs(angle - 90) < 5: break
-                elif angle > 90: motors.run(-10, 10)
-                else: motors.run(10, -10)
+                print(f"Align Angle: {angle:.2f}")
+
+                if abs(angle - 90) < 5:
+                    break
+                elif angle > 90:
+                    motors.run(-10, 10)
+                else:
+                    motors.run(10, -10)
 
                 if self.display_image is not None and camera.X11:
                     box = cv2.boxPoints(rect)
                     box = np.int0(box)
                     cv2.drawContours(self.display_image, [box], 0, (0, 255, 255), 2)
                     show(np.uint8(self.display_image), camera.X11, name="line")
-        
-        print("Aligned to Gap")
-        motors.run(0, 0, 0.3)
-        motors.pause()
-        motors.run(25, 25, 2)
+
+    def __move_and_check_black(self, duration: float) -> bool:
+        motors.run(25, 25, duration)
         motors.pause()
         motors.run(0, 0, 0.3)
+
+        self.image = camera.capture_array()
+        self.display_image = self.image.copy()
+        self.find_black()
+
+        if self.black_contour is not None:
+            return True
+        return False
+
 
     def calculate_angle(self, contour=None, validate=False):
         # Early return for simple case
