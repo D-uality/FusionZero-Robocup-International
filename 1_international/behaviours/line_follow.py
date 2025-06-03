@@ -293,7 +293,7 @@ class LineFollower():
 
             if not self.__move_and_check_black(2.3):
                 print("Still no black. Exiting gap handler.")
-                motors.run(-25, -25, 2.3)
+                motors.run(-25, -25, 2.5)
 
         print("Gap handling complete.")
     
