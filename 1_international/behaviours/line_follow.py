@@ -65,38 +65,24 @@ class LineFollower():
     
     def follow(self) -> None:
         start_time = time.perf_counter()
-
-        if self.__timing: t0 = time.perf_counter()
         self.image = camera.capture_array()
-        
-        if self.__timing: t1 = time.perf_counter()
         self.display_image = self.image.copy()
 
         self.find_black()
-        if self.__timing: t2 = time.perf_counter()
+        if self.black_contour is not None:
+            self.find_green()
+            self.green_check()
 
-        self.find_green()
-        if self.__timing: t3 = time.perf_counter()
-
-        self.green_check()
-        if self.__timing: t4 = time.perf_counter()
-
-        self.calculate_angle(self.black_contour)
-        if self.__timing: t5 = time.perf_counter()
-                
-        self.__turn()
+            self.calculate_angle(self.black_contour)
+            self.__turn()
+        else: self.gap_handling()
 
         if self.display_image is not None and camera.X11:
             show(np.uint8(self.display_image), camera.X11, name="line")
 
-        if self.__timing: t6 = time.perf_counter()
-
         elapsed_time = time.perf_counter() - start_time
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
 
-        if self.__timing:
-            print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
-        
         return fps, self.turn, self.green_signal
 
     def __turn(self):
@@ -161,6 +147,7 @@ class LineFollower():
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
         motors.run(0, 0)
+
 
     # GREEN
     def green_check(self):
@@ -253,7 +240,6 @@ class LineFollower():
                     in_any_contour = any(cv2.pointPolygonTest(contour, (x, y), False) >= 0 for contour in self.green_contours)
                     if not in_any_contour:
                         return True
-        
         return False
 
     def green_hold(self):
@@ -280,10 +266,62 @@ class LineFollower():
         if self.green_contours and self.display_image is not None and camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (255, 0, 255), 2)
 
+
     # BLACK
+    def gap_handling(self):
+        print("Gap Detected!")
+        motors.pause()
+        motors.run(0, 0, 1)
+        motors.run(-self.speed, -self.speed)
+
+        while True:
+            self.image = camera.capture_array()
+            self.display_image = self.image.copy()
+            self.find_black()
+
+            if self.black_contour is not None:
+                print("hi")
+                if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 3000:
+                    break
+
+            if self.display_image is not None and camera.X11:
+                show(np.uint8(self.display_image), camera.X11, name="line")
+        
+        motors.run(0, 0, 0.5)
+
+        while True:
+            self.image = camera.capture_array()
+            self.display_image = self.image.copy()
+            self.find_black()
+
+            if self.black_contour is None:
+                rect = cv2.minAreaRect(self.black_contour)
+                angle = rect[2]
+                if angle < -45:angle += 90
+                elif angle < 0: angle = -angle
+
+                print(f"Gap Angle: {angle:.2f}")
+
+                if abs(angle - 90) < 5: break
+                elif angle > 90: motors.run(-10, 10)
+                else: motors.run(10, -10)
+
+                if self.display_image is not None and camera.X11:
+                    box = cv2.boxPoints(rect)
+                    box = np.int0(box)
+                    cv2.drawContours(self.display_image, [box], 0, (0, 255, 255), 2)
+                    show(np.uint8(self.display_image), camera.X11, name="line")
+        
+        print("Aligned to Gap")
+        motors.run(0, 0, 0.3)
+        motors.pause()
+        motors.run(25, 25, 2)
+        motors.pause()
+        motors.run(0, 0, 0.3)
+
     def calculate_angle(self, contour=None, validate=False):
         # Early return for simple case
-        if not validate:
+        if not validate: 
             self.angle = 90
             if contour is None:
                 return 90
