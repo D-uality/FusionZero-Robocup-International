@@ -10,8 +10,7 @@ class EvacuationCamera():
         self.camera = cv2.VideoCapture(device, cv2.CAP_V4L2)
         
         if not self.camera.isOpened():
-            print("Failed to open camera!")
-            exit(1)
+            raise "Failed to open camera!"
         
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
@@ -19,10 +18,9 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         
-        self.image_queue = mp.Queue(maxsize=1)
-        self.exit_event  = mp.Event()
-        
-        self.__capture_process = mp.Process(target=self.__background_capture, daemon=True)
+        self.image_queue       = mp.Queue(maxsize=1)
+        self.exit_event        = mp.Event()
+        self.__capture_process = mp.Process(target=self.__background_capture)
         
         self.start()
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
@@ -35,31 +33,33 @@ class EvacuationCamera():
         
         if self.__capture_process.is_alive():
             self.__capture_process.terminate()
-            self.__capture_process.join()
-        self.__release()
-        
+            self.__capture_process.join()            
+    
+    def release(self) -> None:
+        self.stop()
+        self.camera.release()
+    
     def capture(self) -> np.ndarray:
-        try:
+        if not self.image_queue.empty():
             return self.image_queue.get_nowait()
         
-        except:
-            return np.zeros(self.height, self.width, 3, dtype=np.uint8)
+        else:
+            return np.zeros((self.height, self.width, 3), dtype=np.uint8)
     
-    def __background_capture(self) -> None:
-        try:
-            while not self.exit_event.is_set():
-                while True:
-                    ok, image = self.camera.read()
-                    if ok: break
-                    
-                # If the queue is full, remove the oldest image, then push the newest image
-                if self.image_queue.full(): self.image_queue.get()
-                self.image_queue.put(image)
-                
-                time.sleep(0.003)
-        
-        except KeyboardInterrupt:
-            pass
-    
-    def __release(self) -> None:
-        self.camera.release()
+    def __background_capture(self) -> None:        
+        while not self.exit_event.is_set():
+            t0 = time.perf_counter()
+            
+            while True:
+                ok, image = self.camera.read()
+                if ok: break
+                if time.perf_counter() - t0 > 1:
+                    print("Failed to capture image from evacuation camera!")
+                    return
+            
+            image = image[:int(0.48 * self.height), :]
+            
+            image = cv2.flip(image, 0)
+            image = cv2.flip(image, 1)
+            
+            self.image_queue.put(image)

@@ -2,7 +2,6 @@ import time
 
 start_time = time.perf_counter()
 
-
 import socket
 import getpass
 from typing import Optional, Deque
@@ -11,6 +10,7 @@ import operator
 import os
 import sys
 import math
+from queue import Empty
 
 import cv2
 import numpy as np

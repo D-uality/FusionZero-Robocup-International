@@ -16,7 +16,7 @@ def main() -> None:
     try:
         listener.start()
         
-        while not listener.has_exited():
+        while not listener.exit_event.is_set():
             if listener.mode.value != 1:
                 start_time = time.perf_counter()
 
@@ -49,14 +49,16 @@ def main() -> None:
         print("Exiting gracefully!")
     
     finally:
-        listener.stop()
-        
-        GPIO.cleanup()
-        evac_camera.__release()
-        camera.close()
-        
         claw.lift(160)
         claw.close(90)
         motors.run(0, 0)
+        
+        evac_camera.release()
+        camera.close()
+        laser_sensors.stop()
+        gyroscope.stop()
+        
+        GPIO.cleanup()
+        listener.stop()
 
 if __name__ == "__main__": main()

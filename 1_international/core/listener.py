@@ -8,8 +8,8 @@ class ModeListener():
         self.exit_event  = mp.Event()
         self.input_queue = mp.Queue()
 
-        self.__process_console = mp.Process(target=self.__input_listener,  daemon=True)
-        self.__process_button  = mp.Process(target=self.__button_listener, daemon=True)
+        self.__process_console = mp.Process(target=self.__input_listener)
+        self.__process_button  = mp.Process(target=self.__button_listener)
         
     def start(self) -> None:
         self.__start_input_thread()
