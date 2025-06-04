@@ -14,7 +14,7 @@ last_live_x, last_dead_x = None, None
 def evac_image():
     global last_live_x, last_dead_x
     t0 = time.perf_counter()
-    image = evac_camera.capture_image()
+    image = evac_camera.capture()
     display_image = image.copy()
         
     # green_x = search.triangle(image, "green")

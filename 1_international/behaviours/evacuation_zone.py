@@ -424,7 +424,7 @@ def locate(search_type: str = "default") -> tuple[int, str]:
     movement = Movement()
     
     while True:
-        image = evac_camera.capture_image()
+        image = evac_camera.capture()
         display_image = image.copy()
         
         # Exit if target found
@@ -446,7 +446,7 @@ def route(last_x: int, search_type: str) -> bool:
     while True:
         # Take measurements
         distance = laser_sensors.read([1])[0]
-        image = evac_camera.capture_image()
+        image = evac_camera.capture()
         display_image = image.copy()
         
         x, search_type = analyse(image, display_image, search_type, last_x)

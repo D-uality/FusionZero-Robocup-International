@@ -14,7 +14,7 @@ def main() -> None:
     led.off()
     
     try:
-        listener.run()
+        listener.start()
         
         while not listener.has_exited():
             if listener.mode.value != 1:
@@ -49,8 +49,10 @@ def main() -> None:
         print("Exiting gracefully!")
     
     finally:
+        listener.stop()
+        
         GPIO.cleanup()
-        evac_camera.release()
+        evac_camera.__release()
         camera.close()
         
         claw.lift(160)

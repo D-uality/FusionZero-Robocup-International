@@ -1,4 +1,4 @@
-from core.shared_imports import cv2, np, time
+from core.shared_imports import cv2, np, time, mp
 from core.utilities import debug
 
 class EvacuationCamera():
@@ -19,28 +19,47 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         
+        self.image_queue = mp.Queue(maxsize=1)
+        self.exit_event  = mp.Event()
+        
+        self.__capture_process = mp.Process(target=self.__background_capture, daemon=True)
+        
+        self.start()
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
 
-    def capture_image(self) -> np.ndarray:
-        image = np.zeros((240, 640, 3), dtype=np.uint8)
+    def start(self) -> None:
+        self.__capture_process.start()
         
+    def stop(self) -> None:
+        self.exit_event.set()
+        
+        if self.__capture_process.is_alive():
+            self.__capture_process.terminate()
+            self.__capture_process.join()
+        self.__release()
+        
+    def capture(self) -> np.ndarray:
         try:
-            while True:
-                ok, image = self.camera.read()
-                if ok: break
-                
-                print("CAMERA NOT READY!")
-            
-            image = image[:int(0.48 * self.height), :]
-            
-            image = cv2.flip(image, 0)
-            image = cv2.flip(image, 1)
+            return self.image_queue.get_nowait()
         
-        except Exception as e:
-            debug( [f"ERROR", f"CAMERA", f"{e}"], [30, 20, 50] )
-            time.sleep(0.1)
-        
-        return image
+        except:
+            return np.zeros(self.height, self.width, 3, dtype=np.uint8)
     
-    def release(self) -> None:
+    def __background_capture(self) -> None:
+        try:
+            while not self.exit_event.is_set():
+                while True:
+                    ok, image = self.camera.read()
+                    if ok: break
+                    
+                # If the queue is full, remove the oldest image, then push the newest image
+                if self.image_queue.full(): self.image_queue.get()
+                self.image_queue.put(image)
+                
+                time.sleep(0.003)
+        
+        except KeyboardInterrupt:
+            pass
+    
+    def __release(self) -> None:
         self.camera.release()

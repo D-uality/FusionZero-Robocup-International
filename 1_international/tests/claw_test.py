@@ -8,7 +8,7 @@ from core.utilities import *
 start_display()
 
 def camera_claw():
-    image = evac_camera.capture_image()
+    image = evac_camera.capture()
     show(image, "image")
     mode, angle = list(map(int, input("Enter [Mode Angle]: ").split(" ")))
     

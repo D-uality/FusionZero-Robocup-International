@@ -1,7 +1,7 @@
 from core.shared_imports import mp, time, GPIO, Thread
 
 class ModeListener():
-    def __init__(self, initial_mode: int = 0) -> None:
+    def __init__(self, initial_mode: int = 0):
         self.__button_pin = 22
         
         self.mode        = mp.Value("i", initial_mode)
@@ -12,18 +12,22 @@ class ModeListener():
         self.__process_button  = mp.Process(target=self.__button_listener, daemon=True)
         
     def start(self) -> None:
+        self.__start_input_thread()
         self.__process_console.start()
         self.__process_button.start()
-
-    def has_exited(self) -> bool:
-        return self.exit_event.is_set()
-
-    def run(self) -> None:
-        self.__start_input_thread()
-        self.start()
+        
+    def stop(self) -> None:
+        self.exit_event.set()
+        
+        if self.__process_console.is_alive():
+            self.__process_console.terminate()
+            self.__process_console.join()
+            
+        if self.__process_button.is_alive():
+            self.__process_button.terminate()
+            self.__process_button.join()
 
     def __start_input_thread(self) -> None:
-        # Start a thread in the main process to handle user input
         def input_thread() -> None:
             while not self.exit_event.is_set():
                 mode = input()
