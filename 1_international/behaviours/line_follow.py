@@ -124,16 +124,16 @@ class LineFollower():
                 t += 2
                 b = 1
 
-            motors.run(-self.speed, -self.speed, b)
-            motors.run(self.speed, self.speed, f)
+            motors.run(-30, -30, b)
+            motors.run(30, 30, f)
             motors.run(v1, v2, t)
             self.run_till_camera(v1, v2, 15)
         else:
-            v1 = self.speed + self.turn
-            v2 = self.speed - self.turn
+            v1 = 30 + self.turn
+            v2 = 30 - self.turn
             if robot_state.last_downhill < 100:
-                v1 = self.speed + self.turn * 0.4 - 20
-                v2 = self.speed - self.turn * 0.4 - 20
+                v1 = 30 + self.turn * 0.4 - 20
+                v2 = 30 - self.turn * 0.4 - 20
             elif robot_state.trigger["uphill"]:
                 v1 += 10
                 v2 += 10
@@ -278,7 +278,7 @@ class LineFollower():
     def gap_handling(self):
         print("Gap Detected!")
         motors.run(0, 0, 1)
-        motors.run(-self.speed, -self.speed)
+        motors.run(-30, -30)
 
         self.__wait_for_black_contour()
         motors.run(0, 0, 0.5)
@@ -763,28 +763,28 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         direction = "cw" if randint(0, 1) == 0 else "ccw"
 
     if direction == "cw":
-        v1 = -line_follow.speed
-        v2 =  line_follow.speed * 0.8
+        v1 = -30
+        v2 =  30 * 0.8
         laser_pin = 2
         if robot_state.count["downhill"] > 3:
-            v1 = -line_follow.speed * 0.7
+            v1 = -30 * 0.7
     else:
-        v1 =  line_follow.speed * 0.8
-        v2 = -line_follow.speed
+        v1 =  30 * 0.8
+        v2 = -30
         laser_pin = 0
         if robot_state.count["downhill"] > 3:
-            v2 = -line_follow.speed * 0.7
+            v2 = -30 * 0.7
 
     # SETUP
     # Over turn passed obstacle
     # oled_display.text("Turning till obstacle", 0, 10, size=10
 
     if robot_state.count["downhill"] > 3:
-        motors.run(-line_follow.speed-10, -line_follow.speed-10, 1)
+        motors.run(-30-10, -30-10, 1)
     elif robot_state.count["uphill"] > 5:
-        motors.run(-line_follow.speed, -line_follow.speed, 0.2)
+        motors.run(-30, -30, 0.2)
     else:
-        motors.run(-line_follow.speed, -line_follow.speed, 0.4)
+        motors.run(-30, -30, 0.4)
 
     for i in range(3):
         if robot_state.count["downhill"] > 3:
@@ -799,23 +799,23 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         motors.run(v1, v2, 0.7)
 
     # Circle obstacle
-    v1 =  line_follow.speed if direction == "cw" else -line_follow.speed
-    v2 = -line_follow.speed if direction == "cw" else line_follow.speed
+    v1 =  30 if direction == "cw" else -30
+    v2 = -30 if direction == "cw" else 30
     laser_pin = 2 if direction == "cw" else 0
     colour_pin = 2
 
     initial_sequence = True
 
-    circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
+    circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
     while True:
-        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, ">=", 15, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 15, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
 
         if robot_state.count["uphill"] < 5:
-            motors.run(-line_follow.speed, -line_follow.speed, 0.4)
+            motors.run(-30, -30, 0.4)
         else:
-            motors.run(line_follow.speed, line_follow.speed, 0.4)
+            motors.run(30, 30, 0.4)
         motors.run(0, 0, 0.15)
 
         if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 13, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
@@ -827,7 +827,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         motors.run(v1, v2, 0.4)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(line_follow.speed, line_follow.speed, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
@@ -836,7 +836,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
-    motors.run(line_follow.speed, line_follow.speed, 0.2)
+    motors.run(30, 30, 0.2)
     
     if robot_state.count["uphill"] > 5: loops = 1
     else: loops = 5
