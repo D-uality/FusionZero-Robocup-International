@@ -53,6 +53,7 @@ class LineFollower():
         self.prev_side = None
         self.last_angle = 90
         self.angle = 90
+        self.turn = 0
         self.image = None
         self.hsv_image = None
         self.gray_image = None
@@ -66,42 +67,28 @@ class LineFollower():
         self.black_mask = None
         self.__timing = False
     
-    def follow(self) -> None:
+    def follow(self, starting=False) -> None:
         start_time = time.perf_counter()
-
-        if self.__timing: t0 = time.perf_counter()
         self.image = camera.capture_array()
-        
-        if self.__timing: t1 = time.perf_counter()
         self.display_image = self.image.copy()
 
         self.find_black()
-        if self.__timing: t2 = time.perf_counter()
+        if self.black_contour is not None:
+            self.find_green()
+            self.green_check()
 
-        self.find_green()
-        if self.__timing: t3 = time.perf_counter()
-
-        self.green_check()
-        if self.__timing: t4 = time.perf_counter()
-
-        self.calculate_angle(self.black_contour)
-        self.__turn()
-
-        if self.__timing: t5 = time.perf_counter()
-
-        cv2.drawContours(self.display_image, self.blue_contours, -1, (0, 255, 255), 2)
+            self.calculate_angle(self.black_contour)
+            if starting is False:
+                self.__turn()
+        elif starting is False: 
+            self.gap_handling()
 
         if self.display_image is not None and camera.X11:
             show(np.uint8(self.display_image), camera.X11, name="line")
 
-        if self.__timing: t6 = time.perf_counter()
-
         elapsed_time = time.perf_counter() - start_time
         fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
 
-        if self.__timing:
-            print(f"[TIMING] capture={t1-t0:.3f}s black={t2-t1:.3f}s green={t3-t2:.3f}s check={t4-t3:.3f}s angle={t5-t4:.3f}s display={t6-t5:.3f}s total={elapsed_time:.3f}s")
-        
         return fps, self.turn, self.green_signal
 
     def __turn(self):
@@ -288,6 +275,125 @@ class LineFollower():
             cv2.drawContours(self.display_image, self.green_contours, -1, (255, 0, 255), 2)
 
     # BLACK
+    def gap_handling(self):
+        print("Gap Detected!")
+        motors.run(0, 0, 1)
+        motors.run(-self.speed, -self.speed)
+
+        self.__wait_for_black_contour()
+        motors.run(0, 0, 0.5)
+
+        self.__align_to_contour_angle()
+        motors.run(0, 0, 0.3)
+
+        if not self.__move_and_check_black(2):
+            print("No black found, retrying...")
+
+            motors.run(-25, -25, 2)
+            motors.run(0, 0, 0.3)
+
+            self.__align_to_contour_angle()
+            motors.run(0, 0, 0.3)
+
+            if not self.__move_and_check_black(2.3):
+                print("Still no black. Exiting gap handler.")
+                motors.run(-25, -25, 2.5)
+
+        print("Gap handling complete.")
+    
+    def __wait_for_black_contour(self):
+        while True:
+            self.image = camera.capture_array()
+            self.display_image = self.image.copy()
+            self.find_black()
+
+            if self.black_contour is not None:
+                if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 3000:
+                    print("Black contour found.")
+                    break
+
+            if self.display_image is not None and camera.X11:
+                show(np.uint8(self.display_image), camera.X11, name="line")
+
+    def __align_to_contour_angle(self):
+        while True:
+            self.image = camera.capture_array()
+            self.display_image = self.image.copy()
+            self.find_black()
+
+            if self.black_contour is not None and self.black_mask is not None:
+                # --- Approximate contour to a polygon ---
+                epsilon = 0.01 * cv2.arcLength(self.black_contour, True)
+                approx = cv2.approxPolyDP(self.black_contour, epsilon, True)
+                approx_points = approx[:, 0, :]  # shape (N, 2)
+
+                if len(approx_points) < 2:
+                    print("Polygon approximation too small.")
+                    continue
+
+                # --- TOP: average of top 2 points with smallest Y ---
+                top_two = sorted(approx_points, key=lambda p: p[1])[:2]
+                top_point = (
+                    int(np.mean([pt[0] for pt in top_two])),
+                    int(np.mean([pt[1] for pt in top_two]))
+                )
+
+                # --- BOTTOM: mask-based average of bottom 2 rows ---
+                y_start = camera.LINE_HEIGHT - 2
+                y_end = camera.LINE_HEIGHT
+                band_mask = np.zeros_like(self.black_mask)
+                band_mask[y_start:y_end, :] = 255
+                bottom_band = cv2.bitwise_and(self.black_mask, band_mask)
+                ys, xs = np.where(bottom_band == 255)
+
+                if len(xs) == 0:
+                    print("No bottom pixels found.")
+                    continue
+
+                bottom_point = (int(np.mean(xs)), int(np.mean(ys)))
+
+                # --- ANGLE from bottom to top ---
+                dx = top_point[0] - bottom_point[0]
+                dy = top_point[1] - bottom_point[1]
+                angle_rad = np.arctan2(dy, dx)
+                angle = int(np.degrees(angle_rad))
+                if angle < 0:
+                    angle += 180
+
+                print(f"[Gap Align] Angle (Poly): {angle:.2f}")
+
+                # --- Alignment logic ---
+                if abs(angle - 90) < 5:
+                    break
+                elif angle > 90:
+                    motors.run(20, -20)
+                else:
+                    motors.run(-20, 20)
+
+                # --- DEBUG DRAW ---
+                if self.display_image is not None and camera.X11:
+                    # Draw poly approximation
+                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=5)
+
+                    # Draw angle line
+                    cv2.line(self.display_image, bottom_point, top_point, (0, 255, 0), 2)
+                    cv2.circle(self.display_image, top_point, 5, (0, 255, 255), 2)
+                    cv2.circle(self.display_image, bottom_point, 5, (255, 255, 0), 2)
+
+                    show(np.uint8(self.display_image), camera.X11, name="line")
+
+    def __move_and_check_black(self, duration: float) -> bool:
+        motors.run(25, 25, duration)
+        motors.run(0, 0, 0.3)
+
+        self.image = camera.capture_array()
+        self.display_image = self.image.copy()
+        self.find_black()
+
+        if self.black_contour is not None:
+            return True
+        return False
+
     def calculate_angle(self, contour=None, validate=False):
         # Early return for simple case
         if not validate:
@@ -540,6 +646,9 @@ line_follow = LineFollower()
 
 def main(start_time) -> None:
     global robot_state, line_follow
+    led.on()
+    while time.perf_counter() - start_time < 3:
+        line_follow.follow(True)
     fps = error = 0
     green_signal = None
 
@@ -550,9 +659,8 @@ def main(start_time) -> None:
     ramp_check(robot_state, gyro_values)
     update_triggers(robot_state)
 
-    if time.perf_counter() - start_time > 3:
-        line_follow.find_silver()
-        line_follow.find_red()
+    line_follow.find_silver()
+    line_follow.find_red()
 
     if robot_state.count["silver"] >= 5:
         print("Silver Found!")
@@ -568,7 +676,6 @@ def main(start_time) -> None:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
     else:
-        led.on()
         fps, error, green_signal = line_follow.follow()
 
         active_triggers = ["LINE"]
