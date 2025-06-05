@@ -129,11 +129,11 @@ class LineFollower():
             motors.run(v1, v2, t)
             self.run_till_camera(v1, v2, 15)
         else:
-            v1 = 30 + self.turn
-            v2 = 30 - self.turn
+            v1 = self.speed + self.turn
+            v2 = self.speed - self.turn
             if robot_state.last_downhill < 100:
-                v1 = 30 + self.turn * 0.4 - 20
-                v2 = 30 - self.turn * 0.4 - 20
+                v1 = self.speed + self.turn * 0.4 - 20
+                v2 = self.speed - self.turn * 0.4 - 20
             elif robot_state.trigger["uphill"]:
                 v1 += 10
                 v2 += 10
@@ -278,26 +278,27 @@ class LineFollower():
     def gap_handling(self):
         print("Gap Detected!")
         motors.run(0, 0, 1)
-        motors.run(-30, -30)
+        motors.run(-20, -20)
 
         self.__wait_for_black_contour()
-        motors.run(0, 0, 0.5)
-
-        self.__align_to_contour_angle()
+        motors.run(-20, -20, 0.3)
         motors.run(0, 0, 0.3)
 
-        if not self.__move_and_check_black(2):
+        self.__align_to_contour_angle()
+        motors.run(0, 0, 0.2)
+
+        if not self.__move_and_check_black(2.5):
             print("No black found, retrying...")
 
-            motors.run(-25, -25, 2)
-            motors.run(0, 0, 0.3)
+            motors.run(-25, -25, 2.8)
+            motors.run(0, 0, 0.2)
 
             self.__align_to_contour_angle()
-            motors.run(0, 0, 0.3)
+            motors.run(0, 0, 0.2)
 
-            if not self.__move_and_check_black(2.3):
+            if not self.__move_and_check_black(2.8):
                 print("Still no black. Exiting gap handler.")
-                motors.run(-25, -25, 2.5)
+                motors.run(-25, -25, 3)
 
         print("Gap handling complete.")
     
@@ -308,7 +309,7 @@ class LineFollower():
             self.find_black()
 
             if self.black_contour is not None:
-                if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 3000:
+                if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 5000:
                     print("Black contour found.")
                     break
 
@@ -839,13 +840,13 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     motors.run(30, 30, 0.2)
     
     if robot_state.count["uphill"] > 5: loops = 1
-    else: loops = 5
+    else: loops = 3
 
     for i in range(loops):
         if direction == "cw":
-            line_follow.run_till_camera(-v1-10, -v2+5, 10)
+            line_follow.run_till_camera(-v1, -v2-5, 15)
         else:
-            line_follow.run_till_camera(-v1+5, -v2-10, 10)
+            line_follow.run_till_camera(-v1-5, -v2, 15)
     
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = False, direction: str = "") -> bool:
     global camera
