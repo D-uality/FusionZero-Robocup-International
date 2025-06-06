@@ -418,11 +418,11 @@ class LineFollower():
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 10]
 
             # Handle edge cases
-            if ref_point[1] < 30:
+            if ref_point[1] < (30 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)):
                 self.prev_side = None
                 return self._finalize_angle(ref_point, validate)
 
-            if self.green_signal != "Approach" and ref_point[1] > 50 and (left_edge_points or right_edge_points):
+            if self.green_signal != "Approach" and ref_point[1] > (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)) and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
@@ -484,6 +484,7 @@ class LineFollower():
 
         # Step 2: Define the vertical scan band
         min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
+        if robot_state.trigger["uphill"]: min_y = camera.LINE_HEIGHT // 2
         max_y = min_y + 10
 
         # Step 3: Filter points in y-range
