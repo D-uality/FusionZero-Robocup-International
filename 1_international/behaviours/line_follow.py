@@ -116,10 +116,10 @@ class LineFollower():
         fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
 
         # Format timing info in one line
-        timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(
-            f"{key}: {value:.4f}s" for key, value in timings.items()
-        )
-        print(timing_line)
+        # timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(
+        #     f"{key}: {value:.4f}s" for key, value in timings.items()
+        # )
+        # print(timing_line)
 
         return fps, self.turn, self.green_signal
 
@@ -432,31 +432,44 @@ class LineFollower():
         return False
 
     def calculate_angle(self, contour=None, validate=False):
-        # Early return for simple case
+        timing = {}
+        start = time.perf_counter()
+
         if not validate:
             self.angle = 90
             if contour is None:
                 return 90
 
-        # Initialize ref_point
+        t0 = time.perf_counter()
         ref_point = self.calculate_top_contour(contour, validate) if contour is not None else None
+        timing['top_contour'] = time.perf_counter() - t0
 
-        # Handle green signal cases
+        t0 = time.perf_counter()
         if contour is not None and self.green_signal in ["Left", "Right"]:
             self.prev_side = self.green_signal
             point = min(contour, key=lambda p: p[0][0]) if self.green_signal == "Left" else max(contour, key=lambda p: p[0][0])
             ref_point = tuple(point[0])
-            return self._finalize_angle(ref_point, validate)
+            timing['green_case'] = time.perf_counter() - t0
+            t1 = time.perf_counter()
+            return_val = self._finalize_angle(ref_point, validate)
+            timing['finalize'] = time.perf_counter() - t1
+            print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+            return return_val
+        timing['green_case'] = time.perf_counter() - t0
 
-        # Edge detection and angle calculation
+        t0 = time.perf_counter()
         if contour is not None and ref_point is not None:
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 10]
 
-            # Handle edge cases
             if ref_point[1] < (30 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)):
                 self.prev_side = None
-                return self._finalize_angle(ref_point, validate)
+                timing['edges'] = time.perf_counter() - t0
+                t1 = time.perf_counter()
+                return_val = self._finalize_angle(ref_point, validate)
+                timing['finalize'] = time.perf_counter() - t1
+                print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+                return return_val
 
             if self.green_signal != "Approach" and ref_point[1] > (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)) and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
@@ -471,8 +484,14 @@ class LineFollower():
                 elif y_avg_right is not None:
                     ref_point = (camera.LINE_WIDTH - 1, y_avg_right)
                     self.prev_side = "Right"
+        timing['edges'] = time.perf_counter() - t0
 
-        return self._finalize_angle(ref_point, validate) if ref_point is not None else 90
+        t0 = time.perf_counter()
+        return_val = self._finalize_angle(ref_point, validate) if ref_point is not None else 90
+        timing['finalize'] = time.perf_counter() - t0
+
+        print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+        return return_val
 
     def _finalize_angle(self, ref_point, validate):
         bottom_center = (camera.LINE_WIDTH // 2, camera.LINE_HEIGHT)
