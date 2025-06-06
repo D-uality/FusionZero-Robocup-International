@@ -54,6 +54,7 @@ class LineFollower():
         self.last_angle = 90
         self.angle = 90
         self.turn = 0
+        self.gap_count = 0
         self.image = None
         self.hsv_image = None
         self.gray_image = None
@@ -74,14 +75,18 @@ class LineFollower():
 
         self.find_black()
         if self.black_contour is not None:
+            self.gap_count = 0
             self.find_green()
             self.green_check()
 
             self.calculate_angle(self.black_contour)
             if starting is False:
                 self.__turn()
-        elif starting is False: 
+        elif self.gap_count > 3:
             self.gap_handling()
+        elif starting is False: 
+            self.gap_count += 1
+
 
         if self.display_image is not None and camera.X11:
             show(np.uint8(self.display_image), camera.X11, name="line")
@@ -285,16 +290,16 @@ class LineFollower():
         motors.run(-20, -20)
 
         self.__wait_for_black_contour()
-        motors.run(-20, -20, 0.3)
+        motors.run(-20, -20, 0.2)
         motors.run(0, 0, 0.3)
 
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        if not self.__move_and_check_black(2.5):
+        if not self.__move_and_check_black(2.4):
             print("No black found, retrying...")
 
-            motors.run(-25, -25, 2.8)
+            motors.run(-25, -25, 2.6)
             motors.run(0, 0, 0.2)
 
             self.__align_to_contour_angle()
@@ -368,7 +373,7 @@ class LineFollower():
                 print(f"[Gap Align] Angle (Poly): {angle:.2f}")
 
                 # --- Alignment logic ---
-                if abs(angle - 90) < 5:
+                if abs(angle - 90) < 3:
                     break
                 elif angle > 90:
                     motors.run(20, -20)
