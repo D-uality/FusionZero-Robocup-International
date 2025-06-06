@@ -69,30 +69,57 @@ class LineFollower():
         self.__timing = False
     
     def follow(self, starting=False) -> None:
-        start_time = time.perf_counter()
+        overall_start = time.perf_counter()
+        timings = {}
+
+        t0 = time.perf_counter()
         self.image = camera.capture_array()
         self.display_image = self.image.copy()
+        timings['capture'] = time.perf_counter() - t0
 
+        t0 = time.perf_counter()
         self.find_black()
+        timings['find_black'] = time.perf_counter() - t0
+
         if self.black_contour is not None:
             self.gap_count = 0
-            self.find_green()
-            self.green_check()
 
+            t0 = time.perf_counter()
+            self.find_green()
+            timings['find_green'] = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
+            self.green_check()
+            timings['green_check'] = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             self.calculate_angle(self.black_contour)
-            if starting is False:
+            timings['calculate_angle'] = time.perf_counter() - t0
+
+            if not starting:
+                t0 = time.perf_counter()
                 self.__turn()
+                timings['__turn'] = time.perf_counter() - t0
         elif self.gap_count > 3:
+            t0 = time.perf_counter()
             self.gap_handling()
-        elif starting is False: 
+            timings['gap_handling'] = time.perf_counter() - t0
+        elif not starting:
             self.gap_count += 1
 
-
         if self.display_image is not None and camera.X11:
+            t0 = time.perf_counter()
             show(np.uint8(self.display_image), camera.X11, name="line")
+            timings['display'] = time.perf_counter() - t0
 
-        elapsed_time = time.perf_counter() - start_time
-        fps = int(1.0 / elapsed_time) if elapsed_time > 0 else 0
+        total_elapsed = time.perf_counter() - overall_start
+        fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
+
+        # Format timing info in one line
+        timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(
+            f"{key}: {value:.4f}s" for key, value in timings.items()
+        )
+        print(timing_line)
 
         return fps, self.turn, self.green_signal
 
