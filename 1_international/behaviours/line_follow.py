@@ -132,11 +132,15 @@ class LineFollower():
             v1 = self.speed + self.turn
             v2 = self.speed - self.turn
             if robot_state.last_downhill < 100:
-                v1 = self.speed + self.turn * 0.4 - 20
-                v2 = self.speed - self.turn * 0.4 - 20
+                v1 = self.speed + self.turn * 0.6 - 20
+                v2 = self.speed - self.turn * 0.6 - 20
+                v1 = min(v1, self.speed - 10)
+                v2 = min(v2, self.speed - 10)
             elif robot_state.trigger["uphill"]:
                 v1 += 10
                 v2 += 10
+                v1 = max(0, v1)
+                v2 = max(0, v2)
 
             motors.run(v1, v2)
     
