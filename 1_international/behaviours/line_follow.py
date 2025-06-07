@@ -54,7 +54,6 @@ class LineFollower():
         self.last_angle = 90
         self.angle = 90
         self.turn = 0
-        self.gap_count = 0
         self.image = None
         self.hsv_image = None
         self.gray_image = None
@@ -82,8 +81,6 @@ class LineFollower():
         timings['find_black'] = time.perf_counter() - t0
 
         if self.black_contour is not None:
-            self.gap_count = 0
-
             t0 = time.perf_counter()
             self.find_green()
             timings['find_green'] = time.perf_counter() - t0
@@ -100,12 +97,8 @@ class LineFollower():
                 t0 = time.perf_counter()
                 self.__turn()
                 timings['__turn'] = time.perf_counter() - t0
-        elif self.gap_count > 3:
-            t0 = time.perf_counter()
-            self.gap_handling()
-            timings['gap_handling'] = time.perf_counter() - t0
         elif not starting:
-            self.gap_count += 1
+            self.gap_handling()
 
         if self.display_image is not None and camera.X11:
             t0 = time.perf_counter()
@@ -453,7 +446,7 @@ class LineFollower():
             t1 = time.perf_counter()
             return_val = self._finalize_angle(ref_point, validate)
             timing['finalize'] = time.perf_counter() - t1
-            print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+            # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
             return return_val
         timing['green_case'] = time.perf_counter() - t0
 
@@ -468,7 +461,7 @@ class LineFollower():
                 t1 = time.perf_counter()
                 return_val = self._finalize_angle(ref_point, validate)
                 timing['finalize'] = time.perf_counter() - t1
-                print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+                # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
                 return return_val
 
             if self.green_signal != "Approach" and ref_point[1] > (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)) and (left_edge_points or right_edge_points):
@@ -490,7 +483,7 @@ class LineFollower():
         return_val = self._finalize_angle(ref_point, validate) if ref_point is not None else 90
         timing['finalize'] = time.perf_counter() - t0
 
-        print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+        # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
         return return_val
 
     def _finalize_angle(self, ref_point, validate):
@@ -533,48 +526,44 @@ class LineFollower():
         if contour is None:
             return camera.LINE_WIDTH // 2, 0
 
-        # Step 1: Create a mask from the contour
+        # Create mask from contour
         contour_mask = np.zeros_like(self.gray_image, dtype=np.uint8)
         cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
 
-        # Step 2: Define the vertical scan band
+        # Define scan band
         min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
-        if robot_state.trigger["uphill"]: min_y = camera.LINE_HEIGHT // 2
-        max_y = min_y + 10
+        if robot_state.trigger["uphill"]:
+            min_y = camera.LINE_HEIGHT // 2
+        max_y = min(camera.LINE_HEIGHT, min_y + 10)
 
-        # Step 3: Filter points in y-range
         roi_mask = np.zeros_like(self.gray_image, dtype=np.uint8)
         roi_mask[min_y:max_y, :] = 255
         masked = cv2.bitwise_and(contour_mask, roi_mask)
 
-        # Step 4: Extract (x, y) of mask pixels
+        # Extract (x, y) points
         ys, xs = np.where(masked == 255)
         if len(xs) == 0:
             return camera.LINE_WIDTH // 2, 0
 
         points = list(zip(xs, ys))
 
-        # Step 5: Pick the point closest in angle to previous angle
-        if len(points) > 1:
-            angles = [self._finalize_angle(pt, True) for pt in points]
-            closest_index = min(range(len(angles)), key=lambda i: abs(angles[i] - self.last_angle))
-            main_point = points[closest_index]
+        # Downsample with linspace
+        max_points = 20
+        if len(points) > max_points:
+            idx = np.linspace(0, len(points) - 1, max_points, dtype=int)
+            points = [points[i] for i in idx]
 
-            # Filter horizontally close points
-            points = [pt for pt in points if abs(pt[0] - main_point[0]) < 50]
-        else:
-            main_point = points[0]
+        # # Draw sampled points
+        # if self.display_image is not None and camera.X11:
+        #     for pt in points:
+        #         cv2.circle(self.display_image, pt, 3, (255, 0, 0), -1)  # blue dot
 
-        # # Debug draw
-        # if self.display_image is not None and not validate and camera.X11:
-        #     for i, pt in enumerate(points):
-        #         if i % 200 == 0:
-        #             cv2.circle(self.display_image, pt, radius=3, color=(0, 0, 255), thickness=-1)
-
-        # Average remaining points
+        # average for stability
         x_avg = int(np.mean([pt[0] for pt in points]))
         y_avg = int(np.mean([pt[1] for pt in points]))
         return x_avg, y_avg
+
+        return main_point
 
     def find_black(self): 
         self.black_contour = None
@@ -681,7 +670,7 @@ class LineFollower():
         # Silver detection logic
         blue_pixels = cv2.countNonZero(mask)
         total_pixels = self.image.shape[0] * self.image.shape[1]
-        print(f"[DEBUG] Blue pixel ratio: {blue_pixels / total_pixels:.3f} ({blue_pixels} / {total_pixels})")
+        # print(f"[DEBUG] Blue pixel ratio: {blue_pixels / total_pixels:.3f} ({blue_pixels} / {total_pixels})")
         if blue_pixels / total_pixels >= 0.1: robot_state.count["silver"] += 1
 
     
