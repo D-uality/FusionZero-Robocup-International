@@ -209,64 +209,8 @@ class Search():
         if self.debug_dead: print(f"Green: {(t1-t0)*1000:.1f}ms | Spectral: {(t2-t1)*1000:.1f}ms | Mask: {(t3-t2)*1000:.1f}ms | Hough: {(t4-t3)*1000:.1f}ms | Validation: {(t5-t4)*1000:.1f}ms | Total: {(t5-t0)*1000:.1f}ms")
 
         return int(centre_x)
-
-    def classic_dead(self, image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 45
-        KERNAL_SIZE = 5
-        CROP_SIZE = 100
-        
-        # Crop image to approximate region for higher performance
-        if last_x is not None:
-            x_lower = max(                0, last_x - CROP_SIZE)
-            x_upper = min(evac_camera.width, last_x + CROP_SIZE)
-            image = image[:, x_lower : x_upper]
-        
-        image = cv2.dilate(image, np.ones((KERNAL_SIZE, KERNAL_SIZE), np.uint8), iterations=1)
-        mask = cv2.inRange(image, (0, 0, 0), (THRESHOLD, THRESHOLD, THRESHOLD))
-        
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours: return None
-
-        # Validate contours based on: area, y-position
-        valid = []
-        for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
-            area = cv2.contourArea(contour)
-            
-            if y + h/2 > 5 and y + h/2 < 150 and 100 < area < 20000:
-                cx = x + w/2
-                valid.append((contour, cx))
-        if len(valid) == 0: return None
-
-        # Find largest contour/closest contour
-        best_contour = max(valid, key=lambda t: cv2.contourArea(t[0]))[0] if last_x is None else min(valid, key=lambda t: abs(t[1]))[0]
-        x, _, w, _ = cv2.boundingRect(best_contour)
-        center_x = x + w/2 if last_x is None else (x + w/2) + (last_x - CROP_SIZE)
-
-        if evac_state.X11:   cv2.drawContours(image, [best_contour], -1, (0, 255, 0), 1)
-        
-        show(image, "dead_cropped")
-        
-        # Find centre x 
-        return int(center_x)
-         
-    def ai_dead(self, image:np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        try:
-            results = self.model(image, imgsz=self.input_shape, conf=self.confidence_threshold, verbose=False)
-        except Exception as e:
-            debug( [f"ERROR", f"TPU", f"{e}"], [30, 20, 50] )
-            motors.run(0, 0, 1)
-        
-        xywh = results[0].boxes.xywh
-        cx_list = xywh[:, 0].cpu().numpy().tolist()
-        
-        if not cx_list: return None
-        x = cx_list[0] if last_x is None else min(cx_list, key=lambda cx: abs(cx - last_x))
-        
-        image = results[0].plot()
-        return int(x)
     
-    def triangle(self, image: np.ndarray, display_image: np.ndarray, triangle: str) -> Optional[int]:
+    def triangle(self, image: np.ndarray, display_image: np.ndarray, triangle: str) -> tuple[Optional[int], Optional[int]]:
         KERNEL_SIZE = 3
         
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -283,7 +227,7 @@ class Search():
         mask = cv2.dilate(mask, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
         
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours: return None
+        if not contours: return None, None
         
         if self.debug_triangles: 
             for contour in contours: print(cv2.contourArea(contour))
@@ -291,7 +235,9 @@ class Search():
         largest_contour = max(contours, key=cv2.contourArea)
 
         # If the largest contour is too small, return None
-        if cv2.contourArea(largest_contour) < 4500: return None
+        
+        contour_area = cv2.contourArea(largest_contour)
+        if contour_area < 4500: return None, None
 
         # Get the bounding rectangle of the largest contour
         x, y, w, h = cv2.boundingRect(largest_contour)
@@ -299,11 +245,11 @@ class Search():
         if h > w or y + h/2 > evac_camera.height / 2: return None
 
         # Display debug information
-        if evac_state.X11 and self.debug_triangles:
+        if evac_state.X11:
             cv2.drawContours(display_image, [largest_contour], -1, (0, 255, 0), 1)
             cv2.circle(display_image, (int(x + w / 2), int(y + h / 2)), 3, (255, 0, 0), 1)
 
-        return int(x + w/2)
+        return int(x + w/2), contour_area
 
 class Movement():
     def __init__(self):
@@ -411,11 +357,11 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
         if dead_x is not None: return dead_x, "dead"
     
     if search_type in ["green", "default"] and green_enable:
-        x  = search.triangle(image, display_image, "green")
+        x, _ = search.triangle(image, display_image, "green")
         if x is not None: return x, "green"
     
     if search_type in ["red", "default"] and red_enable:
-        x  = search.triangle(image, display_image, "red")
+        x, _  = search.triangle(image, display_image, "red")
         if x is not None: return x, "red"
     
     return None, search_type

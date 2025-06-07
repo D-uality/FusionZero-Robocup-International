@@ -1,4 +1,4 @@
-from core.shared_imports import time, ServoKit, socket, getpass, math
+from core.shared_imports import time, ServoKit, socket, getpass, math, mp
 from core.utilities import debug
 
 class Motors():
@@ -34,12 +34,17 @@ class Motors():
         for i in range(0, 4):
             self.pca.servo[self.servo_pins[i]].angle = self.stop_angles[i]
 
+        
+        self.last_run = mp.Array('f', 2)   # [left, right] rad/s equiv.
         debug(["INITIALISATION", "MOTORS", "✓"], [25, 25, 50])
     
     def run(self, v1: float, v2: float, delay: float = 0) -> None:
+        self.last_run[0] = v1
+        self.last_run[1] = v2
+        
         if self.user_at_host == "frederick@raspberrypi": v1, v2 = v2, v1
         calculated_angles = [0, 0, 0, 0]
-
+        
         for i in range(0, 2):
             if   (v1 < self.negative_intercepts[i]): calculated_angles[i] = self.negative_gradients[i] * v1 + self.negative_intercepts[i]
             elif (v1 > self.positive_intercepts[i]): calculated_angles[i] = self.positive_gradients[i] * v1 + self.positive_intercepts[i]

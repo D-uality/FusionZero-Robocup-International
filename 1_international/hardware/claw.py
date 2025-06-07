@@ -30,7 +30,9 @@ class Claw():
             values = [int(self.analogs[i].value / 256) for i in range(0, len(self.analogs))]
             for i, value in enumerate(values): self.__empty_average[i] += value
             
-            time.sleep(0.01)
+            time.sleep(0.005)
+        
+        self.close(90)
         
         # Find average
         for i in range(0, len(self.__empty_average)):
@@ -64,10 +66,10 @@ class Claw():
     def close(self, angle: int) -> None:
         self.__pca.servo[self.__closer_pin].angle = angle
     
-    def read(self):
+    def read(self) -> list[int]:
         TRIALS = 15
-        EMPTY_TOLORANCE = 5
-        OPPOSITE_LIVE_TOLORANCE = 5
+        EMPTY_TOLORANCE = 20
+        OPPOSITE_LIVE_TOLORANCE = 20
         
         averages = [0, 0]
         
@@ -91,6 +93,8 @@ class Claw():
                     self.spaces[i] = "live"
                 else:
                     self.spaces[i] = "dead"
+                    
+            return [averages[i] / TRIALS for i in range(0, len(averages))]
         
         except RuntimeError as e:
             debug( [f"ERROR", f"CLAW", f"{e}"], [30, 20, 50] )
