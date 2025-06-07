@@ -130,6 +130,6 @@ def calculate_wall_distance(rx, ry, rad, rw, rh):
 
 
 if __name__ == "__main__":
-    RW, RH, R = 120, 90, 2
+    RW, RH, R = 120, 90, 1
     build_distance_lookup(RW, RH, R)
     build_rotational_patterns(RW, RH, R)
