@@ -43,8 +43,9 @@ def main() -> None:
 
     finally:
         motors.run(0, 0)
-        GPIO.cleanup()
         stop_display()
+        GPIO.cleanup()
+        time.sleep(0.1)
         if record: save_vfr_video(get_saved_frames())
 
 if __name__ == "__main__": main()

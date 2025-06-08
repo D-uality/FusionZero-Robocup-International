@@ -130,7 +130,7 @@ class LineFollower():
             for i in range(5):
                 motors.run(-30+i*6, -30+i*6, 0.20)
         elif self.green_signal == "Double":
-            v1, v2, t = 35, -35, 4
+            v1, v2, t = 35, -35, 3.8
             f = b = f_after = b_after = 0
 
             if robot_state.trigger["tilt_left"]:
@@ -146,30 +146,32 @@ class LineFollower():
             if robot_state.trigger["downhill"]:
                 v1 -= 5
                 v2 += 5
-                t += 2
+                t += 0
                 b = 1
 
             motors.run(-30, -30, b)
             motors.run(30, 30, f)
             motors.run(v1, v2, t)
+            motors.run(0, 0, 0.5)
             self.run_till_camera(v1, v2, 15)
+        # elif (self.green_signal == "Left" or self.green_signal == "Right") and robot_state.trigger["downhill"]:
+        #     v1 = -35 if self.green_signal == "Left" else 15
+        #     v2 = 15 if self.green_signal == "Left" else -35
+        #     motors.run(v1, v2, 2.5)
         else:
             v1 = self.speed + self.turn
             v2 = self.speed - self.turn
-            if robot_state.last_downhill < 100:
-                v1 = self.speed + self.turn * 0.6 - 20
-                v2 = self.speed - self.turn * 0.6 - 20
-                v1 = min(v1, self.speed - 10)
-                v2 = min(v2, self.speed - 10)
-                if v1 < -10 and v2 >= 0:
-                    v2 = 0
-                elif v2 < -10 and v1 >= 0:
-                    v1 = 0
+            if robot_state.last_downhill < 30:
+                speed = 15
+                v1 = speed + self.turn
+                v2 = speed - self.turn
+                v1 = min(v1, speed)
+                v2 = min(v2, speed)
             elif robot_state.trigger["uphill"]:
                 v1 += 10
                 v2 += 10
-                v1 = max(-10, v1)
-                v2 = max(-10, v2)
+                v1 = max(-20, v1)
+                v2 = max(-20, v2)
 
             motors.run(v1, v2)
     
@@ -242,7 +244,7 @@ class LineFollower():
         # Average top left and top right points and increase y result
         x_avg = int((top_left[0] + top_right[0]) / 2)
         y_avg = int((top_left[1] + top_right[1]) / 2)
-        if y_avg < int(camera.LINE_HEIGHT / 3):
+        if y_avg < int(camera.LINE_HEIGHT / 3) and robot_state.trigger["downhill"] is False:
             self.green_signal = "Approach"
             return None
 
@@ -400,9 +402,9 @@ class LineFollower():
                 if abs(angle - 90) < 3:
                     break
                 elif angle > 90:
-                    motors.run(20, -20)
+                    motors.run(15, -15)
                 else:
-                    motors.run(-20, 20)
+                    motors.run(-15, 15)
 
                 # --- DEBUG DRAW ---
                 if self.display_image is not None and camera.X11:
@@ -459,8 +461,8 @@ class LineFollower():
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 10]
 
-            if ref_point[1] < (30 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)):
-                self.prev_side = None
+            if ref_point[1] < (30 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2) - 20 * (robot_state.last_downhill < 100)):
+                if robot_state.last_downhill > 100: self.prev_side = None
                 timing['edges'] = time.perf_counter() - t0
                 t1 = time.perf_counter()
                 return_val = self._finalize_angle(ref_point, validate)
@@ -468,7 +470,7 @@ class LineFollower():
                 # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
                 return return_val
 
-            if self.green_signal != "Approach" and ref_point[1] > (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)) and (left_edge_points or right_edge_points):
+            if self.green_signal != "Approach" and ref_point[1] > (40 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)  - 30 * (robot_state.last_downhill < 100)) and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
@@ -488,6 +490,7 @@ class LineFollower():
         timing['finalize'] = time.perf_counter() - t0
 
         # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+        print(self.prev_side)
         return return_val
 
     def _finalize_angle(self, ref_point, validate):
@@ -788,6 +791,19 @@ def update_triggers(robot_state: RobotState) -> list[str]:
             robot_state.triggers = prev_triggers
 
 def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
+    if robot_state.trigger["downhill"]:
+        while True:
+            touch_values = touch_sensors.read()
+            if sum(touch_values) == 0:
+                break
+            elif sum(touch_values) == 2:
+                motors.run(15, 15)
+            elif touch_values[0] == 0:
+                motors.run(0, 15)
+            elif touch_values[1] == 0:
+                motors.run(15, 0)
+
+
     motors.run(0, 0)
     while True:
         left_value = laser_sensors.read([0])[0]
@@ -861,10 +877,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     while True:
         if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 15, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
-
         if robot_state.count["uphill"] < 5:
-            motors.run(-30, -30, 0.4)
-        else:
             motors.run(30, 30, 0.4)
         motors.run(0, 0, 0.15)
 
@@ -890,6 +903,11 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     
     if robot_state.count["uphill"] > 5: loops = 1
     else: loops = 3
+
+    if robot_state.count["downhill"] > 5:
+        motors.run(-v1, -v2, 2)
+        motors.run(-30, -30, 1)
+        motors.run(0, 0, 2)
 
     for i in range(loops):
         if direction == "cw":
