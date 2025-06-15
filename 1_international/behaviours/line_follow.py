@@ -46,11 +46,13 @@ class LineFollower():
         self.light_black = 80
         self.lightest_black = 100
         self.silver = 253
+
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
         
         self.turn_color = (0, 255, 0)
         self.prev_side = None
+  
         self.last_angle = 90
         self.angle = 90
         self.turn = 0

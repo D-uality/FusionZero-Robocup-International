@@ -28,11 +28,10 @@ try:
         for servo_number, servo_pin in enumerate(servo_pins):
             pca.servo[servo_pin].angle = stop_angles[servo_number]
 
-        print("1: Record for ALL servos\n2: Record for SPECIFIC servo\nMode: ")
-        mode = int(input())
+        mode = int(input("1: Record for ALL servos\n2: Record for SPECIFIC servo\nMode: "))
 
         if mode == 1:
-            calibration_values = open("/home/fusion/FusionZero-Robocup-International/code/calibration/calibration_values.txt", "a")
+            calibration_values = open("/home/frederick/FusionZero-Robocup-International/2_pre_internatinal/calibration/calibration_values.txt", "a")
 
             for pin_number, servo_pin in enumerate(servo_pins):
                 stop_angle = stop_angles[pin_number]
@@ -40,7 +39,7 @@ try:
                 for angle in range(stop_angle-50, stop_angle+51, 10):
                     if angle == stop_angle: continue
 
-                    print(f"Servo {servo_number} @ {angle}")
+                    print(f"Servo {servo_pin} @ {angle}")
 
                     elapsed_time = control_loop(pin_number, servo_pin, angle)
                     calibration_values.write(f"{elapsed_time:.2f} ")

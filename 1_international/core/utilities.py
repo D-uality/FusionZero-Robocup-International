@@ -3,7 +3,7 @@ import shutil
 import subprocess
 
 # Print Function
-def debug(data: list[str], coloumn_widths: list[int], separator: str = "|"):
+def debug(data: list[str], coloumn_widths: list[int], separator: str = "|") -> None:
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
     print(f" {separator} ".join(formatted_cells))
 
@@ -37,7 +37,7 @@ def _display_worker(queue: mp.Queue):
                     last_time = current_time
 
     cv2.destroyAllWindows()
-
+    
 def start_display():
     global _display_process, _display_queue
     if _display_process is None:
