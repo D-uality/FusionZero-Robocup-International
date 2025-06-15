@@ -5,7 +5,7 @@ from picamera2 import Picamera2
 from libcamera import Transform
 
 WIDTH, HEIGHT, FLIP = 320, 240, False
-claw_pin = 9
+claw_pin = 8
 
 camera = Picamera2()
 camera_config = camera.create_preview_configuration(main={"format": "RGB888", "size": (WIDTH, HEIGHT)}, transform=Transform(vflip=FLIP, hflip=FLIP))
@@ -46,4 +46,5 @@ try:
         claw_step(int(input("ANGLE: ")), 0)
 
 except:
-    claw_step(270, 0)
+    print("bye")
+    # claw_step(270, 0)
