@@ -154,24 +154,21 @@ class LineFollower():
             motors.run(v1, v2, t)
             motors.run(0, 0, 0.5)
             self.run_till_camera(v1, v2, 15)
-        # elif (self.green_signal == "Left" or self.green_signal == "Right") and robot_state.trigger["downhill"]:
-        #     v1 = -35 if self.green_signal == "Left" else 15
-        #     v2 = 15 if self.green_signal == "Left" else -35
-        #     motors.run(v1, v2, 2.5)
         else:
             v1 = self.speed + self.turn
             v2 = self.speed - self.turn
             if robot_state.last_downhill < 30:
-                speed = 15
+                speed = 10
                 v1 = speed + self.turn
                 v2 = speed - self.turn
-                v1 = min(v1, speed)
-                v2 = min(v2, speed)
+                v1 = min(v1, max(-v2//5, speed))
+                v2 = min(v2, max(-(speed + self.turn)//5, speed))
             elif robot_state.trigger["uphill"]:
-                v1 += 10
-                v2 += 10
-                v1 = max(-20, v1)
-                v2 = max(-20, v2)
+                v1 += 5
+                v2 += 5
+                v1 = max(-30, v1)
+                v2 = max(-30, v2)
+            # elif
 
             motors.run(v1, v2)
     
@@ -244,7 +241,8 @@ class LineFollower():
         # Average top left and top right points and increase y result
         x_avg = int((top_left[0] + top_right[0]) / 2)
         y_avg = int((top_left[1] + top_right[1]) / 2)
-        if y_avg < int(camera.LINE_HEIGHT / 3) and robot_state.trigger["downhill"] is False:
+        # if y_avg < int(camera.LINE_HEIGHT / 3) and robot_state.trigger["downhill"] is False:
+        if y_avg < int(camera.LINE_HEIGHT / 3):
             self.green_signal = "Approach"
             return None
 
@@ -322,18 +320,19 @@ class LineFollower():
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        if not self.__move_and_check_black(2.4):
+        f = 2.5 + 0.5 * (robot_state.last_uphill < 100)
+        if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
-            motors.run(-25, -25, 2.6)
+            motors.run(-25, -25, f+0.2)
             motors.run(0, 0, 0.2)
 
             self.__align_to_contour_angle()
             motors.run(0, 0, 0.2)
 
-            if not self.__move_and_check_black(2.8):
+            if not self.__move_and_check_black(f+0.4):
                 print("Still no black. Exiting gap handler.")
-                motors.run(-25, -25, 3)
+                motors.run(-25, -25, f+0.6)
 
         print("Gap handling complete.")
     
@@ -358,9 +357,23 @@ class LineFollower():
             self.find_black()
 
             if self.black_contour is not None and self.black_mask is not None:
+                mask = self.black_mask.copy()
+
+                # remove everything above LINE_HEIGHT - 80 if last uphill was recent
+                if robot_state.last_uphill < 100:
+                    mask[0:camera.LINE_HEIGHT - 120, :] = 0
+
+                # Re-find contour on the modified mask
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if not contours:
+                    print("No contours after top cutoff.")
+                    return
+
+                contour = max(contours, key=cv2.contourArea)
+
                 # --- Approximate contour to a polygon ---
-                epsilon = 0.01 * cv2.arcLength(self.black_contour, True)
-                approx = cv2.approxPolyDP(self.black_contour, epsilon, True)
+                epsilon = 0.01 * cv2.arcLength(contour, True)
+                approx = cv2.approxPolyDP(contour, epsilon, True)
                 approx_points = approx[:, 0, :]  # shape (N, 2)
 
                 if len(approx_points) < 2:
@@ -458,11 +471,11 @@ class LineFollower():
 
         t0 = time.perf_counter()
         if contour is not None and ref_point is not None:
-            left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 10]
-            right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 10]
+            left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 20]
+            right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 20]
 
-            if ref_point[1] < (30 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2) - 20 * (robot_state.last_downhill < 100)):
-                if robot_state.last_downhill > 100: self.prev_side = None
+            if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 70) + 20 * (robot_state.last_downhill < 100)):
+                # if robot_state.last_downhill > 100: self.prev_side = None
                 timing['edges'] = time.perf_counter() - t0
                 t1 = time.perf_counter()
                 return_val = self._finalize_angle(ref_point, validate)
@@ -470,12 +483,18 @@ class LineFollower():
                 # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
                 return return_val
 
-            if self.green_signal != "Approach" and ref_point[1] > (40 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2)  - 30 * (robot_state.last_downhill < 100)) and (left_edge_points or right_edge_points):
+            if self.green_signal != "Approach" and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
                 if self.prev_side is None:
-                    self.prev_side = "Left" if self.angle < 90 else "Right" if self.angle > 90 else None
+                    # self.prev_side = "Left" if self.angle < 90 else "Right" if self.angle > 90 else None
+                    if y_avg_left is None and y_avg_right is not None:
+                        self.prev_side = "Right"
+                    elif y_avg_right is None and y_avg_left is not None:
+                        self.prev_side = "Left"
+                    else:
+                        self.prev_side = "Left" if y_avg_left < y_avg_right else "Right" if  y_avg_left > y_avg_right else None
 
                 if y_avg_left is not None and (y_avg_right is None or self.prev_side == "Left"):
                     ref_point = (0, y_avg_left)
@@ -490,7 +509,7 @@ class LineFollower():
         timing['finalize'] = time.perf_counter() - t0
 
         # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
-        print(self.prev_side)
+        # print(self.prev_side)
         return return_val
 
     def _finalize_angle(self, ref_point, validate):
@@ -528,6 +547,21 @@ class LineFollower():
             self.turn_color = (0, 0, 255)
 
         cv2.circle(self.display_image, ref_point, 10, self.turn_color, 2)
+
+        trigger_states = ", ".join([k for k, v in robot_state.trigger.items() if v])
+        info_text = f"Ref: {ref_point}, Angle: {angle}, Triggers: {trigger_states}"
+
+        # Put text at the top-left corner
+        cv2.putText(
+            self.display_image,
+            info_text,
+            (10, 25),  # (x, y) coordinates
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.3,  # Font scale
+            self.turn_color,  # Text color (white)
+            1,  # Thickness
+            cv2.LINE_AA
+        )
     
     def calculate_top_contour(self, contour, validate):
         if contour is None:
@@ -540,7 +574,9 @@ class LineFollower():
         # Define scan band
         min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
         if robot_state.trigger["uphill"]:
-            min_y = camera.LINE_HEIGHT // 2
+            min_y = camera.LINE_HEIGHT // 2 - 40
+        elif robot_state.trigger["downhill"]:
+            min_y = 50  
         max_y = min(camera.LINE_HEIGHT, min_y + 10)
 
         roi_mask = np.zeros_like(self.gray_image, dtype=np.uint8)
@@ -550,7 +586,7 @@ class LineFollower():
         # Extract (x, y) points
         ys, xs = np.where(masked == 255)
         if len(xs) == 0:
-            return camera.LINE_WIDTH // 2, 0
+            return camera.LINE_WIDTH // 2, camera.LINE_HEIGHT
 
         points = list(zip(xs, ys))
 
@@ -569,8 +605,6 @@ class LineFollower():
         x_avg = int(np.mean([pt[0] for pt in points]))
         y_avg = int(np.mean([pt[1] for pt in points]))
         return x_avg, y_avg
-
-        return main_point
 
     def find_black(self): 
         self.black_contour = None
@@ -621,12 +655,20 @@ class LineFollower():
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
         contours = [cnt for cnt in contours if any(p[0][1] > 50 for p in cnt)]
+        # contours = [cnt for cnt in contours if (cv2.contourArea(cnt) > self.min_black_area and any(p[0][1] > 50 for p in cnt) and any(p[0][1] < 50 for p in cnt))]
 
         if len(contours) > 1:
-            close_contours = []
+            filtered_contours = []
             for contour in contours:
+                if any(p[0][1] > camera.LINE_HEIGHT - 10 and 30 < p[0][0] < camera.LINE_WIDTH - 30 for p in contour):
+                    filtered_contours.append(contour)
+
+            target_contours = filtered_contours if filtered_contours else contours
+
+            close_contours = []
+            for contour in target_contours:
                 angle = self.calculate_angle(contour, validate=True)
-                if abs(angle - self.last_angle) < 15:
+                if abs(angle - self.last_angle) < 90:
                     close_contours.append(contour)
 
             if len(close_contours) == 0:
@@ -872,16 +914,20 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     initial_sequence = True
 
-    circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
+    circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
     while True:
         if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 15, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
-        if robot_state.count["uphill"] < 5:
+        if robot_state.count["uphill"] > 1:
+            motors.run(30, 30, 0.1)
+        if robot_state.count["uphill"] < 5 and robot_state.last_downhill > 100:
             motors.run(30, 30, 0.4)
+        elif robot_state.last_downhill < 100:
+            motors.run(-30, -30, 0.3)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 13, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 10, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 

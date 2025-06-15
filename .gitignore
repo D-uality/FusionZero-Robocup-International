@@ -10,3 +10,6 @@ code/line_follow/cam_line_following/1_minRect_angle/main.py
 .
 # Ignore .vscode directory
 .vscode/
+
+# Ignore .mp4 files
+*.mp4
