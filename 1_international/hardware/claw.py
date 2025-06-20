@@ -1,8 +1,12 @@
+from numpy import empty
 from core.shared_imports import time, ServoKit, ADC, board, AnalogIn
 from core.utilities import debug
 
 class Claw():
     def __init__(self):
+        TRIALS = 50
+        self.debug = False
+        
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
         
@@ -10,11 +14,30 @@ class Claw():
         self.__closer_pin = 8
         self.__pca = ServoKit(channels=16)
         
+        self.a0 = AnalogIn(self.__ADC, 0)
+        self.a1 = AnalogIn(self.__ADC, 1)
+        self.analogs = [self.a0, self.a1]
+        
         self.__pca.servo[self.__lifter_pin].angle = 160
         self.__pca.servo[self.__closer_pin].angle = 90
         
         self.spaces = ["", ""]
+
+        # Calibrate
+        self.__empty_average = [0, 0]
         
+        for _ in range(0, TRIALS):
+            values = [int(self.analogs[i].value / 256) for i in range(0, len(self.analogs))]
+            for i, value in enumerate(values): self.__empty_average[i] += value
+            
+            time.sleep(0.005)
+        
+        self.close(90)
+        
+        # Find average
+        for i in range(0, len(self.__empty_average)):
+            self.__empty_average[i] = self.__empty_average[i] / TRIALS
+                    
         debug(["INITIALISATION", "CLAW", "✓"], [25, 25, 50])
     
     def lift(self, target_angle: int, time_delay: float = 0) -> None:
@@ -43,12 +66,35 @@ class Claw():
     def close(self, angle: int) -> None:
         self.__pca.servo[self.__closer_pin].angle = angle
     
-    def read(self):
-        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(6, 8)]
+    def read(self) -> list[int]:
+        TRIALS = 15
+        EMPTY_TOLORANCE = 20
+        OPPOSITE_LIVE_TOLORANCE = 20
         
-        for i in range(0, len(self.spaces)):
-            if   values[i] < 160: self.spaces[i] = ""
-            elif values[i] < 230: self.spaces[i] = "dead"
-            else:                 self.spaces[i] = "live"
+        averages = [0, 0]
         
-        return self.spaces
+        try:
+            # Find average reading
+            for _ in range(0, TRIALS):
+                values = [int(self.analogs[i].value / 256) for i in range(0, len(self.analogs))]
+                for i, value in enumerate(values): averages[i] += value
+                
+                time.sleep(0.005)
+            
+            for i, average, in enumerate(averages):
+                average = average / TRIALS
+                if self.debug: print(f"{average:.2f}, {self.__empty_average[i]:.2f}", end="     ")
+                # If opposite side has live
+                tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE
+                
+                if self.__empty_average[i] - tolorane < average < self.__empty_average[i] + tolorane:
+                    self.spaces[i] = ""
+                elif average > 250:
+                    self.spaces[i] = "live"
+                else:
+                    self.spaces[i] = "dead"
+                    
+            return [averages[i] / TRIALS for i in range(0, len(averages))]
+        
+        except RuntimeError as e:
+            debug( [f"ERROR", f"CLAW", f"{e}"], [30, 20, 50] )

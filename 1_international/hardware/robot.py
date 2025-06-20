@@ -8,10 +8,11 @@ from hardware.led import LED
 from hardware.evacuation_camera import EvacuationCamera
 from hardware.claw import Claw
 
-laser_sensors = LaserSensors()
-touch_sensors = TouchSensors()
 motors = Motors()
+laser_sensors = LaserSensors(motors)
+touch_sensors = TouchSensors()
 camera = Camera()
+motors = Motors(camera)
 colour_sensors = ColourSensors()
 gyroscope = Gyroscope()
 led = LED()

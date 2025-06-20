@@ -5,9 +5,9 @@ from libcamera import Transform
 
 # Config variables
 TRANSFORM = False
-WIDTH, HEIGHT = 320, 200  # Correct resolution for Pi Camera
+LINE_WIDTH, LINE_HEIGHT = 320, 200  # Correct resolution for Pi Camera
 FLIP = False
-CROP_MIN, CROP_MAX = 0, HEIGHT
+CROP_MIN, CROP_MAX = 0, LINE_HEIGHT
 
 # # Initialize Picamera2
 # camera = Picamera2()
@@ -23,23 +23,22 @@ from gpiozero import LED
 from time import sleep
 
 led = LED(13)
-# led.on()
+led.on()
 
 camera = Picamera2()
 camera_config = camera.create_still_configuration(
-    main={"size": (WIDTH, HEIGHT), "format": "YUV420"},
-    # raw={"size": (2304, 1296), "format": "SBGGR10"},
-    raw={"size": (2304, 1500), "format": "SBGGR10"},
+    main={"size": (LINE_WIDTH, LINE_HEIGHT), "format": "RGB888"},
+    raw={"size": (2304, 1296), "format": "SBGGR10"},
     transform=Transform(vflip=FLIP, hflip=FLIP)
 )
 camera.configure(camera_config)
 camera.start()
 
 # Source Points
-top_left = (10, 100)
-bottom_left = (0, HEIGHT - 1)
-top_right = (WIDTH - 10, 100)
-bottom_right = (WIDTH, HEIGHT - 1)
+top_left     = (int(LINE_WIDTH / 4),     20)
+top_right    = (int(LINE_WIDTH * 3 / 4), 20)
+bottom_left  = (0,                            LINE_HEIGHT - 50)
+bottom_right = (LINE_WIDTH,              LINE_HEIGHT - 50)
 
 # Initialize HSV thresholds
 h_min, h_max = 0, 179
@@ -55,7 +54,7 @@ def perspective_transform(image):
     """Apply perspective transform to the image"""
     # Define points for the perspective transform (source and destination)
     src_points = np.float32([top_left, bottom_left, top_right, bottom_right])
-    dst_points = np.float32([[0, 0], [0, HEIGHT], [WIDTH, 0], [WIDTH, HEIGHT]])
+    dst_points = np.float32([[0, 0], [0, LINE_HEIGHT], [LINE_WIDTH, 0], [LINE_WIDTH, LINE_HEIGHT]])
 
     # Calculate the perspective matrix
     matrix = cv2.getPerspectiveTransform(src_points, dst_points)
@@ -84,12 +83,9 @@ try:
     while True:
         # Capture image
         image = camera.capture_array()
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
-        image = image[20:, :]
 
         # Apply perspective transform
-        if TRANSFORM:
-            image = perspective_transform(image)
+        image = perspective_transform(image)
 
         # Apply HSV mask
         masked_image, mask_result = hsv_mask(image)
