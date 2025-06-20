@@ -719,8 +719,11 @@ class LineFollower():
         # Silver detection logic
         blue_pixels = cv2.countNonZero(mask)
         total_pixels = self.image.shape[0] * self.image.shape[1]
-        # print(f"[DEBUG] Blue pixel ratio: {blue_pixels / total_pixels:.3f} ({blue_pixels} / {total_pixels})")
+        print(f"[DEBUG] Blue pixel ratio: {blue_pixels / total_pixels:.3f} ({blue_pixels} / {total_pixels})")
         if blue_pixels / total_pixels >= 0.1: robot_state.count["silver"] += 1
+        elif blue_pixels / total_pixels >= 0.03 and robot_state.trigger["downhill"]: robot_state.count["silver"] += 2
+        elif robot_state.count["silver"] > 0: robot_state.count["silver"] -= 1
+        print(robot_state.count["silver"])
 
     
     # RED
