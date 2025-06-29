@@ -41,7 +41,7 @@ def _display_worker(queue: mp.Queue):
 def start_display():
     global _display_process, _display_queue
     if _display_process is None:
-        _display_queue = mp.Queue(maxsize=10)
+        _display_queue = mp.Queue(maxsize=1)
         _display_process = mp.Process(target=_display_worker, args=(_display_queue,), daemon=True)
         _display_process.start()
 
