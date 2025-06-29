@@ -1,4 +1,4 @@
-from core.shared_imports import time, np, cv2, Optional, YOLO, math
+from core.shared_imports import time, np, cv2, Optional, math
 from hardware.robot import *
 from core.utilities import *
 
@@ -27,12 +27,7 @@ class Search():
         self.debug_live      = False
         self.debug_dead      = False
         self.debug_triangles = False
-        
-        self.model_path = "/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/dead_edgetpu.tflite"
-        self.input_shape = 640
-        self.model = YOLO(self.model_path, task='detect')
-        self.confidence_threshold = 0.3
-    
+
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         THRESHOLD = 245
         KERNEL_SIZE = 7
@@ -257,30 +252,6 @@ class Movement():
         
         self.state = "forwards"
         self.t0 = time.perf_counter()
-            
-    def random(self) -> tuple[int]:
-        # Set speeds
-        v1 = v2 = 0
-        if self.state == "forwards":
-            v1 =  evac_state.base_speed
-            v2 =  evac_state.base_speed
-        
-        elif self.state == "touch":
-            v1 =  evac_state.base_speed * 0.65
-            v2 = -evac_state.base_speed * 0.65
-        
-        motors.run(v1, v2)
-        
-        # Update state
-        if self.state == "forwards" and sum(touch_sensors.read()) != 2:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
-            self.state = "touch"
-            self.t0 = time.perf_counter()
-            
-        elif self.state == "touch" and time.perf_counter() - self.t0 > 3:
-            self.state = "forwards"
-            
-        return v1, v2
     
     def route(self, kP: float, x: int, search_type: str, distance: float, last_distance: float, time_step: float = 0) -> tuple[int]:        
         Y_INTERCEPT = 0.5

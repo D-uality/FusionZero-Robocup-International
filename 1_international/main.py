@@ -14,9 +14,9 @@ def main() -> None:
     led.off()
     
     try:
-        listener.run()
+        listener.start()
         
-        while not listener.has_exited():
+        while not listener.exit_event.is_set():
             if listener.mode.value != 1:
                 start_time = time.perf_counter()
 

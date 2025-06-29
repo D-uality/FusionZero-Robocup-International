@@ -1,9 +1,8 @@
-
-from core.shared_imports import time, ServoKit, socket, getpass, math, mp
+from core.shared_imports import time, ServoKit, socket, getpass, math, mp, operator, np
 from core.utilities import debug, show
 
 class Motors():
-    def __init__(self) -> None:
+    def __init__(self, camera) -> None:
         self.pca = ServoKit(channels=16)
         self.servo_pins = [14, 13, 12, 10]
 
@@ -66,10 +65,10 @@ class Motors():
             calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
         
         try:
-            pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+40), 90-40)
-            pca.servo[self.servo_pins[1]].angle = max(min(self.stop_angles[1] + calculated_angles[1], 90+40), 90-40)
-            pca.servo[self.servo_pins[2]].angle = max(min(self.stop_angles[2] + calculated_angles[2], 90+40), 90-40)
-            pca.servo[self.servo_pins[3]].angle = max(min(self.stop_angles[3] + calculated_angles[3], 90+40), 90-40)
+            self.pca.servo[self.servo_pins[1]].angle = max(min(self.stop_angles[1] + calculated_angles[1], 90+40), 90-40)
+            self.pca.servo[self.servo_pins[2]].angle = max(min(self.stop_angles[2] + calculated_angles[2], 90+40), 90-40)
+            self.pca.servo[self.servo_pins[3]].angle = max(min(self.stop_angles[3] + calculated_angles[3], 90+40), 90-40)
+            self.pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+40), 90-40)
 
             if delay > 0:
                 capture_start = time.perf_counter()
