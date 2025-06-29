@@ -9,7 +9,7 @@ class EvacuationState():
         self.X11 = True
         self.debug = True
         
-        self.victims_saved = 0
+        self.victims_saved = 3
         self.base_speed  = 35
         self.fast_speed  = 45
         self.align_speed = 30
@@ -22,6 +22,10 @@ class EvacuationState():
         
         self.minimum_align_distance = 20
         
+        self.silver_min = 130
+        self.black_max  = 20
+
+        
 class Search():
     def __init__(self):
         self.debug_live      = False
@@ -29,7 +33,7 @@ class Search():
         self.debug_triangles = False
 
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 245
+        THRESHOLD = 250
         KERNEL_SIZE = 7
         CROP_SIZE = 100
         
@@ -42,7 +46,7 @@ class Search():
         
         # Crop according to last x
         if last_x is not None:
-            x_lower = max(                     0, last_x - CROP_SIZE)
+            x_lower = max(             0, last_x - CROP_SIZE)
             x_upper = min(image.shape[1], last_x + CROP_SIZE)
             
             if x_upper > x_lower: working_image = working_image[:, x_lower : x_upper]
@@ -60,7 +64,9 @@ class Search():
             x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
             
-            if y + h/2 > 5 and y + h/2 < 150 and area < 3000:
+            print(y + h/2, evac_camera.height * 0.15)
+            
+            if y + h/2 > 5 and y + h/2 < evac_camera.height * 0.15 and area < 3000:
                 centre_x = x + w/2
                 valid.append((contour, centre_x))
         if len(valid) == 0: return None
@@ -249,6 +255,7 @@ class Search():
 class Movement():
     def __init__(self):
         self.offset = 3
+        self.kP = 1.2
         
         self.state = "forwards"
         self.t0 = time.perf_counter()
@@ -280,26 +287,27 @@ class Movement():
     def wall_follow(self) -> tuple[int]:
         touch_values = touch_sensors.read()
         
-        if sum(touch_values) != 2:
-            motors.run(-self.base_speed, -self.base_speed, 0.3)
-            motors.run(-self.base_speed,  self.base_speed, 1.3)
-        
         distance = laser_sensors.read([0])[0]
-        if distance is None: return None
-
-        error = distance - self.OFFSET
+        print(distance)
+        
+        if distance is None: return -1, -1
+        
+        if sum(touch_values) != 2:
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.15)
+            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            
+        error = distance - self.offset
         raw_turn = self.kP * error
 
-        effective_turn = raw_turn * (1 + 7 / max(distance, self.OFFSET))
+        effective_turn = raw_turn * (1 + 2 / max(distance, self.offset))
 
-        max_turn = self.base_speed * 0.5
+        max_turn = evac_state.base_speed * 0.5
         effective_turn = min(max(effective_turn, -max_turn), max_turn)
 
-        v1 = self.base_speed + effective_turn
-        v2 = self.base_speed - effective_turn
+        v1 = evac_state.base_speed - effective_turn
+        v2 = evac_state.base_speed + effective_turn
 
         motors.run(v1, v2)
-        debug([f"{error:.2f}", f"{raw_turn:.2f}", f"{v1:.2f} {v2:.2f}"], [30, 20, 20])
         
         return v1, v2
 
@@ -349,13 +357,14 @@ def locate(search_type: str = "default") -> tuple[int, str]:
         if x is not None: return x, search_type
         
         if search_type == "default":
-            v1, v2 = movement.random()
+            v1, v2 = movement.wall_follow()
+            
         else:
             v1, v2 = evac_state.base_speed, evac_state.base_speed
             motors.run(v1, v2)
         
         if evac_state.X11:   show(display_image, "display")
-        if evac_state.debug: debug( [f"LOCATING", f"{v1} {v2}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
+        if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str) -> bool:
     last_distance = 100
@@ -574,6 +583,8 @@ def main() -> None:
     # search.ai_dead(image, None)
     
     while True:
+        if evac_state.victims_saved == 3: break
+        
         claw.read()
         x, search_type = locate()
         
@@ -605,3 +616,8 @@ def main() -> None:
             if not grab_success:
                 motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
                 continue
+            
+    # Exit
+    
+    
+    gap_align()

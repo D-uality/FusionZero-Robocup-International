@@ -5,11 +5,12 @@ __pycache__/
 
 # Ignore Cython debug output
 cython_debug/
-code/line_follow/cam_line_following/1_minRect_angle/main.py
-code/line_follow/cam_line_following/1_minRect_angle/main.py
-.
+
 # Ignore .vscode directory
 .vscode/
 
 # Ignore .mp4 files
 *.mp4
+
+# Ignore all images from capture_script
+.5_ai_training_data/0_images/images/
