@@ -1,6 +1,7 @@
 from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
 from core.utilities import *
 from hardware.robot import *
+import behaviours.evacuation_zone as evacuation_zone
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
@@ -56,6 +57,8 @@ class LineFollower():
         self.last_angle = 90
         self.angle = 90
         self.turn = 0
+        self.low_turn = False
+        self.last_check_front = 0
         self.image = None
         self.hsv_image = None
         self.gray_image = None
@@ -99,7 +102,7 @@ class LineFollower():
                 t0 = time.perf_counter()
                 self.__turn()
                 timings['__turn'] = time.perf_counter() - t0
-        elif not starting:
+        elif not starting and robot_state.trigger["uphill"] is False and robot_state.trigger["downhill"] is False:
             self.gap_handling()
 
         if self.display_image is not None and camera.X11:
@@ -148,7 +151,7 @@ class LineFollower():
             if robot_state.trigger["downhill"]:
                 v1 -= 5
                 v2 += 5
-                t += 0
+                t -= 0.3
                 b = 1
 
             motors.run(-30, -30, b)
@@ -159,18 +162,33 @@ class LineFollower():
         else:
             v1 = self.speed + self.turn
             v2 = self.speed - self.turn
-            if robot_state.last_downhill < 30:
-                speed = 10
+
+            # if time.perf_counter() - self.last_check_front > 0.5 and (robot_state.trigger["downhill"] or robot_state.trigger["uphill"]) and robot_state.trigger["tilt_left"] is False and robot_state.trigger["tilt_right"] is False:
+            #     self.low_turn = self.check_front()
+            #     self.last_check_front = time.perf_counter()
+
+            if robot_state.trigger["downhill"]:
+                speed = 18
                 v1 = speed + self.turn
                 v2 = speed - self.turn
                 v1 = min(v1, max(-v2//5, speed))
                 v2 = min(v2, max(-(speed + self.turn)//5, speed))
+                if self.green_signal == None and self.low_turn and robot_state.trigger["tilt_left"] is False and robot_state.trigger["tilt_right"] is False:
+                    v1 = speed + 0.01 * self.turn
+                    v2 = speed - 0.01 * self.turn
+
             elif robot_state.trigger["uphill"]:
                 v1 += 5
                 v2 += 5
-                v1 = max(-30, v1)
-                v2 = max(-30, v2)
-            # elif
+                if v1 < 0: v1 = max(-30, v1)
+                if v2 < 0: v2 = max(-30, v2)
+                if self.green_signal == None and self.low_turn and robot_state.trigger["tilt_left"] is False and robot_state.trigger["tilt_right"] is False:
+                    v1 = 35 + 0.03 * self.turn
+                    v2 = 35 - 0.03 * self.turn
+            
+            if robot_state.trigger["tilt_left"] and v2 < 0: v2 = v2 // 2
+
+            if robot_state.trigger["tilt_right"] and v1 < 0: v1 = v1 // 2
 
             motors.run(v1, v2)
     
@@ -245,6 +263,9 @@ class LineFollower():
         y_avg = int((top_left[1] + top_right[1]) / 2)
         # if y_avg < int(camera.LINE_HEIGHT / 3) and robot_state.trigger["downhill"] is False:
         if y_avg < int(camera.LINE_HEIGHT / 3):
+            self.green_signal = "Approach"
+            return None
+        elif y_avg < int(camera.LINE_HEIGHT / 2) and robot_state.trigger["uphill"] is True:
             self.green_signal = "Approach"
             return None
 
@@ -607,6 +628,18 @@ class LineFollower():
         x_avg = int(np.mean([pt[0] for pt in points]))
         y_avg = int(np.mean([pt[1] for pt in points]))
         return x_avg, y_avg
+    
+    def check_front(self):
+        image = evac_camera.capture(False)
+        display_image = image.copy()
+
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        black_mask = cv2.inRange(gray_image, 0, self.light_black)
+
+        if display_image is not None and camera.X11:
+            show(np.uint8(black_mask), camera.X11, name="front")
+        
+        return cv2.countNonZero(black_mask) > 0  
 
     def find_black(self): 
         self.black_contour = None
@@ -764,15 +797,15 @@ def main(start_time) -> None:
 
     if robot_state.count["silver"] >= 5:
         print("Silver Found!")
-        motors.pause()
         robot_state.count["silver"] = 0
+        motors.pause()
         evacuation_zone.main()
         robot_state.trigger["evacuation_zone"] = True
-    elif robot_state.count["red"] >= 10:
+    elif robot_state.count["red"] >= 5:
         print("Red Found!")
         motors.run(0, 0, 8)
         robot_state.count["red"] = 0
-    elif robot_state.count["touch"] > 5:
+    elif robot_state.count["touch"] > 3:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
     else:
@@ -838,27 +871,30 @@ def update_triggers(robot_state: RobotState) -> list[str]:
             robot_state.triggers = prev_triggers
 
 def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
-    if robot_state.trigger["downhill"]:
+    if robot_state.trigger["downhill"] or robot_state.trigger["uphill"] or robot_state.trigger["tilt_left"] or robot_state.trigger["tilt_right"]:
+        touch_count = 0
         while True:
             touch_values = touch_sensors.read()
             if sum(touch_values) == 0:
-                break
+                touch_count += 1
             elif sum(touch_values) == 2:
-                motors.run(15, 15)
+                touch_count = 0
+                motors.run(20, 20)
             elif touch_values[0] == 0:
-                motors.run(0, 15)
+                motors.run(-5, 20)
+                touch_count = 0
             elif touch_values[1] == 0:
-                motors.run(15, 0)
-
+                motors.run(20, -5)
+                touch_count = 0
+            if touch_count > 5:
+                break
 
     motors.run(0, 0)
-    while True:
-        left_value = laser_sensors.read([0])[0]
-        if left_value is not None: break
-    
-    while True:
+
+    for i in range(100): 
         right_value = laser_sensors.read([2])[0]
-        if right_value is not None: break
+        left_value = laser_sensors.read([0])[0]
+        time.sleep(0.001)
 
     # Clockwise if left > right
     side_values = [left_value, right_value]
@@ -922,12 +958,12 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
     while True:
-        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 15, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
         elif not initial_sequence: break
         if robot_state.count["uphill"] > 1:
             motors.run(30, 30, 0.1)
-        if robot_state.count["uphill"] < 5 and robot_state.last_downhill > 100:
-            motors.run(30, 30, 0.4)
+        # if robot_state.count["uphill"] < 5 and robot_state.last_downhill > 100:
+        #     motors.run(30, 30, 0.4)
         elif robot_state.last_downhill < 100:
             motors.run(-30, -30, 0.3)
         motors.run(0, 0, 0.15)
@@ -950,21 +986,25 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
-    motors.run(30, 30, 0.2)
+    print("hi")
+    if robot_state.count["downhill"] < 5: motors.run(30, 30, 0.2)
+    else: 
+        print("Backing Up")
+        motors.run(-30, -30, 0.5)
     
     if robot_state.count["uphill"] > 5: loops = 1
     else: loops = 3
 
     if robot_state.count["downhill"] > 5:
-        motors.run(-v1, -v2, 2)
-        motors.run(-30, -30, 1)
+        motors.run(-v1, -v2, 2.3)
+        motors.run(-30, -30, 0.5)
         motors.run(0, 0, 2)
 
     for i in range(loops):
         if direction == "cw":
-            line_follow.run_till_camera(-v1, -v2-5, 15)
+            line_follow.run_till_camera(-v1, -v2-5, 20)
         else:
-            line_follow.run_till_camera(-v1-5, -v2, 15)
+            line_follow.run_till_camera(-v1-5, -v2, 20)
     
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = False, direction: str = "") -> bool:
     global camera

@@ -1,8 +1,12 @@
-from core.shared_imports import cv2, np, time
+from core.shared_imports import cv2, np, time, socket, getpass
 from core.utilities import debug
 
 class EvacuationCamera():
     def __init__(self):
+        username = getpass.getuser()
+        hostname = socket.gethostname()
+        self.user_at_host = f"{username}@{hostname}"
+        
         self.width  = 320 * 2
         self.height = 240 * 2
         
@@ -21,7 +25,7 @@ class EvacuationCamera():
         
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
 
-    def capture(self) -> np.ndarray:
+    def capture(self, evac = True) -> np.ndarray:
         image = np.zeros((240, 640, 3), dtype=np.uint8)
         
         try:
@@ -31,10 +35,12 @@ class EvacuationCamera():
                 
                 print("CAMERA NOT READY!")
             
-            image = image[:int(0.48 * self.height), :]
-            
-            image = cv2.flip(image, 0)
-            image = cv2.flip(image, 1)
+            if evac: image = image[:int(0.48 * self.height), :]
+            else: image = image[int(0.8 * self.height):, :]
+
+            if self.user_at_host == "frederick@raspberrypi":
+                image = cv2.flip(image, 0)
+                image = cv2.flip(image, 1)
         
         except Exception as e:
             debug( [f"ERROR", f"CAMERA", f"{e}"], [30, 20, 50] )

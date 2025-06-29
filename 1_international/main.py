@@ -1,17 +1,21 @@
 from core.shared_imports import GPIO, time
 
 from core.listener import ModeListener
-from core.utilities import debug
+from core.utilities import *
 
 import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
+record = True
+
 listener = ModeListener()
+start_display()
 
 def main() -> None:
     motors.run(0, 0)
     led.off()
+    start_time = time.perf_counter()
     
     try:
         listener.start()
@@ -49,12 +53,22 @@ def main() -> None:
         print("Exiting gracefully!")
     
     finally:
-        GPIO.cleanup()
-        evac_camera.release()
-        
-        claw.lift(160)
-        claw.close(90)
-        
         motors.run(0, 0)
+        print("Motors Stopped")
+        GPIO.cleanup()
+        print("LED's Off")
+        laser_sensors.close()
+        print("Laser's Closed")
+        stop_display()
+        print("Display Stopped")
+        evac_camera.release()
+        print("Evac Camera Stopped")
+        
+        claw.lift(claw.pca.servo[claw.lifter_pin].angle)
+        claw.close(claw.pca.servo[claw.closer_pin].angle)
+        print("Claw Stopped")
+        
+        time.sleep(0.1)
+        if record: save_vfr_video(get_saved_frames())
 
 if __name__ == "__main__": main()

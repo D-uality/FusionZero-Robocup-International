@@ -65,10 +65,10 @@ class Motors():
             calculated_angles[i] = max(min(calculated_angles[i], 90), -90)
         
         try:
+            self.pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+40), 90-40)
             self.pca.servo[self.servo_pins[1]].angle = max(min(self.stop_angles[1] + calculated_angles[1], 90+40), 90-40)
             self.pca.servo[self.servo_pins[2]].angle = max(min(self.stop_angles[2] + calculated_angles[2], 90+40), 90-40)
             self.pca.servo[self.servo_pins[3]].angle = max(min(self.stop_angles[3] + calculated_angles[3], 90+40), 90-40)
-            self.pca.servo[self.servo_pins[0]].angle = max(min(self.stop_angles[0] + calculated_angles[0], 90+40), 90-40)
 
             if delay > 0:
                 capture_start = time.perf_counter()
