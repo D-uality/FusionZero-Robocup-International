@@ -9,7 +9,7 @@ class EvacuationState():
         self.X11 = True
         self.debug = True
         
-        self.victims_saved = 3
+        self.victims_saved = 0
         self.base_speed  = 35
         self.fast_speed  = 45
         self.align_speed = 30
@@ -284,24 +284,28 @@ class Movement():
         
         return v1, v2, min_distance
     
-    def wall_follow(self) -> tuple[int]:
+    def wall_follow(self, leaving=False) -> tuple[int]:
         touch_values = touch_sensors.read()
         
         distance = laser_sensors.read([0])[0]
         print(distance)
         
         if distance is None: return -1, -1
+
+        error = distance - self.offset
+        raw_turn = self.kP * error
+        max_turn = evac_state.base_speed * 0.5
         
+        if leaving and distance > 13:
+            raw_turn = raw_turn * 10
+            max_turn = evac_state.base_speed * 5
+            
         if sum(touch_values) != 2:
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.15)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-            
-        error = distance - self.offset
-        raw_turn = self.kP * error
 
         effective_turn = raw_turn * (1 + 2 / max(distance, self.offset))
 
-        max_turn = evac_state.base_speed * 0.5
         effective_turn = min(max(effective_turn, -max_turn), max_turn)
 
         v1 = evac_state.base_speed - effective_turn
@@ -619,5 +623,9 @@ def main() -> None:
             
     # Exit
     
-    
-    gap_align()
+    while True:
+        movement.wall_follow(leaving=True)
+        
+
+    print("Found gap!")
+    # gap_align()

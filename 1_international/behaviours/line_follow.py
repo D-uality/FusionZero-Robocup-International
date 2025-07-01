@@ -879,12 +879,12 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
                 touch_count += 1
             elif sum(touch_values) == 2:
                 touch_count = 0
-                motors.run(20, 20)
+                motors.run(25, 25)
             elif touch_values[0] == 0:
-                motors.run(-5, 20)
+                motors.run(-15, 25)
                 touch_count = 0
             elif touch_values[1] == 0:
-                motors.run(20, -5)
+                motors.run(25, -15)
                 touch_count = 0
             if touch_count > 5:
                 break
@@ -915,28 +915,29 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         v1 = -30
         v2 =  30 * 0.8
         laser_pin = 2
-        if robot_state.count["downhill"] > 3:
+        if robot_state.count["downhill"] > 0:
             v1 = -30 * 0.7
     else:
         v1 =  30 * 0.8
         v2 = -30
         laser_pin = 0
-        if robot_state.count["downhill"] > 3:
+        if robot_state.count["downhill"] > 0:
             v2 = -30 * 0.7
 
     # SETUP
     # Over turn passed obstacle
     # oled_display.text("Turning till obstacle", 0, 10, size=10
 
-    if robot_state.count["downhill"] > 3:
+    if robot_state.count["downhill"] > 0:
         motors.run(-30-10, -30-10, 1)
+        print("Backing up")
     elif robot_state.count["uphill"] > 5:
         motors.run(-30, -30, 0.2)
     else:
         motors.run(-30, -30, 0.4)
 
     for i in range(3):
-        if robot_state.count["downhill"] > 3:
+        if robot_state.count["downhill"] > 0:
             motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 20, "TURNING PAST OBSTACLE (MIDDLE)")
         else:
             motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 15, "TURNING PAST OBSTACLE (MIDDLE)")
@@ -992,10 +993,10 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
         print("Backing Up")
         motors.run(-30, -30, 0.5)
     
-    if robot_state.count["uphill"] > 5: loops = 1
+    if robot_state.count["uphill"] > 0: loops = 1
     else: loops = 3
 
-    if robot_state.count["downhill"] > 5:
+    if robot_state.count["downhill"] > 0:
         motors.run(-v1, -v2, 2.3)
         motors.run(-30, -30, 0.5)
         motors.run(0, 0, 2)

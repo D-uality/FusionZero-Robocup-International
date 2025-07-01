@@ -17,9 +17,9 @@ class Motors():
             self.stop_angles = [97, 96, 96, 97]
             
             self.negative_gradients  = [-0.96727, -0.90880, -0.90704, -0.77515]
-            self.negative_intercepts = [0.54149, 0.49693, 0.25736, 0.51568]
+            self.negative_intercepts = [5.54149, 5.49693, 5.25736, 5.51568]
             self.positive_gradients  = [-1.00445, -0.93679, -0.72308, -0.78219]
-            self.positive_intercepts = [-0.55059, -0.25260, -0.53597, -0.43908]
+            self.positive_intercepts = [-5.55059, -5.25260, -5.53597, -5.43908]
 
         elif self.user_at_host == "aidan@fusionzero":
             self.servo_pins = [14, 13, 12, 10]

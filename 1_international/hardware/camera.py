@@ -1,4 +1,4 @@
-from core.shared_imports import cv2, np, Picamera2, Transform, os
+from core.shared_imports import cv2, np, Picamera2, Transform, os, socket, getpass
 from core.utilities import debug
 
 os.environ["LIBCAMERA_LOG_LEVELS"] = "2"
@@ -12,7 +12,23 @@ class Camera():
         self.LINE_HEIGHT = 200
 
         self.color_format = "RGB888"
-        
+
+        username = getpass.getuser()
+        hostname = socket.gethostname()
+        self.user_at_host = f"{username}@{hostname}"
+
+        # Transformation points
+        self.top_left     = (int(self.LINE_WIDTH / 4),     20)
+        self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 20)
+        self.bottom_left  = (0,                            self.LINE_HEIGHT - 50)
+        self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 50)
+
+        if self.user_at_host == "frederick@raspberrypi":
+            self.top_left     = (int(self.LINE_WIDTH / 4),     40)
+            self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 40)
+            self.bottom_left  = (0,                            self.LINE_HEIGHT - 30)
+            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 30)
+            
         top_left =     (60,                    0)
         top_right =    (self.LINE_WIDTH - 55,  0)
         bottom_left =  (60,                     int(self.LINE_HEIGHT / 2.5) - 1)
@@ -44,13 +60,7 @@ class Camera():
         return self.perspective_transform(image)
 
     def perspective_transform(self, image: np.ndarray) -> np.ndarray:
-        # Transformation points
-        top_left     = (int(self.LINE_WIDTH / 4),     20)
-        top_right    = (int(self.LINE_WIDTH * 3 / 4), 20)
-        bottom_left  = (0,                            self.LINE_HEIGHT - 50)
-        bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 50)
-
-        src_points = np.array([top_left, top_right, bottom_left, bottom_right], dtype=np.float32)
+        src_points = np.array([self.top_left, self.top_right, self.bottom_left, self.bottom_right], dtype=np.float32)
         dst_points = np.array([[0, 0], [self.LINE_WIDTH, 0], [0, self.LINE_HEIGHT], [self.LINE_WIDTH, self.LINE_HEIGHT]], dtype=np.float32)
         
         matrix            = cv2.getPerspectiveTransform(src_points, dst_points)

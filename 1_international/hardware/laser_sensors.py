@@ -7,7 +7,7 @@ class LaserSensors:
 
     def __init__(self, motors=None, *, xshut_pins=(board.D23, board.D24, board.D25),
                  timing_budget_ms=20, inter_measurement_ms=25, poll_delay=0.001,
-                 max_none=3, enable_watchdog=False):
+                 max_none=5, enable_watchdog=True):
 
         # ───────── shared state
         self._motors  = motors
@@ -36,6 +36,8 @@ class LaserSensors:
         # ───────── worker thread
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
+
+        debug( ["INITIALISATION", "LASER SENSORS", "✓"], [25, 25, 50] )
 
     # ----------------------------- worker
     def _worker(self):
