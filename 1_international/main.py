@@ -7,7 +7,7 @@ import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
-record = True
+record = False
 
 listener = ModeListener()
 start_display()

@@ -63,9 +63,7 @@ class Search():
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
-            
-            print(y + h/2, evac_camera.height * 0.15)
-            
+                        
             if y + h/2 > 5 and y + h/2 < evac_camera.height * 0.15 and area < 3000:
                 centre_x = x + w/2
                 valid.append((contour, centre_x))
@@ -91,6 +89,55 @@ class Search():
         # Find centre x
         centre_x = x + w/2 if last_x is None else x_lower + (x + w/2)
         return int(centre_x)
+    
+    def hough_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
+        THRESHOLD = 250
+        KERNEL_SIZE = 7
+        CROP_SIZE = 100
+        
+        # Ensure image is not None
+        if working_image is None or working_image.size == 0: return None
+        
+        x_lower = 0
+        # Crop according to last x
+        if last_x is not None:
+            x_lower = max(             0, last_x - CROP_SIZE)
+            x_upper = min(image.shape[1], last_x + CROP_SIZE)
+            
+            if x_upper > x_lower: working_image = working_image[:, x_lower : x_upper]
+        
+        # Filter for spectral highlights
+        spectral_highlights = cv2.inRange(working_image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
+        spectral_highlights = cv2.dilate (spectral_highlights, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
+        
+        # mask = 
+        
+        # Search for only black parts of the image
+        grey_image = cv2.cvtColor(working_image, cv2.COLOR_BGR2GRAY)
+        grey_image = cv2.bitwise_and(grey_image, mask)
+        
+        # Hough Circle Transform
+        circles = cv2.HoughCircles(grey_image, cv2.HOUGH_GRADIENT, DP, MIN_DISTANCE, param1=PARAMETER_1, param2=PARAMETER_2, minRadius=MIN_RADIUS, maxRadius=MAX_RADIUS)
+        if circles is None: return None
+        
+        t4 = time.perf_counter()
+        # Process circles
+        circles = np.round(circles[0, :]).astype("int")
+        # Validate circles based on: colour, position, size
+        valid = []
+        for (x, y, r) in circles:
+            # Clamp coordinates to image bounds
+            x = max(0, min(x, working_image.shape[1] - 1))
+            y = max(0, min(y, working_image.shape[0] - 1))
+            
+            # colour at x y on image must be black
+            if (working_image[y, x][0] < DARK_BLACK and working_image[y, x][1] < DARK_BLACK and working_image[y, x][2] < DARK_BLACK
+                # and y + r < working_image.shape[0] + OFFSET and y - r > -OFFSET
+                and y > 10):
+                valid.append((x, y, r))
+        
+        if len(valid) == 0: return None
+        
     
     def hough_dead(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         CROP_SIZE = 200
@@ -200,7 +247,9 @@ class Search():
             _, y, r = best_circle
             cv2.circle(display_image, (centre_x, y), r, (0, 255, 0), 2)
             cv2.circle(display_image, (centre_x, y), 1, (0, 255, 0), 2)
-        
+
+            print(r)
+            
             if self.debug_dead:
                 cv2.circle(working_image, (x, y), r, (0, 255, 0), 2)
                 cv2.circle(working_image, (x, y), 1, (0, 255, 0), 2)
