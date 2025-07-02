@@ -35,7 +35,7 @@ class EvacuationCamera():
                 
                 print("CAMERA NOT READY!")
             
-            if evac: image = image[:int(0.48 * self.height), :]
+            if evac: image = image[:int(0.55 * self.height), :]
             else: image = image[int(0.8 * self.height):, :]
 
             if self.user_at_host == "frederick@raspberrypi":

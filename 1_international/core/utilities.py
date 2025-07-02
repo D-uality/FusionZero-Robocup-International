@@ -45,7 +45,7 @@ def start_display():
         _display_process = mp.Process(target=_display_worker, args=(_display_queue,), daemon=True)
         _display_process.start()
 
-def show(frame: np.ndarray, display, name: str = "Display"):
+def show(frame: np.ndarray, name: str = "Display", display: bool = True):
     global _display_queue
     if _display_queue is not None and display:
         # Clear queue to prioritize the latest frame

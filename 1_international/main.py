@@ -7,7 +7,7 @@ import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
-record = True
+record = False
 
 listener = ModeListener()
 start_display()
@@ -57,8 +57,6 @@ def main() -> None:
         print("Motors Stopped")
         GPIO.cleanup()
         print("LED's Off")
-        laser_sensors.close()
-        print("Laser's Closed")
         stop_display()
         print("Display Stopped")
         evac_camera.release()

@@ -14,3 +14,5 @@ cython_debug/
 
 # Ignore all images from capture_script
 .5_ai_training_data/0_images/images/
+
+.temp_frames/

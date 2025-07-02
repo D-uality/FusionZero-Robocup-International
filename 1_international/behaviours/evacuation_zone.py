@@ -63,9 +63,7 @@ class Search():
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
-            
-            print(y + h/2, evac_camera.height * 0.15)
-            
+                        
             if y + h/2 > 5 and y + h/2 < evac_camera.height * 0.15 and area < 3000:
                 centre_x = x + w/2
                 valid.append((contour, centre_x))
@@ -200,7 +198,7 @@ class Search():
             _, y, r = best_circle
             cv2.circle(display_image, (centre_x, y), r, (0, 255, 0), 2)
             cv2.circle(display_image, (centre_x, y), 1, (0, 255, 0), 2)
-        
+            
             if self.debug_dead:
                 cv2.circle(working_image, (x, y), r, (0, 255, 0), 2)
                 cv2.circle(working_image, (x, y), 1, (0, 255, 0), 2)
@@ -285,27 +283,37 @@ class Movement():
         return v1, v2, min_distance
     
     def wall_follow(self, leaving=False) -> tuple[int]:
+        GAP_DISTANCE = 13
+        
         touch_values = touch_sensors.read()
-        
         distance = laser_sensors.read([0])[0]
-        print(distance)
         
-        if distance is None: return -1, -1
+        if distance is None:
+            print("EXITED EARLY")
+            return -1, -1
+        
+        if sum(touch_values) != 2:
+            turn_time = 0.65 if distance < GAP_DISTANCE else 0.8
+            
+            print("TOUCH")
+            
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
+        
+        if distance > GAP_DISTANCE:
+            print("GAP")
+            motors.run(evac_state.fast_speed, evac_state.fast_speed)
+            return evac_state.fast_speed, evac_state.fast_speed
 
         error = distance - self.offset
         raw_turn = self.kP * error
         max_turn = evac_state.base_speed * 0.5
         
-        if leaving and distance > 13:
+        if leaving and distance > GAP_DISTANCE:
             raw_turn = raw_turn * 10
             max_turn = evac_state.base_speed * 5
-            
-        if sum(touch_values) != 2:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.15)
-            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 0.5)
 
         effective_turn = raw_turn * (1 + 2 / max(distance, self.offset))
-
         effective_turn = min(max(effective_turn, -max_turn), max_turn)
 
         v1 = evac_state.base_speed - effective_turn
@@ -350,8 +358,6 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     return None, search_type
 
 def locate(search_type: str = "default") -> tuple[int, str]:
-    movement = Movement()
-    
     while True:
         image = evac_camera.capture()
         display_image = image.copy()
@@ -360,14 +366,9 @@ def locate(search_type: str = "default") -> tuple[int, str]:
         x, search_type = analyse(image, display_image, search_type)
         if x is not None: return x, search_type
         
-        if search_type == "default":
-            v1, v2 = movement.wall_follow()
-            
-        else:
-            v1, v2 = evac_state.base_speed, evac_state.base_speed
-            motors.run(v1, v2)
+        v1, v2 = movement.wall_follow()
         
-        if evac_state.X11:   show(display_image, "display")
+        # if evac_state.X11:   show(display_image, "display")
         if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str) -> bool:
@@ -403,107 +404,6 @@ def route(last_x: int, search_type: str) -> bool:
     while True:
         if sum(touch_sensors.read()) == 0: break
         motors.run(evac_state.fast_speed, evac_state.fast_speed)
-    
-    return True
-
-def forwards_align(distance_tolorance: float, time_step: float) -> bool:
-    MAX_ALIGN_TIME = 5
-    t0 = time.perf_counter()
-    
-    while True:
-        distance = laser_sensors.read([1])[0]
-        
-        debug( ["ALIGNING [DISTANCE]", f"{distance}"], [30, 20])
-        
-        if distance is None:                          continue
-        if distance > 30:                             return False
-        if time.perf_counter() - t0 > MAX_ALIGN_TIME: return False
-        
-        if   distance > evac_state.align_distance + distance_tolorance: motors.run( evac_state.align_speed,  evac_state.align_speed, time_step)
-        elif distance < evac_state.align_distance - distance_tolorance: motors.run(-evac_state.align_speed, -evac_state.align_speed, time_step)
-        else:                                                           return True
-        
-        motors.run(0, 0, time_step * 3)
-        
-def sweep(centre_tolorance: float) -> bool:
-    SWEEP_TIME = 0.7
-    distances = []
-    
-    # Setup
-    motors.run(-evac_state.base_speed * 0.85, evac_state.base_speed * 0.85, SWEEP_TIME)
-    
-    t0 = time.perf_counter()
-    while True:
-        distance = laser_sensors.read([1])[0]
-        
-        if time.perf_counter() - t0 > SWEEP_TIME * 2: break
-        if distance is None: continue
-        
-        distances.append(distance)
-        motors.run(evac_state.align_speed * 0.85, -evac_state.align_speed * 0.85)
-        
-    motors.run(0, 0)
-    target_distance = min(distances)
-    
-    # Sweep past to the target distance
-    t0 = time.perf_counter()
-    while True:
-        distance = laser_sensors.read([1])[0]
-        
-        if distance is None: continue
-        if distance < target_distance + centre_tolorance: break
-        if time.perf_counter() - t0 > SWEEP_TIME * 5: return False
-        
-        motors.run(-evac_state.align_speed * 0.85, evac_state.align_speed * 0.85)
-    
-    motors.run(-evac_state.align_speed * 0.85, evac_state.align_speed * 0.85, 0.3)
-    
-    # Sweep back to the target distance
-    t0 = time.perf_counter()
-    while True:
-        distance = laser_sensors.read([1])[0]
-        
-        if distance is None: continue
-        if distance < target_distance + centre_tolorance: break
-        if time.perf_counter() - t0 > SWEEP_TIME * 5: return False
-        
-        motors.run(-evac_state.align_speed * 0.85, evac_state.align_speed * 0.85)
-        
-    # motors.run(0, 0, 0.1)
-    # motors.run(evac_state.align_speed, -evac_state.align_speed, 0.025)
-    
-    return True
-
-def align(centre_tolorance: float, distance_tolorance: float) -> bool:
-    TIME_STEP = 0.025
-    
-    while True:
-        side_distance = laser_sensors.read([0])[0]
-        if side_distance is not None: break
-        
-    if side_distance < 10:
-        # motors.ease(-evac_state.fast_speed, 60, 0, -2, 1.5)
-        motors.steer(-evac_state.fast_speed, 65, 2.3)
-        motors.pause()
-        motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 1.5)
-        motors.pause()
-        
-        # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
-        # motors.run(-evac_state.fast_speed,  evac_state.fast_speed, 1)
-        # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 1)
-        # motors.run( evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-        # motors.run(0, 0)
-        return False
-    
-    if not forwards_align(distance_tolorance, TIME_STEP): return False
-    motors.run(0, 0, 0.3)
-    if not forwards_align(distance_tolorance, TIME_STEP): return False
-            
-    if not sweep(centre_tolorance): return False
-    
-    if not forwards_align(distance_tolorance, TIME_STEP): return False
-    motors.run(0, 0, 0.3)
-    if not forwards_align(distance_tolorance, TIME_STEP): return False
     
     return True
 
@@ -581,51 +481,37 @@ evac_state = EvacuationState()
 search = Search()
 movement = Movement()
 
-def main() -> None:    
-    # # Warmup camera and TPU
+def main() -> None:
+    motors.run(evac_state.fast_speed, evac_state.fast_speed, 0.5)
+    
+    side_values = [None, None]
+    
+    while not all(side_values):
+        side_values[0] = laser_sensors.read([0])[0]
+        side_values[1] = laser_sensors.read([2])[0]
+    
+    if all([False if value < 15 else True for value in side_values]):
+        print("Far away from wall")
+    else:
+        print("Close to wall")
+    
+    while True:
+        _, _ = locate()
+        
+    
+    # del side_values
+    
+    # # Warmup camera
     # for _ in range(0, 2): image = evac_camera.capture_image()
-    # search.ai_dead(image, None)
     
-    while True:
-        if evac_state.victims_saved == 3: break
+    # while True:
+    #     if evac_state.victims_saved == 3: break
         
-        claw.read()
-        x, search_type = locate()
+    #     claw.read()
+    #     x, search_type = locate()
         
-        route_success = route(x, search_type)
-        if not route_success:
-            # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-            continue
+    #     route_success = route(x, search_type)
         
-        # If it is a triangle
-        if search_type in ["red", "green"]:
-            # Reset and move closer again
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 2)
-            x, search_type = locate(search_type)
-            
-            route_success = route(x, search_type)
-            if not route_success: continue
-            
-            dump(search_type)
-            
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
-        
-        # Align only if we're picking up
-        if search_type in ["live", "dead"]:
-            align_success = align(10, 0.1)
-            if not align_success: continue
-            
-            grab_success = grab()
-            if not grab_success:
-                motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
-                continue
-            
-    # Exit
-    
-    while True:
-        movement.wall_follow(leaving=True)
-        
+    #     motors.run(0, 0, 5)
 
-    print("Found gap!")
-    # gap_align()
+    # print("Found gap!")
