@@ -43,3 +43,5 @@ def read_claw():
 #     motors.run(0, 0)
 while True:
     read_claw()
+    # set_claw()
+    
