@@ -107,7 +107,7 @@ class LineFollower():
 
         if self.display_image is not None and camera.X11:
             t0 = time.perf_counter()
-            show(np.uint8(self.display_image), camera.X11, name="line")
+            show(np.uint8(self.display_image), display=camera.X11, name="line")
             timings['display'] = time.perf_counter() - t0
 
         total_elapsed = time.perf_counter() - overall_start
@@ -371,7 +371,7 @@ class LineFollower():
                     break
 
             if self.display_image is not None and camera.X11:
-                show(np.uint8(self.display_image), camera.X11, name="line")
+                show(np.uint8(self.display_image), display=camera.X11, name="line")
 
     def __align_to_contour_angle(self):
         while True:

@@ -9,7 +9,7 @@ class EvacuationState():
         self.X11 = True
         self.debug = True
         
-        self.victims_saved = 0
+        self.victims_saved = 3
         self.base_speed  = 35
         self.fast_speed  = 45
         self.align_speed = 30
@@ -297,10 +297,10 @@ class Movement():
             
             print("TOUCH")
             
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
         
-        if distance > GAP_DISTANCE:
+        if not leaving and distance > GAP_DISTANCE:
             print("GAP")
             motors.run(evac_state.fast_speed, evac_state.fast_speed)
             return evac_state.fast_speed, evac_state.fast_speed
@@ -310,8 +310,8 @@ class Movement():
         max_turn = evac_state.base_speed * 0.5
         
         if leaving and distance > GAP_DISTANCE:
-            raw_turn = raw_turn * 10
-            max_turn = evac_state.base_speed * 5
+            raw_turn = raw_turn * 12
+            max_turn = evac_state.base_speed * 4
 
         effective_turn = raw_turn * (1 + 2 / max(distance, self.offset))
         effective_turn = min(max(effective_turn, -max_turn), max_turn)
@@ -486,13 +486,13 @@ def align_line(align_type: str) -> None:
         
         # Move backwards till 1 finds silver
         while not left_silver and not right_silver:
-            colour_values = colour.read()
+            colour_values = colour_sensors.read()
 
-            if colour_values[0] > silver_min or colour_values[1] > silver_min:
+            if colour_values[0] > evac_state.silver_min or colour_values[1] > evac_state.silver_min:
                 left_silver = True
                 print("Found left Silver")
 
-            elif colour_values[3] > silver_min or colour_values[4] > silver_min:
+            elif colour_values[3] > evac_state.silver_min or colour_values[4] > evac_state.silver_min:
                 right_silver = True
                 print("Found right silver")
         
@@ -501,31 +501,31 @@ def align_line(align_type: str) -> None:
 
         # Account for angled entry
         if(left_silver): 
-            motors.run_until(7, -evac_state.base_speed * 0.5, colour.read, 4, ">=", silver_min, "Right")
+            motors.run_until(7, -evac_state.base_speed * 0.5, colour_sensors.read, 4, ">=", evac_state.silver_min, "Right")
         
         # Repeat finding silver
-        for i in range(4):
+        for i in range(3):
             forwards_speed = evac_state.base_speed * 0.5
             other_speed = 8
             
             motors.run      ( 0, 0, 0.2)
-            motors.run_until(-forwards_speed,     other_speed, colour.read, 0, ">=", silver_min, "LEFT SILVER")
+            motors.run_until(-forwards_speed,     other_speed, colour_sensors.read, 0, ">=", evac_state.silver_min, "LEFT SILVER")
             
             motors.run      ( 0, 0, 0.2)
-            motors.run_until(    other_speed, -forwards_speed, colour.read, 4, ">=", silver_min, "RIGHT SILVER")
+            motors.run_until(    other_speed, -forwards_speed, colour_sensors.read, 4, ">=", evac_state.silver_min, "RIGHT SILVER")
             
             motors.run      (0, 0, 0.2)
-            motors.run_until( forwards_speed,     other_speed, colour.read, 0, "<=", silver_min, "LEFT WHITE")
+            motors.run_until( forwards_speed,     other_speed, colour_sensors.read, 0, "<=", evac_state.silver_min, "LEFT WHITE")
             
             motors.run      ( 0, 0, 0.2)
-            motors.run_until(    other_speed,  forwards_speed, colour.read, 4, "<=", silver_min, "RIGHT WHITE")
+            motors.run_until(    other_speed,  forwards_speed, colour_sensors.read, 4, "<=", evac_state.silver_min, "RIGHT WHITE")
                     
     elif align_type == "black":
         motors.run(-evac_state.base_speed*0.7, -evac_state.base_speed*0.7, 0.7)
         motors.run(evac_state.base_speed * 0.5, evac_state.base_speed * 0.5)
         left_black, right_black = None, None
         while left_black is None and right_black is None:
-            colour_values = colour.read()
+            colour_values = colour_sensors.read()
 
             if colour_values[0] < 40 or colour_values[1] < 40:
                 left_black = True
@@ -535,21 +535,30 @@ def align_line(align_type: str) -> None:
                 print("Right")
 
         if(left_black): 
-            motors.run_until(-5, evac_state.base_speed * 0.5, colour.read, 4, "<=", 30, "Right")
+            motors.run_until(-5, evac_state.base_speed * 0.5, colour_sensors.read, 4, "<=", 30, "Right")
             
-        for i in range(4):
+        for i in range(3):
             motors.run(0, 0, 0.2)
-            motors.run_until(-evac_state.base_speed * 0.5, -5, colour.read, 0, ">=", 60, "Left")
+            motors.run_until(-evac_state.base_speed * 0.5, -5, colour_sensors.read, 0, ">=", 60, "Left")
             motors.run(0, 0, 0.2)
-            motors.run_until(-5, -evac_state.base_speed * 0.5, colour.read, 4, ">=", 60, "Right")
+            motors.run_until(-5, -evac_state.base_speed * 0.5, colour_sensors.read, 4, ">=", 60, "Right")
             motors.run(0, 0, 0.2)
-            motors.run_until(evac_state.base_speed * 0.5, -5, colour.read, 0, "<=", 30, "Left")
+            motors.run_until(evac_state.base_speed * 0.5, -5, colour_sensors.read, 0, "<=", 30, "Left")
             motors.run(0, 0, 0.2)
-            motors.run_until(-5, evac_state.base_speed * 0.5, colour.read, 4, "<=", 30, "Right")
+            motors.run_until(-5, evac_state.base_speed * 0.5, colour_sensors.read, 4, "<=", 30, "Right")
 
         for i in range(0, int(evac_state.base_speed * 0.7)):
             motors.run(-evac_state.base_speed*0.7+i, -evac_state.base_speed*0.7+i, 0.03)
 
+def validate_exit(colour_values: list[int], black_count: int, silver_count: int) -> bool:
+    valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
+    silver_values = [1 if value >= evac_state.silver_min else 0 for value in valid_values]
+    black_values  = [1 if value <=  evac_state.black_max else 0 for value in valid_values]
+    
+    silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else 0
+    black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
+    
+    return silver_count, black_count
     
 evac_state = EvacuationState()
 search = Search()
@@ -587,8 +596,6 @@ def main() -> None:
         
         # Align only if we're picking up
         if search_type in ["live", "dead"]:
-            align_success = align(10, 0.1)
-            if not align_success: continue
             
             grab_success = grab()
             if not grab_success:
@@ -596,9 +603,42 @@ def main() -> None:
                 continue
             
     # Exit
-    
+    silver_count = black_count = 0
     while True:
         movement.wall_follow(leaving=True)
+        colour_values = colour_sensors.read()
+        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
+
+        if black_count >= 5:
+            debug(["EXITING", "FOUND EXIT!"], [24, 30])
+            align_line("black")
+            break
         
-    print("Found gap!")
-    align_line("black")
+        elif silver_count >= 5:
+            debug(["EXITING", "FOUND SILVER"], [24, 30])
+            
+            motors.run(0, 0, 0.3)
+            align_line("silver")
+            motors.run(-evac_state.base_speed, -evac_state.base_speed, 1.7)
+            motors.run(0, 0, 0.3)
+            motors.run(evac_state.base_speed, -evac_state.base_speed, 2.2)
+            motors.run(0, 0, 0.3)
+
+            while True:
+                distance = laser_sensors.read([0])[0]
+                touch_values = touch_sensors.read()
+                
+                debug(["MOVING TILL WALL", f"{distance}", f"{touch_values}"], [24, 10, 10])
+                motors.run(22, 22)
+
+                if distance <= 20:
+                    break
+                
+                if sum(touch_values) != 2:
+                    motors.run(evac_state.base_speed, evac_state.base_speed, 1)
+                    motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.5)
+                    motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
+                    motors.run_until(evac_state.base_speed,  -evac_state.base_speed, laser_sensors.read, 0, "<=", 10)
+
+                    break
+
