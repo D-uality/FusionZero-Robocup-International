@@ -1,3 +1,8 @@
+if __name__ == "__main__":
+    import sys, pathlib
+    root = pathlib.Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(root))
+
 from core.shared_imports import time, np, cv2, Optional, math
 from hardware.robot import *
 from core.utilities import *
@@ -288,10 +293,12 @@ class Movement():
         touch_values = touch_sensors.read()
         distance = laser_sensors.read([0])[0]
         
+        # Laser sensors failed
         if distance is None:
             print("EXITED EARLY")
             return -1, -1
         
+        # Touch
         if sum(touch_values) != 2:
             turn_time = 0.65 if distance < GAP_DISTANCE else 0.8
             
@@ -300,6 +307,7 @@ class Movement():
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
         
+        # Ignore gaps
         if not leaving and distance > GAP_DISTANCE:
             print("GAP")
             motors.run(evac_state.fast_speed, evac_state.fast_speed)
@@ -563,7 +571,50 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
     
     return silver_count, black_count
+
+def leave():
+    silver_count = black_count = 0
     
+    while True:
+        movement.wall_follow(leaving=True)
+        colour_values = colour_sensors.read()
+        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
+
+        if black_count >= 5:
+            debug(["EXITING", "FOUND EXIT!"], [24, 30])
+            align_line("black")
+            break
+        
+        elif silver_count >= 5:
+            debug(["EXITING", "FOUND SILVER"], [24, 30])
+            
+            motors.run(0, 0, 0.3)
+            align_line("silver")
+            motors.run(-evac_state.base_speed, -evac_state.base_speed, 1.7)
+            motors.run(0, 0, 0.3)
+            motors.run(evac_state.base_speed, -evac_state.base_speed, 2.2)
+            motors.run(0, 0, 0.3)
+
+            while True:
+                distance = laser_sensors.read([0])[0]
+                touch_values = touch_sensors.read()
+                
+                debug(["MOVING TILL WALL", f"{distance}", f"{touch_values}"], [24, 10, 10])
+                motors.run(22, 22)
+
+                if distance <= 20:
+                    break
+                
+                if sum(touch_values) != 2:
+                    motors.run(evac_state.base_speed, evac_state.base_speed, 1)
+                    motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.5)
+                    motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
+                    motors.run_until(evac_state.base_speed,  -evac_state.base_speed, laser_sensors.read, 0, "<=", 10)
+
+                    break
+
+#---------------------------------------------------------------------------------------------------------------------------------------------
+
 evac_state = EvacuationState()
 search = Search()
 movement = Movement()
@@ -596,7 +647,7 @@ def main() -> None:
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
         
-    #     # Align only if we're picking up
+        # Align only if we're picking up
         if search_type in ["live", "dead"]:
             
             grab_success = grab()
@@ -604,42 +655,9 @@ def main() -> None:
                 motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
                 continue
             
-    # # Exit
-    # silver_count = black_count = 0
-    # while True:
-    #     movement.wall_follow(leaving=True)
-    #     colour_values = colour_sensors.read()
-    #     silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
-
-    #     if black_count >= 5:
-    #         debug(["EXITING", "FOUND EXIT!"], [24, 30])
-    #         align_line("black")
-    #         break
-        
-    #     elif silver_count >= 5:
-    #         debug(["EXITING", "FOUND SILVER"], [24, 30])
-            
-    #         motors.run(0, 0, 0.3)
-    #         align_line("silver")
-    #         motors.run(-evac_state.base_speed, -evac_state.base_speed, 1.7)
-    #         motors.run(0, 0, 0.3)
-    #         motors.run(evac_state.base_speed, -evac_state.base_speed, 2.2)
-    #         motors.run(0, 0, 0.3)
-
-    #         while True:
-    #             distance = laser_sensors.read([0])[0]
-    #             touch_values = touch_sensors.read()
-                
-    #             debug(["MOVING TILL WALL", f"{distance}", f"{touch_values}"], [24, 10, 10])
-    #             motors.run(22, 22)
-
-    #             if distance <= 20:
-    #                 break
-                
-    #             if sum(touch_values) != 2:
-    #                 motors.run(evac_state.base_speed, evac_state.base_speed, 1)
-    #                 motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.5)
-    #                 motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
-    #                 motors.run_until(evac_state.base_speed,  -evac_state.base_speed, laser_sensors.read, 0, "<=", 10)
-
-    #                 break
+    leave()
+    
+if __name__ == "__main__":
+    evac_state.victims_saved = 3
+    
+    main()
