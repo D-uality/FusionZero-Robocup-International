@@ -33,4 +33,5 @@ def read_claw():
     print(claw.spaces)
 
 while True:
-    set_claw()
+    read_claw()
+    # set_claw()

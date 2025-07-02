@@ -5,7 +5,7 @@ from core.utilities import debug
 class Claw():
     def __init__(self):
         TRIALS = 50
-        self.debug = False
+        self.debug = True
         
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
@@ -14,20 +14,30 @@ class Claw():
         self.closer_pin = 8
         self.pca = ServoKit(channels=16)
         
-        self.a0 = AnalogIn(self.__ADC, 0)
-        self.a1 = AnalogIn(self.__ADC, 1)
-        self.analogs = [self.a0, self.a1]
-        
         username = getpass.getuser()
         hostname = socket.gethostname()
         self.user_at_host = f"{username}@{hostname}"
         
         if self.user_at_host == "frederick@raspberrypi":
+            self.EMPTY_TOLERANCE = 20
+            self.OPPOSITE_LIVE_TOLERANCE = 20
+            self.LIVE_TOLERANCE = 250
+            self.left_cup = AnalogIn(self.__ADC, 0)
+            self.right_cup = AnalogIn(self.__ADC, 1)
+            self.lifter_angle = [20, 160]
             self.pca.servo[self.lifter_pin].angle = 160
             self.pca.servo[self.closer_pin].angle = 90
         else:
-            self.pca.servo[self.lifter_pin].angle = 105
-            self.pca.servo[self.closer_pin].angle = 120
+            self.EMPTY_TOLORANCE = 5
+            self.OPPOSITE_LIVE_TOLORANCE = 12
+            self.LIVE_TOLERANCE = 230
+            self.left_cup = AnalogIn(self.__ADC, 6)
+            self.right_cup = AnalogIn(self.__ADC, 7)
+            self.lifter_angle = [30, 160]
+            self.pca.servo[self.lifter_pin].angle = 160
+            self.pca.servo[self.closer_pin].angle = 90
+
+        self.analogs = [self.left_cup, self.right_cup]
         
         self.spaces = ["", ""]
 
@@ -49,8 +59,8 @@ class Claw():
         debug(["INITIALISATION", "CLAW", "✓"], [25, 25, 50])
     
     def lift(self, target_angle: int, time_delay: float = 0) -> None:
-        if target_angle < 20: target_angle = 20
-        if target_angle > 160: target_angle = 160
+        if target_angle < self.lifter_angle[0]: target_angle = self.lifter_angle[0]
+        if target_angle > self.lifter_angle[1]: target_angle = self.lifter_angle[1]
         current_angle = self.pca.servo[self.lifter_pin].angle
 
         if current_angle == target_angle: return None
@@ -76,8 +86,6 @@ class Claw():
     
     def read(self) -> list[int]:
         TRIALS = 15
-        EMPTY_TOLORANCE = 20
-        OPPOSITE_LIVE_TOLORANCE = 20
         
         averages = [0, 0]
         
@@ -93,11 +101,11 @@ class Claw():
                 average = average / TRIALS
                 if self.debug: print(f"{average:.2f}, {self.__empty_average[i]:.2f}", end="     ")
                 # If opposite side has live
-                tolorane =  OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else EMPTY_TOLORANCE
+                tolorane =  self.OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else self.EMPTY_TOLORANCE
                 
                 if self.__empty_average[i] - tolorane < average < self.__empty_average[i] + tolorane:
                     self.spaces[i] = ""
-                elif average > 250:
+                elif average > self.LIVE_TOLERANCE:
                     self.spaces[i] = "live"
                 else:
                     self.spaces[i] = "dead"
