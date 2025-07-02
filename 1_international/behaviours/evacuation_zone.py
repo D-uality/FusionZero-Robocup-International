@@ -476,42 +476,129 @@ def dump(search_type: str) -> None:
     time.sleep(1)
     
     claw.read()
+
+def align_line(align_type: str) -> None:
+    if align_type == "silver":   
+
+        motors.run( evac_state.base_speed,       evac_state.base_speed,   0.7)
+        motors.run(-evac_state.base_speed * 0.3, -evac_state.base_speed * 0.3)
+        left_silver, right_silver = False, False
+        
+        # Move backwards till 1 finds silver
+        while not left_silver and not right_silver:
+            colour_values = colour.read()
+
+            if colour_values[0] > silver_min or colour_values[1] > silver_min:
+                left_silver = True
+                print("Found left Silver")
+
+            elif colour_values[3] > silver_min or colour_values[4] > silver_min:
+                right_silver = True
+                print("Found right silver")
+        
+        # Moving forwards slowly
+        motors.run(evac_state.base_speed * 0.5, evac_state.base_speed * 0.5, 0.4)
+
+        # Account for angled entry
+        if(left_silver): 
+            motors.run_until(7, -evac_state.base_speed * 0.5, colour.read, 4, ">=", silver_min, "Right")
+        
+        # Repeat finding silver
+        for i in range(4):
+            forwards_speed = evac_state.base_speed * 0.5
+            other_speed = 8
+            
+            motors.run      ( 0, 0, 0.2)
+            motors.run_until(-forwards_speed,     other_speed, colour.read, 0, ">=", silver_min, "LEFT SILVER")
+            
+            motors.run      ( 0, 0, 0.2)
+            motors.run_until(    other_speed, -forwards_speed, colour.read, 4, ">=", silver_min, "RIGHT SILVER")
+            
+            motors.run      (0, 0, 0.2)
+            motors.run_until( forwards_speed,     other_speed, colour.read, 0, "<=", silver_min, "LEFT WHITE")
+            
+            motors.run      ( 0, 0, 0.2)
+            motors.run_until(    other_speed,  forwards_speed, colour.read, 4, "<=", silver_min, "RIGHT WHITE")
+                    
+    elif align_type == "black":
+        motors.run(-evac_state.base_speed*0.7, -evac_state.base_speed*0.7, 0.7)
+        motors.run(evac_state.base_speed * 0.5, evac_state.base_speed * 0.5)
+        left_black, right_black = None, None
+        while left_black is None and right_black is None:
+            colour_values = colour.read()
+
+            if colour_values[0] < 40 or colour_values[1] < 40:
+                left_black = True
+                print("Left")
+            elif colour_values[3] < 40 or colour_values[4] < 40:
+                right_black = True
+                print("Right")
+
+        if(left_black): 
+            motors.run_until(-5, evac_state.base_speed * 0.5, colour.read, 4, "<=", 30, "Right")
+            
+        for i in range(4):
+            motors.run(0, 0, 0.2)
+            motors.run_until(-evac_state.base_speed * 0.5, -5, colour.read, 0, ">=", 60, "Left")
+            motors.run(0, 0, 0.2)
+            motors.run_until(-5, -evac_state.base_speed * 0.5, colour.read, 4, ">=", 60, "Right")
+            motors.run(0, 0, 0.2)
+            motors.run_until(evac_state.base_speed * 0.5, -5, colour.read, 0, "<=", 30, "Left")
+            motors.run(0, 0, 0.2)
+            motors.run_until(-5, evac_state.base_speed * 0.5, colour.read, 4, "<=", 30, "Right")
+
+        for i in range(0, int(evac_state.base_speed * 0.7)):
+            motors.run(-evac_state.base_speed*0.7+i, -evac_state.base_speed*0.7+i, 0.03)
+
     
 evac_state = EvacuationState()
 search = Search()
 movement = Movement()
 
-def main() -> None:
-    motors.run(evac_state.fast_speed, evac_state.fast_speed, 0.5)
-    
-    side_values = [None, None]
-    
-    while not all(side_values):
-        side_values[0] = laser_sensors.read([0])[0]
-        side_values[1] = laser_sensors.read([2])[0]
-    
-    if all([False if value < 15 else True for value in side_values]):
-        print("Far away from wall")
-    else:
-        print("Close to wall")
+def main() -> None:    
+    # # Warmup camera and TPU
+    # for _ in range(0, 2): image = evac_camera.capture_image()
+    # search.ai_dead(image, None)
     
     while True:
-        _, _ = locate()
+        if evac_state.victims_saved == 3: break
         
+        claw.read()
+        x, search_type = locate()
+        
+        route_success = route(x, search_type)
+        if not route_success:
+            # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            continue
+        
+        # If it is a triangle
+        if search_type in ["red", "green"]:
+            # Reset and move closer again
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 2)
+            x, search_type = locate(search_type)
+            
+            route_success = route(x, search_type)
+            if not route_success: continue
+            
+            dump(search_type)
+            
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
+        
+        # Align only if we're picking up
+        if search_type in ["live", "dead"]:
+            align_success = align(10, 0.1)
+            if not align_success: continue
+            
+            grab_success = grab()
+            if not grab_success:
+                motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
+                continue
+            
+    # Exit
     
-    # del side_values
-    
-    # # Warmup camera
-    # for _ in range(0, 2): image = evac_camera.capture_image()
-    
-    # while True:
-    #     if evac_state.victims_saved == 3: break
+    while True:
+        movement.wall_follow(leaving=True)
         
-    #     claw.read()
-    #     x, search_type = locate()
-        
-    #     route_success = route(x, search_type)
-        
-    #     motors.run(0, 0, 5)
-
-    # print("Found gap!")
+    print("Found gap!")
+    align_line("black")
