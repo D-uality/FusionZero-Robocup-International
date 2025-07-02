@@ -13,6 +13,7 @@ cython_debug/
 *.mp4
 
 # Ignore all images from capture_script
-.5_ai_training_data/0_images/images/
+5_ai_training_data/0_images/images/
 
-.temp_frames/
+# Ignore all files in temp_frames
+temp_frames/

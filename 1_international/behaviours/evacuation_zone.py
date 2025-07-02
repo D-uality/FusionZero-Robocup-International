@@ -9,7 +9,7 @@ class EvacuationState():
         self.X11 = True
         self.debug = True
         
-        self.victims_saved = 3
+        self.victims_saved = 0
         self.base_speed  = 35
         self.fast_speed  = 45
         self.align_speed = 30
@@ -28,7 +28,7 @@ class EvacuationState():
         
 class Search():
     def __init__(self):
-        self.debug_live      = False
+        self.debug_live      = True
         self.debug_dead      = False
         self.debug_triangles = False
 
@@ -221,7 +221,7 @@ class Search():
             mask = cv2.bitwise_or(mask_lower, mask_upper)
         
         else:
-            mask = cv2.inRange(hsv_image, (50, 120, 15), (70, 255, 255))
+            mask = cv2.inRange(hsv_image, (50, 120, 15), (85, 255, 255))
             
         mask = cv2.dilate(mask, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
         
@@ -241,7 +241,7 @@ class Search():
         # Get the bounding rectangle of the largest contour
         x, y, w, h = cv2.boundingRect(largest_contour)
         
-        if h > w or y + h/2 > evac_camera.height / 2: return None
+        if h > w or y + h/2 > evac_camera.height / 2: return None, None
 
         # Display debug information
         if evac_state.X11:
@@ -368,11 +368,12 @@ def locate(search_type: str = "default") -> tuple[int, str]:
         
         v1, v2 = movement.wall_follow()
         
-        # if evac_state.X11:   show(display_image, "display")
+        if evac_state.X11:   show(display_image, name="display", display=True)
         if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str) -> bool:
     last_distance = 100
+    distances_recorded = []
     
     while True:
         # Take measurements
@@ -386,8 +387,12 @@ def route(last_x: int, search_type: str) -> bool:
         if distance is None: continue
         if        x is None: return False
         
+        distances_recorded.append(distance)
+        
         # Exit conditions
-        if   search_type in ["live"]         and distance < evac_state.live_approach_distance:     return True
+        if   search_type in ["live"]         and distance < evac_state.live_approach_distance:
+            print(distances_recorded)
+            return True
         elif search_type in ["dead"]         and distance < evac_state.dead_approach_distance:     return True
         elif search_type in ["red", "green"] and distance < evac_state.triangle_approach_distance: break
         
@@ -408,7 +413,6 @@ def route(last_x: int, search_type: str) -> bool:
     return True
 
 def grab() -> bool:    
-    claw.read()
     if "" not in claw.spaces: return False
     
     # Left: -1, Right: 1
@@ -416,9 +420,9 @@ def grab() -> bool:
     
     debug( ["GRAB", "SETUP"], [30, 20] )
     # Setup
-    motors.run(         -evac_state.grab_speed,         -evac_state.grab_speed, 0)
-    motors.run(-evac_state.grab_speed * insert, evac_state.grab_speed * insert, 0.25)
-    motors.run(0, 0)
+    motors.run(         -evac_state.grab_speed,         -evac_state.grab_speed, 0.3)
+    motors.run(-evac_state.grab_speed * insert, evac_state.grab_speed * insert, 0.2)
+    motors.run(0, 0, 0.3)
     
     debug( ["GRAB", "CUP"], [30, 20] )
     # Cup
@@ -529,10 +533,10 @@ def align_line(align_type: str) -> None:
 
             if colour_values[0] < 40 or colour_values[1] < 40:
                 left_black = True
-                print("Left")
+                print("Found left black")
             elif colour_values[3] < 40 or colour_values[4] < 40:
                 right_black = True
-                print("Right")
+                print("Found right black")
 
         if(left_black): 
             motors.run_until(-5, evac_state.base_speed * 0.5, colour_sensors.read, 4, "<=", 30, "Right")
@@ -576,10 +580,8 @@ def main() -> None:
         x, search_type = locate()
         
         route_success = route(x, search_type)
-        if not route_success:
-            # motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-            continue
-        
+        if not route_success: continue
+                
         # If it is a triangle
         if search_type in ["red", "green"]:
             # Reset and move closer again
@@ -594,7 +596,7 @@ def main() -> None:
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
         
-        # Align only if we're picking up
+    #     # Align only if we're picking up
         if search_type in ["live", "dead"]:
             
             grab_success = grab()
@@ -602,43 +604,42 @@ def main() -> None:
                 motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
                 continue
             
-    # Exit
-    silver_count = black_count = 0
-    while True:
-        movement.wall_follow(leaving=True)
-        colour_values = colour_sensors.read()
-        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
+    # # Exit
+    # silver_count = black_count = 0
+    # while True:
+    #     movement.wall_follow(leaving=True)
+    #     colour_values = colour_sensors.read()
+    #     silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
 
-        if black_count >= 5:
-            debug(["EXITING", "FOUND EXIT!"], [24, 30])
-            align_line("black")
-            break
+    #     if black_count >= 5:
+    #         debug(["EXITING", "FOUND EXIT!"], [24, 30])
+    #         align_line("black")
+    #         break
         
-        elif silver_count >= 5:
-            debug(["EXITING", "FOUND SILVER"], [24, 30])
+    #     elif silver_count >= 5:
+    #         debug(["EXITING", "FOUND SILVER"], [24, 30])
             
-            motors.run(0, 0, 0.3)
-            align_line("silver")
-            motors.run(-evac_state.base_speed, -evac_state.base_speed, 1.7)
-            motors.run(0, 0, 0.3)
-            motors.run(evac_state.base_speed, -evac_state.base_speed, 2.2)
-            motors.run(0, 0, 0.3)
+    #         motors.run(0, 0, 0.3)
+    #         align_line("silver")
+    #         motors.run(-evac_state.base_speed, -evac_state.base_speed, 1.7)
+    #         motors.run(0, 0, 0.3)
+    #         motors.run(evac_state.base_speed, -evac_state.base_speed, 2.2)
+    #         motors.run(0, 0, 0.3)
 
-            while True:
-                distance = laser_sensors.read([0])[0]
-                touch_values = touch_sensors.read()
+    #         while True:
+    #             distance = laser_sensors.read([0])[0]
+    #             touch_values = touch_sensors.read()
                 
-                debug(["MOVING TILL WALL", f"{distance}", f"{touch_values}"], [24, 10, 10])
-                motors.run(22, 22)
+    #             debug(["MOVING TILL WALL", f"{distance}", f"{touch_values}"], [24, 10, 10])
+    #             motors.run(22, 22)
 
-                if distance <= 20:
-                    break
+    #             if distance <= 20:
+    #                 break
                 
-                if sum(touch_values) != 2:
-                    motors.run(evac_state.base_speed, evac_state.base_speed, 1)
-                    motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.5)
-                    motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
-                    motors.run_until(evac_state.base_speed,  -evac_state.base_speed, laser_sensors.read, 0, "<=", 10)
+    #             if sum(touch_values) != 2:
+    #                 motors.run(evac_state.base_speed, evac_state.base_speed, 1)
+    #                 motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.5)
+    #                 motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
+    #                 motors.run_until(evac_state.base_speed,  -evac_state.base_speed, laser_sensors.read, 0, "<=", 10)
 
-                    break
-
+    #                 break

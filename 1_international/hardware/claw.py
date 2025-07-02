@@ -22,17 +22,22 @@ class Claw():
             self.EMPTY_TOLERANCE = 20
             self.OPPOSITE_LIVE_TOLERANCE = 20
             self.LIVE_TOLERANCE = 250
+            
             self.left_cup = AnalogIn(self.__ADC, 0)
             self.right_cup = AnalogIn(self.__ADC, 1)
+            
             self.lifter_angle = [20, 160]
             self.pca.servo[self.lifter_pin].angle = 160
             self.pca.servo[self.closer_pin].angle = 90
+            
         else:
             self.EMPTY_TOLORANCE = 5
             self.OPPOSITE_LIVE_TOLORANCE = 12
             self.LIVE_TOLERANCE = 230
+            
             self.left_cup = AnalogIn(self.__ADC, 6)
             self.right_cup = AnalogIn(self.__ADC, 7)
+            
             self.lifter_angle = [30, 160]
             self.pca.servo[self.lifter_pin].angle = 160
             self.pca.servo[self.closer_pin].angle = 90
@@ -101,9 +106,9 @@ class Claw():
                 average = average / TRIALS
                 if self.debug: print(f"{average:.2f}, {self.__empty_average[i]:.2f}", end="     ")
                 # If opposite side has live
-                tolorane =  self.OPPOSITE_LIVE_TOLORANCE if self.spaces[0 if i == 1 else 0] == "live" else self.EMPTY_TOLORANCE
+                tolerance =  self.OPPOSITE_LIVE_TOLERANCE if self.spaces[0 if i == 1 else 0] == "live" else self.EMPTY_TOLERANCE
                 
-                if self.__empty_average[i] - tolorane < average < self.__empty_average[i] + tolorane:
+                if average < self.__empty_average[i] + tolerance:
                     self.spaces[i] = ""
                 elif average > self.LIVE_TOLERANCE:
                     self.spaces[i] = "live"

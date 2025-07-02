@@ -17,20 +17,21 @@ def evac_image():
     image = evac_camera.capture()
     display_image = image.copy()
         
-    # green_x = search.triangle(image, "green")
-    # red_x = search.triangle(image, "red")
+    green_x = search.triangle(image, display_image, "green")
+    red_x = search.triangle(image, display_image, "red")
     
     # live_x = search.classic_live(image, display_image, last_live_x)
-    dead_x = search.hough_dead  (image, display_image, last_dead_x)
+    # dead_x = search.hough_dead  (image, display_image, last_dead_x)
     
     # print(green_x, red_x, live_x, dead_x)
-    # print(green_x, red_x)
+    print(green_x, red_x)
     # print(live_x, dead_x)
     
-    show(        image, "image")
-    show(display_image, "display")
+    show(        image, name="image", display=True)
+    show(display_image, name="display", display=True)
+    
     # last_live_x = live_x
-    last_dead_x = dead_x
+    # last_dead_x = dead_x
     
     print(f"{1/(time.perf_counter() - t0):.2f}")
 
