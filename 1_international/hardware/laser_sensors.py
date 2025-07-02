@@ -1,107 +1,81 @@
-from core.shared_imports import GPIO, board, time, busio, digitalio, adafruit_vl53l1x, threading, traceback, Optional
-from core.utilities   import debug
-from hardware.motors  import Motors
+from core.shared_imports import GPIO, board, time, adafruit_vl53l1x, Optional
+from core.utilities import debug
+from hardware.motors import Motors
 
-class LaserSensors:
-    _NEW_ADDRS = (0x30, 0x31)              # third stays 0x29
+class LaserSensors():
+    def __init__(self, motors: Motors):
+        self.__x_shut_pins = [23, 24, 25]
+        self.__tof_sensors = []
+        
+        self.__fails = 0
+        self.__last_values = [0, 0, 0]
+        
+        self.__motors = motors
+        
+        self.__setup()
 
-    def __init__(self, motors=None, *, xshut_pins=(board.D23, board.D24, board.D25),
-                 timing_budget_ms=20, inter_measurement_ms=25, poll_delay=0.001,
-                 max_none=5, enable_watchdog=True):
+    def __setup(self):
+        for pin in self.__x_shut_pins:
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, GPIO.LOW)
+            time.sleep(0.1)
+            
+        for pin_number, x_shut_pin in enumerate(self.__x_shut_pins):
+            self.__change_address(pin_number, x_shut_pin)
 
-        # ───────── shared state
-        self._motors  = motors
-        self._wd_on   = enable_watchdog and motors is not None
-        self._max_none, self._poll = max_none, poll_delay
-        self._latest  = [None, None, None]
-        self._nonecnt = [0, 0, 0]
-        self._paused  = False
-        self._alive   = True
-        self._lock    = threading.Lock()
+        for sensor in self.__tof_sensors:
+            sensor.start_ranging()
+        
+    def __change_address(self, pin_number: int, x_shut_pin: int) -> None:
+        attempts = 10
 
-        # ───────── sensor boot
-        self.i2c = busio.I2C(board.SCL, board.SDA)                    # :contentReference[oaicite:3]{index=3}
-        self._xshut = [digitalio.DigitalInOut(p) for p in xshut_pins]
-        for p in self._xshut: p.switch_to_output(False)               # hold reset
-        self._sns = []
-        for i, p in enumerate(self._xshut):
-            p.value = True; time.sleep(0.12)                          # ≥100 ms boot :contentReference[oaicite:4]{index=4}
-            s = adafruit_vl53l1x.VL53L1X(self.i2c)
-            if i < len(self._NEW_ADDRS): s.set_address(self._NEW_ADDRS[i])
-            s.timing_budget = timing_budget_ms                        # accuracy-speed table :contentReference[oaicite:5]{index=5}
-            s.inter_measurement = inter_measurement_ms
-            s.start_ranging()                                         # continuous mode
-            self._sns.append(s)
+        for attempt in range(1, attempts + 1):
+            try:
+                GPIO.output(x_shut_pin, GPIO.HIGH)
+                time.sleep(0.2)
 
-        # ───────── worker thread
-        self._thread = threading.Thread(target=self._worker, daemon=True)
-        self._thread.start()
+                sensor = adafruit_vl53l1x.VL53L1X(board.I2C())
+                sensor.distance_mode = 1 
+                sensor.timing_budget = 15
 
-        debug( ["INITIALISATION", "LASER SENSORS", "✓"], [25, 25, 50] )
+                self.__tof_sensors.append(sensor)
 
-    # ----------------------------- worker
-    def _worker(self):
-        while self._alive:
-            all_ok = True
-            for i, s in enumerate(self._sns):
-                try:
-                    if s.data_ready:
-                        d = s.distance
-                        s.clear_interrupt()
-                    else:
-                        d = None
-                except OSError:            # e.g. bus closed / sensor off
-                    d = None
-                except Exception:
-                    traceback.print_exc()
-                    d = None
+                if pin_number < len(self.__x_shut_pins) - 1:
+                    sensor.set_address(pin_number + 0x30)
 
-                with self._lock:
-                    if d is not None:
-                        self._latest[i] = d
-                        self._nonecnt[i] = 0
-                    else:
-                        self._nonecnt[i] += 1
-                    if self._nonecnt[i] > self._max_none:
-                        all_ok = False
+                debug(["INITIALISATION", f"LASERS {pin_number}", "✓"], [25, 25, 50])
+                break
 
-            # optional watchdog
-            if self._wd_on:
-                with self._lock:
-                    if not self._paused and not all_ok:
-                        self._motors.run(0, 0)
-                        self._paused = True
-                    elif self._paused and all_ok:
-                        self._paused = False
-            time.sleep(self._poll)
+            except Exception as e:
+                if attempt == attempts:
+                    raise e
+                else:
+                    print(f"INITIALISATION: LASER {x_shut_pin} {e}")
+                    time.sleep(0.1)
 
-    # ----------------------------- public read
-    def read(self, idx=None):
-        with self._lock:
-            snap = self._latest.copy()
-        if idx is None:       return snap
-        if isinstance(idx,int): return snap[idx]
-        return [snap[i] for i in idx]
+    def read(self, pins=None) -> list[int]:
+        if self.__fails > 5:
+            print("LASER SENSORS FAILED!")
+            self.__motors.run(0, 0)
+            
+            self.__tof_sensors = []
+            self.__setup()
+            self.__fails = 0
+        
+        values = []
+        if pins is None: sensors = self.__tof_sensors
+        else:            sensors = [self.__tof_sensors[i] for i in pins]
 
-    # ----------------------------- graceful shutdown
-    def close(self):
-        """Stop thread, power-down sensors, release GPIO & I²C."""
-        self._alive = False
-        self._thread.join(timeout=1.0)               # wait worker out :contentReference[oaicite:6]{index=6}
+        for sensor in sensors:
+            try:
+                values.append(sensor.distance)
+                
+            except Exception as e:
+                print(f"Error reading sensor: {e}")
+                values.append(None)
 
-        for s in self._sns:          # stop driver first (thread already dead)
-            try: s.stop_ranging()                     # API call :contentReference[oaicite:7]{index=7}
-            except Exception: pass
-
-        for p in self._xshut:        # then cut power
-            try: p.switch_to_output(value=False)      # LOW = shutdown :contentReference[oaicite:8]{index=8}
-            except Exception: pass
-            try: p.deinit()
-            except Exception: pass
-
-        try: self.i2c.deinit()                        # releases /dev/i2c-1 :contentReference[oaicite:9]{index=9}
-        except Exception: pass
-
-    # ----------------------------- context-manager
-    def __enter__(self): return self
-    def __exit__(self, *_): self.close()
+        
+        self.__fails = self.__fails + 1 if None in values and None in self.__last_values else 0
+        self.__last_values = values
+        
+        return values

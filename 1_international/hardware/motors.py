@@ -72,9 +72,11 @@ class Motors():
 
             if delay > 0:
                 capture_start = time.perf_counter()
+                
                 while True:
                     if delay > 0.2: show(np.uint8(self.camera.capture_array()), display=self.camera.X11, name="line")
                     if delay - (time.perf_counter() - capture_start) < 0: break
+                        
         except Exception as e:  
             print("I2C TIMEOUT!")
             debug(["INITIALISATION", "MOTORS", f"{e}"], [24, 15, 50])
