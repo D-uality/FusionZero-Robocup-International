@@ -304,7 +304,7 @@ class Movement():
             
             print("TOUCH")
             
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.25)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
         
         # Ignore gaps
@@ -573,6 +573,11 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     return silver_count, black_count
 
 def leave():
+    if evac_state.victims_saved != 3:
+        motors.run_until(evac_state.fast_speed, evac_state.fast_speed, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
+        motors.run_until(evac_state.fast_speed, evac_state.fast_speed, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
+        motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
+        motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
     silver_count = black_count = 0
     
     while True:
@@ -623,7 +628,8 @@ def main() -> None:
     # # Warmup camera and TPU
     # for _ in range(0, 2): image = evac_camera.capture_image()
     # search.ai_dead(image, None)
-    
+    led.off()
+
     while True:
         if evac_state.victims_saved == 3: break
         
@@ -644,7 +650,7 @@ def main() -> None:
             
             dump(search_type)
             
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.2)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
         
         # Align only if we're picking up

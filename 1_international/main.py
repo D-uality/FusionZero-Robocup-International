@@ -1,6 +1,6 @@
 from core.shared_imports import GPIO, time
 
-from core.listener import ModeListener
+from core.listener import listener
 from core.utilities import *
 
 import behaviours.line_follow as line_follow
@@ -9,7 +9,6 @@ from hardware.robot import *
 
 record = False
 
-listener = ModeListener()
 start_display()
 
 def main() -> None:
@@ -48,6 +47,9 @@ def main() -> None:
                     " ".join(list(map(str, gyro_values)))
                     ], [25, 20, 20, 20, 20, 20]
                 )
+            
+            elif listener.mode.value == 4:
+                colour_sensors.calibrate()
 
             elif listener.mode.value == 9: listener.exit_event.set()
 

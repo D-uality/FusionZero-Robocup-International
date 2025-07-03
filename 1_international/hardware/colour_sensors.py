@@ -1,5 +1,6 @@
 from core.shared_imports import os, time, board, ADC, AnalogIn
 from core.utilities import debug
+from core.listener import listener
 
 class ColourSensors():
     def __init__(self):
@@ -38,14 +39,14 @@ class ColourSensors():
     
     def calibrate(self) -> None:
         # Rest calibration values
-        self.__min_values = [255 for _ in range(0, 255)]
-        self.__max_values = [0   for _ in range(0, 255)]
+        self.__min_values = [255 for _ in range(0, 5)]
+        self.__max_values = [0   for _ in range(0, 5)]
         
         start_time = time.perf_counter()
         
         while True:
             # Calibrate for 5 seconds
-            if time.perf_counter - start_time > 5: break
+            if time.perf_counter() - start_time > 5: break
             
             analog_values = self.read_raw()
 
@@ -59,3 +60,5 @@ class ColourSensors():
         with open(self.__CALIBRATION_FILE, "w") as file:
             file.write(",".join(map(str, self.__min_values)) + "\n")
             file.write(",".join(map(str, self.__max_values)) + "\n")
+        
+        listener.mode.value = 0

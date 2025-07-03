@@ -31,8 +31,8 @@ class Claw():
             self.pca.servo[self.closer_pin].angle = 90
             
         else:
-            self.EMPTY_TOLORANCE = 5
-            self.OPPOSITE_LIVE_TOLORANCE = 12
+            self.EMPTY_TOLERANCE = 5
+            self.OPPOSITE_LIVE_TOLERANCE = 12
             self.LIVE_TOLERANCE = 230
             
             self.left_cup = AnalogIn(self.__ADC, 6)

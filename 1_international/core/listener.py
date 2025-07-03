@@ -37,7 +37,7 @@ class ModeListener():
 
     def __input_listener(self) -> None:
         try:
-            valid = {"0", "1", "2", "3", "9"}
+            valid = {"0", "1", "2", "3", "4", "9"}
             while not self.exit_event.is_set():
                 if not self.input_queue.empty():
                     mode = self.input_queue.get()
@@ -68,3 +68,5 @@ class ModeListener():
         
         except KeyboardInterrupt:
             pass
+
+listener = ModeListener()

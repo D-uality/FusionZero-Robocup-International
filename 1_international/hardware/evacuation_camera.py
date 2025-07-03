@@ -34,14 +34,14 @@ class EvacuationCamera():
                 if ok: break
                 
                 print("CAMERA NOT READY!")
-            
-            if evac: image = image[:int(0.55 * self.height), :]
-            else: image = image[int(0.8 * self.height):, :]
 
             if self.user_at_host == "frederick@raspberrypi":
+                image = image[:int(0.55 * self.height), :]
                 image = cv2.flip(image, 0)
                 image = cv2.flip(image, 1)
-        
+            else:
+                image = image[int(0.55 * self.height):, :]
+                
         except Exception as e:
             debug( [f"ERROR", f"CAMERA", f"{e}"], [30, 20, 50] )
             time.sleep(0.1)

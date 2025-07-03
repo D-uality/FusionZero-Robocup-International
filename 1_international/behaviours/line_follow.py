@@ -739,6 +739,13 @@ class LineFollower():
                     else:
                         cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
     
+    def black_infront(self):
+        if self.black_contour is not None:
+            if any(p[0][1] < camera.LINE_HEIGHT // 4 for p in self.black_contour):
+                return True
+
+        return False
+
     # RED
     def find_red(self):
         if self.hsv_image is not None:
@@ -758,8 +765,6 @@ line_follow = LineFollower()
 def main(start_time) -> None:
     global robot_state, line_follow
     led.on()
-    while time.perf_counter() - start_time < 3:
-        line_follow.follow(True)
     fps = error = 0
     green_signal = None
 
@@ -771,15 +776,22 @@ def main(start_time) -> None:
     ramp_check(robot_state, gyro_values)
     update_triggers(robot_state)
 
-    find_silver(robot_state, silver_value)
+    if line_follow.black_infront is False:
+        find_silver(robot_state, silver_value)
     line_follow.find_red()
-
-    if robot_state.count["silver"] >= 3:
+    if robot_state.count["silver"] >= 2:
         print("Silver Found!")
         robot_state.count["silver"] = 0
-        motors.pause()
+        motors.run(0, 0, 1)
         evacuation_zone.main()
+        motors.run(0, 0, 1)
         robot_state.trigger["evacuation_zone"] = True
+        start_time = time.perf_counter()
+        led.on()
+        print(start_time)
+    if time.perf_counter() - start_time < 3:
+        while time.perf_counter() - start_time < 3:
+            line_follow.follow(True)
     elif robot_state.count["red"] >= 5:
         print("Red Found!")
         motors.run(0, 0, 8)
@@ -803,7 +815,7 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     print(silver_value)
-    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 170 else 0
+    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 200 else 0
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
@@ -996,7 +1008,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
     elif comparison == ">=": comparison_function = operator.ge
 
     while True:
-        show(np.uint8(camera.capture_array()), camera.X11, name="line") 
+        show(np.uint8(camera.capture_array()), display=camera.X11, name="line") 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()
