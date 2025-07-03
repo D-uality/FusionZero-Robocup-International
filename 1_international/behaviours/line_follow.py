@@ -739,28 +739,6 @@ class LineFollower():
                     else:
                         cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
     
-    # SILVER
-    def find_silver(self):
-        if self.hsv_image is None:
-            robot_state.count["silver"] = 0
-            return 
-
-        # Create blue mask
-        mask = cv2.inRange(self.hsv_image, self.lower_blue, self.upper_blue)
-
-        # Find contours in the blue mask
-        self.blue_contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Silver detection logic
-        blue_pixels = cv2.countNonZero(mask)
-        total_pixels = self.image.shape[0] * self.image.shape[1]
-        print(f"[DEBUG] Blue pixel ratio: {blue_pixels / total_pixels:.3f} ({blue_pixels} / {total_pixels})")
-        if blue_pixels / total_pixels >= 0.1: robot_state.count["silver"] += 1
-        elif blue_pixels / total_pixels >= 0.03 and robot_state.trigger["downhill"]: robot_state.count["silver"] += 2
-        elif robot_state.count["silver"] > 0: robot_state.count["silver"] -= 1
-        print(robot_state.count["silver"])
-
-    
     # RED
     def find_red(self):
         if self.hsv_image is not None:
@@ -786,16 +764,17 @@ def main(start_time) -> None:
     green_signal = None
 
     colour_values = colour_sensors.read()
+    silver_value = silver_sensor.read()
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
     touch_check(robot_state, touch_values)
     ramp_check(robot_state, gyro_values)
     update_triggers(robot_state)
 
-    line_follow.find_silver()
+    find_silver(robot_state, silver_value)
     line_follow.find_red()
 
-    if robot_state.count["silver"] >= 5:
+    if robot_state.count["silver"] >= 3:
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.pause()
@@ -822,6 +801,10 @@ def main(start_time) -> None:
 def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
      
+def find_silver(robot_state: RobotState, silver_value: int) -> None:
+    print(silver_value)
+    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 170 else 0
+
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
         pitch = gyro_values[0]

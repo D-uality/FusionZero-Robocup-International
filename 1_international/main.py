@@ -7,7 +7,7 @@ import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
-record = True
+record = False
 
 listener = ModeListener()
 start_display()
@@ -42,9 +42,11 @@ def main() -> None:
                 debug( [
                     "READING", 
                     " ".join(list(map(str, touch_sensors.read()))),
+                    " ".join(list(map(str, colour_sensors.read()))),
+                    f"{silver_sensor.read()}",
                     " ".join(list(map(str, laser_sensors.read()))), 
                     " ".join(list(map(str, gyro_values)))
-                    ], [25, 20, 20, 20]
+                    ], [25, 20, 20, 20, 20, 20]
                 )
 
             elif listener.mode.value == 9: listener.exit_event.set()
