@@ -636,7 +636,7 @@ class LineFollower():
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         black_mask = cv2.inRange(gray_image, 0, self.light_black)
 
-        if display_image is not None and camera.X11:
+        if black_mask is not None and camera.X11:
             show(np.uint8(black_mask), camera.X11, name="front")
         
         return cv2.countNonZero(black_mask) > 0  
@@ -768,7 +768,6 @@ def main(start_time) -> None:
     fps = error = 0
     green_signal = None
 
-    colour_values = colour_sensors.read()
     silver_value = silver_sensor.read()
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
@@ -776,9 +775,9 @@ def main(start_time) -> None:
     ramp_check(robot_state, gyro_values)
     update_triggers(robot_state)
 
-    if line_follow.black_infront is False:
-        find_silver(robot_state, silver_value)
+    if line_follow.black_infront() is False: find_silver(robot_state, silver_value)
     line_follow.find_red()
+
     if robot_state.count["silver"] >= 2:
         print("Silver Found!")
         robot_state.count["silver"] = 0
@@ -982,7 +981,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     # oled_display.reset()
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
-    print("hi")
+
     if robot_state.count["downhill"] < 5: motors.run(30, 30, 0.2)
     else: 
         print("Backing Up")
@@ -1029,6 +1028,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
             else:
                 if direction == "cw": motors.run(-v1, v2)
                 else: motors.run(v1, -v2)
+
 """
 TESTING
 """
