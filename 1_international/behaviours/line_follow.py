@@ -40,6 +40,7 @@ class LineFollower():
     def __init__(self):
         self.speed = 30
         self.turn_multi = 1.5
+        self.stuck_threshold = 20
 
         self.min_black_area = 1000
         self.min_green_area = 3000
@@ -54,23 +55,16 @@ class LineFollower():
         self.turn_color = (0, 255, 0)
         self.prev_side = None
   
-        self.last_angle = 90
-        self.angle = 90
+        self.last_angle = self.angle = 90
         self.turn = 0
         self.low_turn = False
         self.last_check_front = 0
-        self.image = None
-        self.hsv_image = None
-        self.gray_image = None
-        self.display_image = None
-        self.blue_contours = None
-        self.green_contours = None
-        self.green_signal = None
-        self.prev_green_signal = None
+        self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
+        self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = None
         self.last_seen_green = 100
-        self.black_contour = None
-        self.black_mask = None
-        self.__timing = False
+        self.black_contour = self.black_mask = None
+        self.v1, self.v2 = 0, 0
+        self.stuck_count = self.last_stuck_time = 0
     
     def follow(self, starting=False) -> None:
         overall_start = time.perf_counter()
@@ -113,10 +107,7 @@ class LineFollower():
         total_elapsed = time.perf_counter() - overall_start
         fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
 
-        # Format timing info in one line
-        # timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(
-        #     f"{key}: {value:.4f}s" for key, value in timings.items()
-        # )
+        # timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(f"{key}: {value:.4f}s" for key, value in timings.items())
         # print(timing_line)
 
         return fps, self.turn, self.green_signal
@@ -136,7 +127,7 @@ class LineFollower():
                 motors.run(-30+i*6, -30+i*6, 0.20)
         elif self.green_signal == "Double":
             v1, v2, t = 35, -35, 3.8
-            f = b = f_after = b_after = 0
+            f = b = 0
 
             if robot_state.trigger["tilt_left"]:
                 v1, v2, t = 40, -15, 3
@@ -190,7 +181,9 @@ class LineFollower():
 
             if robot_state.trigger["tilt_right"] and v1 < 0: v1 = v1 // 2
 
-            motors.run(v1, v2)
+            self.v1, self.v2 = v1, v2
+            self.stuck_check()
+            motors.run(self.v1, self.v2)
     
     def run_till_camera(self, v1, v2, threshold):
         motors.run(v1, v2)
@@ -207,6 +200,35 @@ class LineFollower():
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
         motors.run(0, 0)
+
+    def stuck_check(self):
+        """
+        Decide if the robot is stuck based on compare of consecutive gray images
+        and heading angle. Adjust v1/v2 when stuck_count exceeds threshold.
+        """
+        # Initialize prev_gray on first check
+        if self.gray_image is None: return False
+        if self.prev_gray is None:
+            self.prev_gray = self.gray_image.copy()
+            return False
+
+        if float(np.mean(cv2.absdiff(self.gray_image, self.prev_gray))) < 5 and 80 >= self.angle >= 100: self.stuck_count += 1
+        else:
+            if self.stuck_count > self.stuck_threshold: self.stuck_count -= 1  # slow decay when stuck
+            else: self.stuck_count = 0  # reset before threshold
+
+        self.prev_gray = self.gray_image.copy()
+        if self.stuck_count > self.stuck_threshold:
+            # increase motor speeds
+            if self.v1 > 0: self.v1 += 25
+            else:           self.v1 -= 25
+            if self.v2 > 0: self.v2 += 25
+            else:           self.v2 -= 25
+
+            print("Stuck Detected!")
+            return True
+
+        return False
 
     # GREEN
     def green_check(self):
