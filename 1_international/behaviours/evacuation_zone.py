@@ -38,11 +38,12 @@ class Search():
         self.debug_triangles = False
 
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 245
+        THRESHOLD = 250
         KERNEL_SIZE = 15
         CROP_SIZE = 100
         
-        working_image = image.copy()
+        working_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY) 
+        
         
         # Ensure image is not None
         if working_image is None or working_image.size == 0: return None
@@ -57,7 +58,8 @@ class Search():
             if x_upper > x_lower: working_image = working_image[:, x_lower : x_upper]
             
         # Filter for spectral highlights
-        spectral_highlights = cv2.inRange(working_image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
+        # spectral_highlights = cv2.inRange(working_image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
+        spectral_highlights = cv2.inRange(working_image, THRESHOLD, 255)
         spectral_highlights = cv2.dilate (spectral_highlights, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -387,7 +389,7 @@ def route(last_x: int, search_type: str) -> bool:
         if distance is None:                    continue
         if        x is None:                    return False
         if silver_count > 5 or black_count > 5:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
             return False
         
@@ -620,6 +622,11 @@ def main() -> None:
     # for _ in range(0, 2): image = evac_camera.capture_image()
     # search.ai_dead(image, None)
     led.off()
+    motors.run(evac_state.fast_speed, evac_state.fast_speed, 0.7)
+    laser_values = laser_sensors.read()
+    if laser_values[0] > 15:
+        motors.run(evac_state.fast_speed, evac_state.fast_speed, 0.7)
+        motors.run_until(evac_state.fast_speed, evac_state.fast_speed, laser_sensors.read, 0, "<=", 15, "Moving Till Initial Wall")
 
     while True:
         if evac_state.victims_saved == 3: break
