@@ -29,6 +29,8 @@ class EvacuationState():
         
         self.silver_min = 130
         self.black_max  = 20
+        
+        self.gap_count = 3
 
         
 class Search():
@@ -412,23 +414,28 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     
     return None, search_type
 
-def locate(search_type: str = "default") -> tuple[int, str]:
+def locate(black_count: int, silver_count: int, search_type: str = "default") -> tuple[int, str, int, int]:
     while True:
+        colour_values = colour_sensors.read()
         image = evac_camera.capture()
         display_image = image.copy()
         
+        # Validate gaps
+        black_count, silver_count = validate_exit(colour_values, black_count, silver_count)
+        if black_count > evac_state.gap_count or silver_count > evac_state.gap_count:
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
+            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
+        
         # Exit if target found
         x, search_type = analyse(image, display_image, search_type)
-        if x is not None: return x, search_type
+        if x is not None: return x, search_type, black_count, silver_count
         
         v1, v2 = movement.path()
         
         if evac_state.X11:   show(display_image, name="display", display=True)
-        if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
+        if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}", f"{black_count, silver_count}"], [30, 20, 20, 20, 20, 20] )
 
-def route(last_x: int, search_type: str) -> bool:
-    silver_count = black_count = 0
-    
+def route(last_x: int, search_type: str, black_count: int, silver_count: int) -> bool:
     while True:
         # Take measurements
         distance = laser_sensors.read([1])[0]
@@ -442,8 +449,9 @@ def route(last_x: int, search_type: str) -> bool:
         # Error handling
         if distance is None:                    continue
         if        x is None:                    return False
-        if silver_count > 5 or black_count > 5:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
+        
+        if black_count > evac_state.gap_count or silver_count > evac_state.gap_count:
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
             return False
         
@@ -458,7 +466,7 @@ def route(last_x: int, search_type: str) -> bool:
         last_x = x
         
         if evac_state.X11:   show(display_image, "display")
-        if evac_state.debug: debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"{v1:.2f} {v2:.2f}"], [30, 20, 20, 20] )
+        if evac_state.debug: debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"{v1:.2f} {v2:.2f}", f"{black_count, silver_count}"], [30, 20, 20, 20, 20] )
 
     while True:
         if sum(touch_sensors.read()) == 0: break
@@ -672,27 +680,28 @@ search = Search()
 movement = Movement()
 
 def main() -> None:    
-    # # Warmup camera and TPU
-    # for _ in range(0, 2): image = evac_camera.capture_image()
-    # search.ai_dead(image, None)
+    # Warmup camera
+    for _ in range(0, 2): _ = evac_camera.capture()
     led.off()
 
+    black_count = silver_count = 0
+    
     while True:
         if evac_state.victims_saved == 3: break
         
         claw.read()
-        x, search_type = locate()
+        x, search_type, black_count, silver_count = locate(black_count, silver_count)
         
-        route_success = route(x, search_type)
+        route_success = route(x, search_type, black_count, silver_count)
         if not route_success: continue
                 
         # If it is a triangle
         if search_type in ["red", "green"]:
             # Reset and move closer again
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 2)
-            x, search_type = locate(search_type)
+            x, search_type, black_count, silver_count = locate(search_type)
             
-            route_success = route(x, search_type)
+            route_success = route(x, search_type, black_count, silver_count)
             if not route_success: continue
             
             dump(search_type)
@@ -713,7 +722,6 @@ def main() -> None:
 #---------------------------------------------------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    evac_state.victims_saved = 3
+    # evac_state.victims_saved = 3
     
-    while True:
-        movement.path()
+    main()
