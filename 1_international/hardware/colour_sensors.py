@@ -1,4 +1,4 @@
-from core.shared_imports import os, time, board, ADC, AnalogIn
+from core.shared_imports import os, time, board, ADC, AnalogIn, getpass, socket
 from core.utilities import debug
 from core.listener import listener
 
@@ -9,6 +9,16 @@ class ColourSensors():
 
         self.__CURRENT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
         self.__CALIBRATION_FILE = os.path.join(self.__CURRENT_DIRECTORY, "calibration_values.txt")
+        
+        username = getpass.getuser()
+        hostname = socket.gethostname()
+        self.user_at_host = f"{username}@{hostname}"
+        
+        if self.user_at_host == "frederick@raspberrypi":
+            self.__CHANNELS = [2, 4, 5, 6, 7]
+        else:
+            self.__CHANNELS = [0, 1, 2, 3, 4]
+            
         
         if os.path.exists(self.__CALIBRATION_FILE):
             with open(self.__CALIBRATION_FILE, "r") as file:
@@ -23,7 +33,7 @@ class ColourSensors():
             exit()
             
     def read_raw(self) -> list[int]:
-        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in range(0, 5)]
+        values = [int(AnalogIn(self.__ADC, channel).value / 256) for channel in self.__CHANNELS]
         return values
     
     def read(self) -> list[int]:
