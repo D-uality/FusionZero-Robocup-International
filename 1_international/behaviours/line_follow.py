@@ -565,7 +565,7 @@ class LineFollower():
         timing['finalize'] = time.perf_counter() - t0
 
         if robot_state.timings: print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
-        print(self.prev_side)
+        # print(self.prev_side)
         return return_val
 
     def _finalize_angle(self, ref_point, validate):
