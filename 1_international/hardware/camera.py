@@ -8,7 +8,7 @@ class Camera():
         # Camera settings   
         self.X11 = True
         self.FLIP = False
-        self.debug = True
+        self.debug = False
         self.LINE_WIDTH = 320
         self.LINE_HEIGHT = 200
 

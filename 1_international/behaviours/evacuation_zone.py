@@ -384,11 +384,12 @@ def route(last_x: int, search_type: str) -> bool:
         
         x, search_type = analyse(image, display_image, search_type, last_x)
         silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
+        print(f"black_count: {black_count}, silver_count: {silver_count}")
         
         # Error handling
         if distance is None:                    continue
         if        x is None:                    return False
-        if silver_count > 5 or black_count > 5:
+        if silver_count > 3 or black_count > 3:
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
             return False
