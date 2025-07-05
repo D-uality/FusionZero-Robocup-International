@@ -25,7 +25,7 @@ class EvacuationCamera():
         
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
 
-    def capture(self, evac = True) -> np.ndarray:
+    def capture(self) -> np.ndarray:
         image = np.zeros((240, 640, 3), dtype=np.uint8)
         
         try:
@@ -36,11 +36,11 @@ class EvacuationCamera():
                 print("CAMERA NOT READY!")
 
             if self.user_at_host == "frederick@raspberrypi":
-                image = image[:int(0.55 * self.height), :]
+                image = image[:int(0.6 * self.height), :]
                 image = cv2.flip(image, 0)
                 image = cv2.flip(image, 1)
             else:
-                image = image[int(0.55 * self.height):, :]
+                image = image[int(0.5 * self.height):, :]
                 
         except Exception as e:
             debug( [f"ERROR", f"CAMERA", f"{e}"], [30, 20, 50] )

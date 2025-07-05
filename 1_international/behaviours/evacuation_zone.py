@@ -17,7 +17,7 @@ class EvacuationState():
         self.victims_saved = 0
         self.base_speed  = 35
         self.fast_speed  = 45
-        self.align_speed = 30
+        self.route_speed = 25
         self.grab_speed  = 30
         
         self.live_approach_distance     = 7
@@ -33,13 +33,13 @@ class EvacuationState():
         
 class Search():
     def __init__(self):
-        self.debug_live      = True
+        self.debug_live      = False
         self.debug_dead      = False
         self.debug_triangles = False
 
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 250
-        KERNEL_SIZE = 7
+        THRESHOLD = 245
+        KERNEL_SIZE = 15
         CROP_SIZE = 100
         
         working_image = image.copy()
@@ -68,8 +68,8 @@ class Search():
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
-                        
-            if y + h/2 > 5 and y + h/2 < evac_camera.height * 0.15 and area < 3000:
+            
+            if y + h/2 > 5 and y + h/2 < 80 and area < 3000 and area > 200:
                 centre_x = x + w/2
                 valid.append((contour, centre_x))
         if len(valid) == 0: return None
@@ -257,38 +257,32 @@ class Search():
 
 class Movement():
     def __init__(self):
-        self.offset = 3
         self.kP = 1.2
-        
-        self.state = "forwards"
-        self.t0 = time.perf_counter()
-    
-    def route(self, kP: float, x: int, search_type: str, distance: float, last_distance: float, time_step: float = 0) -> tuple[int]:        
-        Y_INTERCEPT = 0.5
-        MAXIMUM = 100
+            
+    def route(self, kP: float, x: int, search_type: str) -> tuple[int]:
         MAX_VELOCITY = 40
         MIN_VELOCITY = -10
         
-        min_distance = min(distance, last_distance)
-        
-        scalar = (Y_INTERCEPT / MAXIMUM) * min_distance + Y_INTERCEPT if search_type in ["live", "dead"] else 1
         error = evac_camera.width / 2 - x
 
         turn = kP * error
+        scalar = 0.8 * turn if abs(error) < 10 else 1
         
-        v1 = (evac_state.align_speed - turn if search_type in ["live", "dead"] else evac_state.fast_speed - turn) * scalar
-        v2 = (evac_state.align_speed + turn if search_type in ["live", "dead"] else evac_state.fast_speed + turn) * scalar
+        v1 = (evac_state.route_speed - turn * scalar if search_type in ["live", "dead"] else evac_state.fast_speed - turn)
+        v2 = (evac_state.route_speed + turn * scalar if search_type in ["live", "dead"] else evac_state.fast_speed + turn)
         
         v1 = min(MAX_VELOCITY, max(v1, MIN_VELOCITY))
         v2 = min(MAX_VELOCITY, max(v2, MIN_VELOCITY))
         
-        motors.run(v1, v2, time_step)
-        if time_step != 0: motors.run(0, 0)
+        motors.run(v1, v2)
         
-        return v1, v2, min_distance
+        return v1, v2
     
     def wall_follow(self, leaving=False) -> tuple[int]:
-        GAP_DISTANCE = 13
+        KP = 1.2
+        GAP_DISTANCE = 13                               # Threshold to classify for gap
+        OFFSET = 3                                      # Wall following distance
+        MAX_TURN = evac_state.base_speed * 0.5          # Max turning speed
         
         touch_values = touch_sensors.read()
         distance = laser_sensors.read([0])[0]
@@ -298,37 +292,34 @@ class Movement():
             print("EXITED EARLY")
             return -1, -1
         
+        error = distance - OFFSET
+        raw_turn = KP * error
+        
         # Touch
         if sum(touch_values) != 2:
             turn_time = 0.65 if distance < GAP_DISTANCE else 0.8
-            
-            print("TOUCH")
-            
+
             motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.25)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
-        
-        # Ignore gaps
+
+        # Ignore gaps if not leaving
         if not leaving and distance > GAP_DISTANCE:
-            print("GAP")
             motors.run(evac_state.fast_speed, evac_state.fast_speed)
             return evac_state.fast_speed, evac_state.fast_speed
 
-        error = distance - self.offset
-        raw_turn = self.kP * error
-        max_turn = evac_state.base_speed * 0.5
-        
+        # Turn into gaps if leaving, uncap max_turn and increase the raw_turn
         if leaving and distance > GAP_DISTANCE:
             raw_turn = raw_turn * 12
-            max_turn = evac_state.base_speed * 4
-
-        effective_turn = raw_turn * (1 + 2 / max(distance, self.offset))
-        effective_turn = min(max(effective_turn, -max_turn), max_turn)
+            MAX_TURN = evac_state.base_speed * 4
+        
+        # Project an artificial pivot point
+        effective_turn = raw_turn * (1 + 2 / max(distance, OFFSET))
+        effective_turn = min(max(effective_turn, -MAX_TURN), MAX_TURN)
 
         v1 = evac_state.base_speed - effective_turn
         v2 = evac_state.base_speed + effective_turn
 
         motors.run(v1, v2)
-        
         return v1, v2
 
 def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last_x: Optional[int] = None) -> tuple[Optional[int], str]:      
@@ -380,34 +371,33 @@ def locate(search_type: str = "default") -> tuple[int, str]:
         if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str) -> bool:
-    last_distance = 100
-    distances_recorded = []
+    silver_count = black_count = 0
     
     while True:
         # Take measurements
         distance = laser_sensors.read([1])[0]
+        colour_values = colour_sensors.read()
         image = evac_camera.capture()
         display_image = image.copy()
         
         x, search_type = analyse(image, display_image, search_type, last_x)
+        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
         
         # Error handling
-        if distance is None: continue
-        if        x is None: return False
-        
-        distances_recorded.append(distance)
+        if distance is None:                    continue
+        if        x is None:                    return False
+        if silver_count > 5 or black_count > 5:
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
+            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
+            return False
         
         # Exit conditions
-        if   search_type in ["live"]         and distance < evac_state.live_approach_distance:
-            print(distances_recorded)
-            return True
+        if   search_type in ["live"]         and distance < evac_state.live_approach_distance:     return True
         elif search_type in ["dead"]         and distance < evac_state.dead_approach_distance:     return True
         elif search_type in ["red", "green"] and distance < evac_state.triangle_approach_distance: break
         
         # Route with kP        
-        # time_step = 0.15 if search_type == "dead" else 0
-        time_step = 0
-        v1, v2, last_distance = movement.route(0.25, x, search_type, distance, last_distance, time_step)
+        v1, v2 = movement.route(0.25, x, search_type)
         
         last_x = x
         
@@ -573,12 +563,13 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     return silver_count, black_count
 
 def leave():
+    silver_count = black_count = 0
+    
     if evac_state.victims_saved != 3:
         motors.run_until(evac_state.fast_speed, evac_state.fast_speed, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
         motors.run_until(evac_state.fast_speed, evac_state.fast_speed, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
         motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
-        motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)
-    silver_count = black_count = 0
+        motors.run(evac_state.fast_speed, -evac_state.fast_speed, 1)    
     
     while True:
         movement.wall_follow(leaving=True)
@@ -666,4 +657,5 @@ def main() -> None:
 if __name__ == "__main__":
     evac_state.victims_saved = 3
     
-    main()
+    while True:
+        movement.wall_follow()

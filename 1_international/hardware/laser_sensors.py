@@ -4,6 +4,8 @@ from hardware.motors import Motors
 
 class LaserSensors():
     def __init__(self, motors: Motors):
+        self.TIMING_BUDGET = 20
+        
         self.__x_shut_pins = [23, 24, 25]
         self.__tof_sensors = []
         
@@ -11,7 +13,6 @@ class LaserSensors():
         self.__last_values = [0, 0, 0]
         
         self.__motors = motors
-        
         self.__setup()
 
     def __setup(self):
@@ -36,7 +37,7 @@ class LaserSensors():
 
                 sensor = adafruit_vl53l1x.VL53L1X(board.I2C())
                 sensor.distance_mode = 1 
-                sensor.timing_budget = 15
+                sensor.timing_budget = self.TIMING_BUDGET
 
                 self.__tof_sensors.append(sensor)
 

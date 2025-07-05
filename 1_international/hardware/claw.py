@@ -5,7 +5,7 @@ from core.utilities import debug
 class Claw():
     def __init__(self):
         TRIALS = 50
-        self.debug = True
+        self.debug = False
         
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
