@@ -38,12 +38,11 @@ class Search():
         self.debug_triangles = False
 
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 250
+        THRESHOLD = 245
         KERNEL_SIZE = 15
         CROP_SIZE = 100
         
-        working_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY) 
-        
+        working_image = image.copy()
         
         # Ensure image is not None
         if working_image is None or working_image.size == 0: return None
@@ -58,8 +57,7 @@ class Search():
             if x_upper > x_lower: working_image = working_image[:, x_lower : x_upper]
             
         # Filter for spectral highlights
-        # spectral_highlights = cv2.inRange(working_image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
-        spectral_highlights = cv2.inRange(working_image, THRESHOLD, 255)
+        spectral_highlights = cv2.inRange(working_image, (THRESHOLD, THRESHOLD, THRESHOLD), (255, 255, 255))
         spectral_highlights = cv2.dilate (spectral_highlights, np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -259,7 +257,16 @@ class Search():
 
 class Movement():
     def __init__(self):
-        self.kP = 1.2
+        self.debug_path = True
+        
+        self.mode = "wall follow"
+        
+        self.touch_trigger = False
+        self.touch_t0 = time.perf_counter()
+        self.touch_count = 0
+        
+        self.spin_trigger = False
+        self.spin_t0 = time.perf_counter()
             
     def route(self, kP: float, x: int, search_type: str) -> tuple[int]:
         MAX_VELOCITY = 40
@@ -280,49 +287,96 @@ class Movement():
         
         return v1, v2
     
+    def path(self) -> None:
+        if   self.mode == "wall follow": self.wall_follow()
+        elif self.mode == "spin cw":     self.__spin( evac_state.base_speed, -evac_state.base_speed)
+        elif self.mode == "spin ccw":    self.__spin(-evac_state.base_speed,  evac_state.base_speed)
+        
+        return self.mode
+    
+    def __spin(self, v1: int, v2: int):
+        MAX_TURN_TIME = 3
+        
+        if self.debug_path: debug( [f"{self.mode.upper()}", f"Time remaining: {MAX_TURN_TIME - time.perf_counter() + self.spin_t0:.2f}"], [35, 35])
+        
+        # Record start time once
+        if not self.spin_trigger: self.spin_t0 = time.perf_counter()
+        self.spin_trigger = True
+        
+        motors.run(v1, v2)
+        
+        # Reset when timer expires, swap modes
+        if time.perf_counter() - self.spin_t0 > MAX_TURN_TIME:
+            self.spin_trigger = False
+            
+            if self.mode == "spin cw": self.mode = "spin ccw"
+            else:                      self.mode = "wall follow"
+    
     def wall_follow(self, leaving=False) -> tuple[int]:
         KP = 1.2
-        GAP_DISTANCE = 13                               # Threshold to classify for gap
+        GAP_DISTANCE = 15                               # Threshold to classify for gap
         OFFSET = 3                                      # Wall following distance
         MAX_TURN = evac_state.base_speed * 0.5          # Max turning speed
+        MAX_COUNT_TIME = 3
+        PROJECTED_DISTANCE = 2
         
         touch_values = touch_sensors.read()
         distance = laser_sensors.read([0])[0]
         
         # Laser sensors failed
-        if distance is None:
-            print("EXITED EARLY")
-            return -1, -1
+        if distance is None: return -1, -1
         
         error = distance - OFFSET
         raw_turn = KP * error
         
+        if self.debug_path: debug( ["WALL FOLLOW", f"Count? {self.touch_trigger} {self.touch_count}", f"Time remaining: {MAX_COUNT_TIME - time.perf_counter() + self.touch_t0:.2f}"], [35, 35, 35])
+        
         # Touch
         if sum(touch_values) != 2:
-            turn_time = 0.65 if distance < GAP_DISTANCE else 0.8
-
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.25)
-            motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
-
-        # Ignore gaps if not leaving
-        if not leaving and distance > GAP_DISTANCE:
-            motors.run(evac_state.fast_speed, evac_state.fast_speed)
-            return evac_state.fast_speed, evac_state.fast_speed
-
-        # Turn into gaps if leaving, uncap max_turn and increase the raw_turn
-        if leaving and distance > GAP_DISTANCE:
-            raw_turn = raw_turn * 12
-            MAX_TURN = evac_state.base_speed * 4
+            # Record start time once
+            if not self.touch_trigger: self.touch_t0 = time.perf_counter()
+            
+            # Activate countring trigger, and incremenet
+            self.touch_trigger = True
+            self.touch_count += 1
+            
+            if self.touch_count < 3:
+                # Normal wall follow turn
+                turn_time = 0.5 if distance < GAP_DISTANCE else 0.65
+                motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.25)
+                motors.run( evac_state.fast_speed, -evac_state.fast_speed, turn_time)
+                
+            else:
+                # Reset counter, and change mode
+                self.touch_count = 0
+                self.touch_trigger = False
+                self.mode = "spin cw"
+            
+        if time.perf_counter() - self.touch_t0 > MAX_COUNT_TIME:
+            # Stop and reset counting when 3 seconds have pased
+            self.touch_count = 0
+            self.touch_trigger = False
+            
+        # Gap handling
+        if distance > GAP_DISTANCE:
+            # If leaving, turn into by uncapping max_turn and increasing raw_turn
+            if leaving:
+                raw_turn = raw_turn * 12
+                MAX_TURN = evac_state.base_speed * 4
+            
+            # If searching, ignore and move forwards, early exit
+            else:
+                motors.run(evac_state.fast_speed, evac_state.fast_speed)
+                return evac_state.fast_speed, evac_state.fast_speed
         
         # Project an artificial pivot point
-        effective_turn = raw_turn * (1 + 2 / max(distance, OFFSET))
+        effective_turn = raw_turn * (1 + PROJECTED_DISTANCE / max(distance, OFFSET))
         effective_turn = min(max(effective_turn, -MAX_TURN), MAX_TURN)
 
         v1 = evac_state.base_speed - effective_turn
         v2 = evac_state.base_speed + effective_turn
 
         motors.run(v1, v2)
-        return v1, v2
 
 def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last_x: Optional[int] = None) -> tuple[Optional[int], str]:      
     live_enable  = False
@@ -367,7 +421,7 @@ def locate(search_type: str = "default") -> tuple[int, str]:
         x, search_type = analyse(image, display_image, search_type)
         if x is not None: return x, search_type
         
-        v1, v2 = movement.wall_follow()
+        v1, v2 = movement.path()
         
         if evac_state.X11:   show(display_image, name="display", display=True)
         if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}"], [30, 20, 20, 20, 20] )
@@ -384,13 +438,12 @@ def route(last_x: int, search_type: str) -> bool:
         
         x, search_type = analyse(image, display_image, search_type, last_x)
         silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
-        print(f"black_count: {black_count}, silver_count: {silver_count}")
         
         # Error handling
         if distance is None:                    continue
         if        x is None:                    return False
-        if silver_count > 3 or black_count > 3:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
+        if silver_count > 5 or black_count > 5:
+            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.3)
             motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
             return False
         
@@ -623,11 +676,6 @@ def main() -> None:
     # for _ in range(0, 2): image = evac_camera.capture_image()
     # search.ai_dead(image, None)
     led.off()
-    motors.run(evac_state.fast_speed, evac_state.fast_speed, 0.7)
-    laser_values = laser_sensors.read()
-    if laser_values[0] > 15:
-        motors.run(evac_state.fast_speed, evac_state.fast_speed, 0.7)
-        motors.run_until(evac_state.fast_speed, evac_state.fast_speed, laser_sensors.read, 0, "<=", 15, "Moving Till Initial Wall")
 
     while True:
         if evac_state.victims_saved == 3: break
@@ -661,9 +709,11 @@ def main() -> None:
                 continue
             
     leave()
-    
+
+#---------------------------------------------------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     evac_state.victims_saved = 3
     
     while True:
-        movement.wall_follow()
+        movement.path()
