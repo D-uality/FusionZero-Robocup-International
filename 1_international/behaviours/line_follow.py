@@ -13,6 +13,9 @@ start_display()
 class RobotState():
     def __init__(self):
         self.main_loop_count = 0
+
+        self.debug = False
+        self.timings = False
         
         self.count = {
             "uphill": 0,
@@ -45,7 +48,7 @@ class LineFollower():
         self.min_black_area = 1000
         self.min_green_area = 3000
         self.base_black = 50
-        self.light_black = 80
+        self.light_black = 90
         self.lightest_black = 100
         self.silver = 253
 
@@ -62,7 +65,7 @@ class LineFollower():
         self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
         self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = None
         self.last_seen_green = 100
-        self.black_contour = self.black_mask = None
+        self.black_contour = self.black_mask = self.full_black = None
         self.v1, self.v2 = 0, 0
         self.stuck_count = self.last_stuck_time = 0
     
@@ -74,41 +77,49 @@ class LineFollower():
         self.image = camera.capture_array()
         self.display_image = self.image.copy()
         timings['capture'] = time.perf_counter() - t0
+        if robot_state.debug: print("captured image")
 
         t0 = time.perf_counter()
         self.find_black()
         timings['find_black'] = time.perf_counter() - t0
+        if robot_state.debug: print("found black")
 
         if self.black_contour is not None:
             t0 = time.perf_counter()
             self.find_green()
             timings['find_green'] = time.perf_counter() - t0
+            if robot_state.debug: print("found green")
 
             t0 = time.perf_counter()
             self.green_check()
             timings['green_check'] = time.perf_counter() - t0
+            if robot_state.debug: print("checked green")
 
             t0 = time.perf_counter()
             self.calculate_angle(self.black_contour)
             timings['calculate_angle'] = time.perf_counter() - t0
+            if robot_state.debug: print("calculated angle")
 
             if not starting:
                 t0 = time.perf_counter()
                 self.__turn()
                 timings['__turn'] = time.perf_counter() - t0
+                if robot_state.debug: print("turned")
         elif not starting and robot_state.trigger["uphill"] is False and robot_state.trigger["downhill"] is False:
             self.gap_handling()
+            if robot_state.debug: print("handled gap")
 
         if self.display_image is not None and camera.X11:
             t0 = time.perf_counter()
             show(np.uint8(self.display_image), display=camera.X11, name="line")
             timings['display'] = time.perf_counter() - t0
+            if robot_state.debug: print("displayed image")
 
         total_elapsed = time.perf_counter() - overall_start
         fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
 
-        # timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(f"{key}: {value:.4f}s" for key, value in timings.items())
-        # print(timing_line)
+        timing_line = f"[Timing] Total: {total_elapsed:.4f}s | FPS: {fps} | " + " | ".join(f"{key}: {value:.4f}s" for key, value in timings.items())
+        if robot_state.timings: print(timing_line)
 
         return fps, self.turn, self.green_signal
 
@@ -158,7 +169,7 @@ class LineFollower():
             #     self.low_turn = self.check_front()
             #     self.last_check_front = time.perf_counter()
 
-            if robot_state.trigger["downhill"]:
+            if robot_state.last_downhill < 200:
                 speed = 18
                 v1 = speed + self.turn
                 v2 = speed - self.turn
@@ -196,7 +207,7 @@ class LineFollower():
             self.calculate_angle(self.black_contour)
 
             if self.display_image is not None and camera.X11:
-                show(np.uint8(self.display_image), camera.X11, name="line")
+                show(np.uint8(self.display_image), display=camera.X11, name="line")
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
         motors.run(0, 0)
@@ -510,7 +521,7 @@ class LineFollower():
             t1 = time.perf_counter()
             return_val = self._finalize_angle(ref_point, validate)
             timing['finalize'] = time.perf_counter() - t1
-            # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+            if robot_state.timings: print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
             return return_val
         timing['green_case'] = time.perf_counter() - t0
 
@@ -525,7 +536,7 @@ class LineFollower():
                 t1 = time.perf_counter()
                 return_val = self._finalize_angle(ref_point, validate)
                 timing['finalize'] = time.perf_counter() - t1
-                # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+                if robot_state.timings: print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
                 return return_val
 
             if self.green_signal != "Approach" and (left_edge_points or right_edge_points):
@@ -553,8 +564,8 @@ class LineFollower():
         return_val = self._finalize_angle(ref_point, validate) if ref_point is not None else 90
         timing['finalize'] = time.perf_counter() - t0
 
-        # print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
-        # print(self.prev_side)
+        if robot_state.timings: print("[Angle Timing]", " | ".join(f"{k}: {v:.4f}s" for k, v in timing.items()))
+        print(self.prev_side)
         return return_val
 
     def _finalize_angle(self, ref_point, validate):
@@ -709,6 +720,8 @@ class LineFollower():
         black_mask = cv2.erode(black_mask, kernel, iterations=2)
         black_mask = cv2.dilate(black_mask, kernel, iterations=5)
 
+        self.full_black = black_mask.copy()
+
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
         contours = [cnt for cnt in contours if any(p[0][1] > 50 for p in cnt)]
@@ -762,10 +775,16 @@ class LineFollower():
                         cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
     
     def black_infront(self):
-        if self.black_contour is not None:
-            if any(p[0][1] < camera.LINE_HEIGHT // 4 for p in self.black_contour):
-                return True
+        if self.full_black is not None:
+            top_check = self.full_black[:camera.LINE_HEIGHT // 4, :]
+            if cv2.countNonZero(top_check) > 0: return True
 
+            left_check = self.full_black[:, :30]
+            if cv2.countNonZero(left_check) > 0: return True
+
+            right_check = self.full_black[:, camera.LINE_WIDTH - 30:]
+            if cv2.countNonZero(right_check) > 0: return True
+            
         return False
 
     # RED
@@ -794,13 +813,17 @@ def main(start_time) -> None:
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
     touch_check(robot_state, touch_values)
+    if robot_state.debug: print("touch checked")
     ramp_check(robot_state, gyro_values)
+    if robot_state.debug: print("ramp checked")
     update_triggers(robot_state)
+    if robot_state.debug: print("updated triggers")
 
-    if line_follow.black_infront() is False: find_silver(robot_state, silver_value)
+    if not line_follow.black_infront(): find_silver(robot_state, silver_value)
     line_follow.find_red()
+    if robot_state.debug: print("found silver and red")
 
-    if robot_state.count["silver"] >= 2:
+    if robot_state.count["silver"] >= 1:
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.run(0, 0, 1)
@@ -809,9 +832,10 @@ def main(start_time) -> None:
         robot_state.trigger["evacuation_zone"] = True
         start_time = time.perf_counter()
         led.on()
-        print(start_time)
+
     if time.perf_counter() - start_time < 3:
         while time.perf_counter() - start_time < 3:
+            motors.run(0, 0)
             line_follow.follow(True)
     elif robot_state.count["red"] >= 5:
         print("Red Found!")
@@ -821,6 +845,7 @@ def main(start_time) -> None:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
     else:
+        if robot_state.debug: print("beginning line follow")
         fps, error, green_signal = line_follow.follow()
 
         active_triggers = ["LINE"]
@@ -836,7 +861,7 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     print(silver_value)
-    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 200 else 0
+    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 110 else 0
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:

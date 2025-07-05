@@ -1,4 +1,4 @@
-from core.shared_imports import cv2, np, time, socket, getpass
+from core.shared_imports import cv2, np, time, socket, getpass, subprocess
 from core.utilities import debug
 
 class EvacuationCamera():
@@ -10,8 +10,8 @@ class EvacuationCamera():
         self.width  = 320 * 2
         self.height = 240 * 2
         
-        device = "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._USB_2.0_Camera_SN0001-video-index0"
-        self.camera = cv2.VideoCapture(device, cv2.CAP_V4L2)
+        self.device = "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._USB_2.0_Camera_SN0001-video-index0"
+        self.camera = cv2.VideoCapture(self.device, cv2.CAP_V4L2)
         
         if not self.camera.isOpened():
             print("Failed to open camera!")
@@ -22,8 +22,20 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FPS, 30)
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        self.set_manual_exposure(130)
+
+        print(self.camera.get(cv2.CAP_PROP_EXPOSURE))
         
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
+    
+    def set_manual_exposure(self, value):
+        subprocess.run([
+            "v4l2-ctl", "-d", self.device,
+            "-c", "auto_exposure=1",              # manual mode
+            "-c", f"exposure_time_absolute={value}"
+        ], check=True)
+
 
     def capture(self) -> np.ndarray:
         image = np.zeros((240, 640, 3), dtype=np.uint8)

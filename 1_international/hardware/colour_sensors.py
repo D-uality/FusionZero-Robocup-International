@@ -71,4 +71,6 @@ class ColourSensors():
             file.write(",".join(map(str, self.__min_values)) + "\n")
             file.write(",".join(map(str, self.__max_values)) + "\n")
         
+        print("Calibrated Colour Values Saved!")
+        
         listener.mode.value = 0

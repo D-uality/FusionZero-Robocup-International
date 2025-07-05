@@ -7,7 +7,7 @@ import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
 from hardware.robot import *
 
-record = False
+record = True
 
 start_display()
 
@@ -50,6 +50,8 @@ def main() -> None:
             
             elif listener.mode.value == 4:
                 colour_sensors.calibrate()
+            elif listener.mode.value == 5:
+                silver_sensor.calibrate()
 
             elif listener.mode.value == 9: listener.exit_event.set()
 
@@ -71,6 +73,7 @@ def main() -> None:
         print("Claw Stopped")
         
         time.sleep(0.1)
+        print("Creating Video...")
         if record: save_vfr_video(get_saved_frames())
 
 if __name__ == "__main__": main()

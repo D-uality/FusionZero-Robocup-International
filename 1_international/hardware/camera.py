@@ -8,6 +8,7 @@ class Camera():
         # Camera settings   
         self.X11 = True
         self.FLIP = False
+        self.debug = True
         self.LINE_WIDTH = 320
         self.LINE_HEIGHT = 200
 
@@ -31,12 +32,12 @@ class Camera():
             
         top_left =     (60,                    0)
         top_right =    (self.LINE_WIDTH - 55,  0)
-        bottom_left =  (60,                     int(self.LINE_HEIGHT / 2.5) - 1)
-        bottom_right = (self.LINE_WIDTH - 55,      int(self.LINE_HEIGHT / 2.35) - 1)
+        bottom_left =  (60,                    int(self.LINE_HEIGHT / 2.8) - 1)
+        bottom_right = (self.LINE_WIDTH - 55,  int(self.LINE_HEIGHT / 2.8) - 1)
         self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
-        top_left =     (60,                    int(self.LINE_HEIGHT / 2.5))
-        top_right =    (self.LINE_WIDTH - 55,  int(self.LINE_HEIGHT / 2.35))
+        top_left =     (60,                    int(self.LINE_HEIGHT / 2.8))
+        top_right =    (self.LINE_WIDTH - 55,  int(self.LINE_HEIGHT / 2.8))
         bottom_left =  (40,                    self.LINE_HEIGHT - 20)
         bottom_right = (self.LINE_WIDTH-50,    self.LINE_HEIGHT - 15)
         self.lightest_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
@@ -66,9 +67,9 @@ class Camera():
         matrix            = cv2.getPerspectiveTransform(src_points, dst_points)
         transformed_image = cv2.warpPerspective(image, matrix, (self.LINE_WIDTH, self.LINE_HEIGHT))
 
-        # if self.X11:
-        #     cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=2)
-        #     cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=2)
+        if self.X11 and self.debug:
+            cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=2)
 
         return transformed_image
     
