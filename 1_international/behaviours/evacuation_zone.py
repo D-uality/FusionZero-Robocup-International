@@ -13,6 +13,7 @@ class EvacuationState():
     def __init__(self):
         self.X11 = True
         self.debug = True
+        self.debug_stuck = True
         
         self.victims_saved = 0
         self.base_speed  = 35
@@ -32,7 +33,6 @@ class EvacuationState():
         
         self.gap_count = 3
 
-        
 class Search():
     def __init__(self):
         self.debug_live      = False
@@ -259,7 +259,7 @@ class Search():
 
 class Movement():
     def __init__(self):
-        self.debug_path = True
+        self.debug_path = False
         
         self.mode = "wall follow"
         
@@ -270,7 +270,7 @@ class Movement():
         self.spin_trigger = False
         self.spin_t0 = time.perf_counter()
             
-    def route(self, kP: float, x: int, search_type: str) -> tuple[int]:
+    def route(self, kP: float, x: int, search_type: str):
         MAX_VELOCITY = 40
         MIN_VELOCITY = -10
         
@@ -287,9 +287,7 @@ class Movement():
         
         motors.run(v1, v2)
         
-        return v1, v2
-    
-    def path(self) -> None:
+    def path(self) -> str:
         if   self.mode == "wall follow": self.wall_follow()
         elif self.mode == "spin cw":     self.__spin( evac_state.base_speed, -evac_state.base_speed)
         elif self.mode == "spin ccw":    self.__spin(-evac_state.base_speed,  evac_state.base_speed)
@@ -297,7 +295,7 @@ class Movement():
         return self.mode
     
     def __spin(self, v1: int, v2: int):
-        MAX_TURN_TIME = 3
+        MAX_TURN_TIME = 2.7
         
         if self.debug_path: debug( [f"{self.mode.upper()}", f"Time remaining: {MAX_TURN_TIME - time.perf_counter() + self.spin_t0:.2f}"], [35, 35])
         
@@ -314,7 +312,7 @@ class Movement():
             if self.mode == "spin cw": self.mode = "spin ccw"
             else:                      self.mode = "wall follow"
     
-    def wall_follow(self, leaving=False) -> tuple[int]:
+    def wall_follow(self, leaving=False) -> None:
         KP = 1.2
         GAP_DISTANCE = 15                               # Threshold to classify for gap
         OFFSET = 3                                      # Wall following distance
@@ -326,7 +324,7 @@ class Movement():
         distance = laser_sensors.read([0])[0]
         
         # Laser sensors failed
-        if distance is None: return -1, -1
+        if distance is None: return None
         
         error = distance - OFFSET
         raw_turn = KP * error
@@ -369,7 +367,7 @@ class Movement():
             # If searching, ignore and move forwards, early exit
             else:
                 motors.run(evac_state.fast_speed, evac_state.fast_speed)
-                return evac_state.fast_speed, evac_state.fast_speed
+                return None
         
         # Project an artificial pivot point
         effective_turn = raw_turn * (1 + PROJECTED_DISTANCE / max(distance, OFFSET))
@@ -416,57 +414,68 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
 
 def locate(black_count: int, silver_count: int, search_type: str = "default") -> tuple[int, str, int, int]:
     while True:
+        # Read sensor stack
         colour_values = colour_sensors.read()
         image = evac_camera.capture()
         display_image = image.copy()
+        if evac_state.debug_stuck: print("locate - reading sensors")
         
         # Validate gaps
-        black_count, silver_count = validate_exit(colour_values, black_count, silver_count)
-        if black_count > evac_state.gap_count or silver_count > evac_state.gap_count:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
+        black_count, silver_count = validate_gap(colour_values, black_count, silver_count)
+        if evac_state.debug_stuck: print("locate - validating gap")
+        if black_count >= evac_state.gap_count or silver_count >= evac_state.gap_count:
+            print(black_count, silver_count)
+            gap_to_wall("black" if black_count > silver_count else "silver")
+            black_count = silver_count = 0
         
         # Exit if target found
-        x, search_type = analyse(image, display_image, search_type)
-        if x is not None: return x, search_type, black_count, silver_count
+        # x, search_type = analyse(image, display_image, search_type)
+        # if evac_state.debug_stuck: print("locate - analysing")
+        # if x is not None: return x, search_type, black_count, silver_count
         
-        v1, v2 = movement.path()
+        path_mode = movement.path()
+        if evac_state.debug_stuck: print("locate - pathing")
         
         if evac_state.X11:   show(display_image, name="display", display=True)
-        if evac_state.debug: debug( [f"LOCATING", f"{v1:.2f} {v2:.2f}", f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}", f"{black_count, silver_count}"], [30, 20, 20, 20, 20, 20] )
+        if evac_state.debug: debug( [f"LOCATING", path_mode, f"search: {search_type}", f"victims: {evac_state.victims_saved}", f"claw: {claw.spaces}", f"{black_count} {silver_count}"], [30, 20, 20, 20, 20, 20] )
 
 def route(last_x: int, search_type: str, black_count: int, silver_count: int) -> bool:
     while True:
-        # Take measurements
+        # Read sensor stack
         distance = laser_sensors.read([1])[0]
         colour_values = colour_sensors.read()
         image = evac_camera.capture()
         display_image = image.copy()
+        if evac_state.debug_stuck: print("route - reading sensors")
         
         x, search_type = analyse(image, display_image, search_type, last_x)
-        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
+        if evac_state.debug_stuck: print("route - analysing")
         
         # Error handling
         if distance is None:                    continue
         if        x is None:                    return False
+        if evac_state.debug_stuck: print("route - passed errors")
         
-        if black_count > evac_state.gap_count or silver_count > evac_state.gap_count:
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.5)
-            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
+        silver_count, black_count = validate_gap(colour_values, black_count, silver_count)
+        if evac_state.debug_stuck: print("route - validating gap")
+        if black_count >= evac_state.gap_count or silver_count >= evac_state.gap_count:
+            gap_to_wall("black" if black_count > silver_count else "silver")
             return False
         
         # Exit conditions
         if   search_type in ["live"]         and distance < evac_state.live_approach_distance:     return True
         elif search_type in ["dead"]         and distance < evac_state.dead_approach_distance:     return True
         elif search_type in ["red", "green"] and distance < evac_state.triangle_approach_distance: break
+        if evac_state.debug_stuck: print("route - passed exit conditions")
         
         # Route with kP        
-        v1, v2 = movement.route(0.25, x, search_type)
+        movement.route(0.3, x, search_type)
+        if evac_state.debug_stuck: print("route - routing")
         
         last_x = x
         
         if evac_state.X11:   show(display_image, "display")
-        if evac_state.debug: debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"{v1:.2f} {v2:.2f}", f"{black_count, silver_count}"], [30, 20, 20, 20, 20] )
+        if evac_state.debug: debug( ["ROUTING", f"{search_type}", f"Distance: {distance:.2f}", f"x: {x} {last_x}", f"Counts: {black_count} {silver_count}"], [30, 20, 20, 20, 20, 20] )
 
     while True:
         if sum(touch_sensors.read()) == 0: break
@@ -543,10 +552,10 @@ def dump(search_type: str) -> None:
     
     claw.read()
 
-def align_line(align_type: str) -> None:
+def align_line(align_type: str, align_count: int) -> None:
     if align_type == "silver":   
 
-        motors.run( evac_state.base_speed,       evac_state.base_speed,   0.7)
+        motors.run( evac_state.base_speed * 0.7,  evac_state.base_speed * 0.7, 1)
         motors.run(-evac_state.base_speed * 0.3, -evac_state.base_speed * 0.3)
         left_silver, right_silver = False, False
         
@@ -570,7 +579,7 @@ def align_line(align_type: str) -> None:
             motors.run_until(7, -evac_state.base_speed * 0.5, colour_sensors.read, 4, ">=", evac_state.silver_min, "Right")
         
         # Repeat finding silver
-        for i in range(3):
+        for i in range(align_count):
             forwards_speed = evac_state.base_speed * 0.5
             other_speed = 8
             
@@ -587,23 +596,25 @@ def align_line(align_type: str) -> None:
             motors.run_until(    other_speed,  forwards_speed, colour_sensors.read, 4, "<=", evac_state.silver_min, "RIGHT WHITE")
                     
     elif align_type == "black":
-        motors.run(-evac_state.base_speed*0.7, -evac_state.base_speed*0.7, 0.7)
-        motors.run(evac_state.base_speed * 0.5, evac_state.base_speed * 0.5)
+        motors.run(-evac_state.base_speed * 0.7, -evac_state.base_speed * 0.7, 1)
+        motors.run( evac_state.base_speed * 0.3,  evac_state.base_speed * 0.3)
         left_black, right_black = None, None
+        
         while left_black is None and right_black is None:
             colour_values = colour_sensors.read()
 
             if colour_values[0] < 40 or colour_values[1] < 40:
                 left_black = True
                 print("Found left black")
+                
             elif colour_values[3] < 40 or colour_values[4] < 40:
                 right_black = True
                 print("Found right black")
 
-        if(left_black): 
+        if (left_black): 
             motors.run_until(-5, evac_state.base_speed * 0.5, colour_sensors.read, 4, "<=", 30, "Right")
             
-        for i in range(3):
+        for i in range(align_count):
             motors.run(0, 0, 0.2)
             motors.run_until(-evac_state.base_speed * 0.5, -5, colour_sensors.read, 0, ">=", 60, "Left")
             motors.run(0, 0, 0.2)
@@ -616,7 +627,7 @@ def align_line(align_type: str) -> None:
         for i in range(0, int(evac_state.base_speed * 0.7)):
             motors.run(-evac_state.base_speed*0.7+i, -evac_state.base_speed*0.7+i, 0.03)
 
-def validate_exit(colour_values: list[int], black_count: int, silver_count: int) -> bool:
+def validate_gap(colour_values: list[int], black_count: int, silver_count: int) -> bool:
     valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
     silver_values = [1 if value >= evac_state.silver_min else 0 for value in valid_values]
     black_values  = [1 if value <=  evac_state.black_max else 0 for value in valid_values]
@@ -624,7 +635,57 @@ def validate_exit(colour_values: list[int], black_count: int, silver_count: int)
     silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else 0
     black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
     
-    return silver_count, black_count
+    return black_count, silver_count
+
+def gap_to_wall(gap_type: str) -> None:
+    MIN_WALL_DISTANCE = 13
+    print(gap_type)
+    
+    # motors.run(-evac_state.base_speed, -evac_state.base_speed, 0.8)
+    align_line(gap_type, 1)
+    
+    # 90 degree turn
+    motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
+    motors.run( evac_state.base_speed, -evac_state.base_speed, 1.6)
+    
+    # Race condition: move till touch, side_laser, gap again    
+    race_condition = ""
+    black_count = silver_count = 0
+    
+    while True:
+        distance =      laser_sensors.read([0])[0]
+        colour_values = colour_sensors.read()
+        touch_values  = touch_sensors.read()
+        
+        black_count, silver_count = validate_gap(colour_values, black_count, silver_count)
+        print(colour_values)
+        print(black_count, silver_count)
+        
+        if distance < MIN_WALL_DISTANCE:
+            race_condition = "laser"
+            break
+        
+        elif black_count > evac_state.gap_count or silver_count > evac_state.gap_count:
+            race_condition = "colour"
+            break
+        
+        elif sum(touch_values) != 2:
+            race_condition = "touch"
+            break
+        
+        motors.run(evac_state.base_speed, evac_state.base_speed)
+    
+    print(f"race_condition: {race_condition}")
+    if race_condition == "laser":
+        return None
+    
+    elif race_condition == "colour":
+        gap_to_wall("black" if gap_type == "silver" else "silver")
+        
+    else:
+        motors.run( evac_state.fast_speed,  evac_state.fast_speed, 0.5)
+        motors.run(-evac_state.base_speed, -evac_state.base_speed, 1)
+        motors.run( evac_state.base_speed, -evac_state.base_speed, 1.6)
 
 def leave():
     silver_count = black_count = 0
@@ -638,7 +699,7 @@ def leave():
     while True:
         movement.wall_follow(leaving=True)
         colour_values = colour_sensors.read()
-        silver_count, black_count = validate_exit(colour_values, black_count, silver_count)
+        silver_count, black_count = validate_gap(colour_values, black_count, silver_count)
 
         if black_count >= 5:
             debug(["EXITING", "FOUND EXIT!"], [24, 30])
