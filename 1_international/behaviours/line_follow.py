@@ -43,7 +43,7 @@ class LineFollower():
     def __init__(self):
         self.speed = 30
         self.turn_multi = 1.5
-        self.stuck_threshold = 20
+        self.stuck_threshold = 30
 
         self.min_black_area = 1000
         self.min_green_area = 3000
@@ -223,7 +223,8 @@ class LineFollower():
             self.prev_gray = self.gray_image.copy()
             return False
 
-        if float(np.mean(cv2.absdiff(self.gray_image, self.prev_gray))) < 5 and 80 >= self.angle >= 100: self.stuck_count += 1
+        similarity = float(np.mean(cv2.absdiff(self.gray_image, self.prev_gray)))
+        if float(np.mean(cv2.absdiff(self.gray_image, self.prev_gray))) < 5 and (self.angle < 80 or self.angle > 100): self.stuck_count += 1
         else:
             if self.stuck_count > self.stuck_threshold: self.stuck_count -= 1  # slow decay when stuck
             else: self.stuck_count = 0  # reset before threshold
@@ -236,9 +237,10 @@ class LineFollower():
             if self.v2 > 0: self.v2 += 25
             else:           self.v2 -= 25
 
-            print("Stuck Detected!")
+            print(f"Similarity: {similarity}, Stuck Detected!")
             return True
 
+        print(f"Similarity: {similarity}")
         return False
 
     # GREEN
@@ -485,7 +487,7 @@ class LineFollower():
                     cv2.circle(self.display_image, top_point, 5, (0, 255, 255), 2)
                     cv2.circle(self.display_image, bottom_point, 5, (255, 255, 0), 2)
 
-                    show(np.uint8(self.display_image), camera.X11, name="line")
+                    show(np.uint8(self.display_image), display=camera.X11, name="line")
 
     def __move_and_check_black(self, duration: float) -> bool:
         motors.run(25, 25, duration)
@@ -670,7 +672,7 @@ class LineFollower():
         black_mask = cv2.inRange(gray_image, 0, self.light_black)
 
         if black_mask is not None and camera.X11:
-            show(np.uint8(black_mask), camera.X11, name="front")
+            show(np.uint8(black_mask), display=camera.X11, name="front")
         
         return cv2.countNonZero(black_mask) > 0  
 
@@ -775,14 +777,14 @@ class LineFollower():
                         cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
     
     def black_infront(self):
-        if self.full_black is not None:
-            top_check = self.full_black[:camera.LINE_HEIGHT // 4, :]
+        if self.black_mask is not None:
+            top_check = self.black_mask[:camera.LINE_HEIGHT // 4, :]
             if cv2.countNonZero(top_check) > 0: return True
 
-            left_check = self.full_black[:, :30]
+            left_check = self.black_mask[:, :30]
             if cv2.countNonZero(left_check) > 0: return True
 
-            right_check = self.full_black[:, camera.LINE_WIDTH - 30:]
+            right_check = self.black_mask[:, camera.LINE_WIDTH - 30:]
             if cv2.countNonZero(right_check) > 0: return True
             
         return False
@@ -794,8 +796,9 @@ class LineFollower():
             mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
 
-            if cv2.countNonZero(mask) > 0:
+            if cv2.countNonZero(mask) > 500:
                 robot_state.count["red"] += 1
+                print(f"red: {cv2.countNonZero(mask)}")
                 return
         
         robot_state.count["red"] = 0
@@ -861,7 +864,7 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     print(silver_value)
-    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 110 else 0
+    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 120 else 0
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
