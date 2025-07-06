@@ -6,17 +6,17 @@ class SilverSensor():
     def __init__(self):
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
+        
         username = getpass.getuser()
         hostname = socket.gethostname()
         self.user_at_host = f"{username}@{hostname}"
         
         if self.user_at_host == "frederick@raspberrypi":
             self.sensor_pin = 5
+            self.__CALIBRATION_FILE = r"/home/frederick/FusionZero-Robocup-International/1_international/hardware/calibration_values/frederick_silver_values.txt"
         else:
-           self.sensor_pin = 5
-
-        self.__CURRENT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
-        self.__CALIBRATION_FILE = os.path.join(self.__CURRENT_DIRECTORY, "silver_values.txt")
+            self.sensor_pin = 5
+            self.__CALIBRATION_FILE = r"/home/aidan/FusionZero-Robocup-International/1_international/hardware/calibration_values/aidan_silver_values.txt"
         
         if os.path.exists(self.__CALIBRATION_FILE):
             with open(self.__CALIBRATION_FILE, "r") as file:

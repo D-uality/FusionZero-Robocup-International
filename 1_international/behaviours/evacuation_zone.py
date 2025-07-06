@@ -786,3 +786,16 @@ if __name__ == "__main__":
     # evac_state.victims_saved = 3
     
     main()
+
+# black_count = silver_count = 0
+
+# while True:
+#     colour_values = colour_sensors.read()
+    
+#     black_count, silver_count = validate_gap(colour_values, black_count, silver_count)
+    
+#     if black_count > evac_state.gap_count:
+#         return "black"
+    
+#     elif silver_count > evac_state.gap_count:
+#         return "silver"

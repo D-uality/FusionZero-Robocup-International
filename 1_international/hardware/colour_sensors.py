@@ -6,20 +6,18 @@ class ColourSensors():
     def __init__(self):
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
-
-        self.__CURRENT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
-        self.__CALIBRATION_FILE = os.path.join(self.__CURRENT_DIRECTORY, "calibration_values.txt")
         
         username = getpass.getuser()
         hostname = socket.gethostname()
         self.user_at_host = f"{username}@{hostname}"
         
         if self.user_at_host == "frederick@raspberrypi":
-            self.__CHANNELS = [2, 4, 5, 6, 7]
+            self.__CHANNELS = [7, 6, 5, 4, 2]
+            self.__CALIBRATION_FILE = r"/home/frederick/FusionZero-Robocup-International/1_international/hardware/calibration_values/frederick_calibration_values.txt"
         else:
             self.__CHANNELS = [0, 1, 2, 3, 4]
+            self.__CALIBRATION_FILE = r"/home/aidan/FusionZero-Robocup-International/1_international/hardware/calibration_values/aidan_calibration_values.txt"
             
-        
         if os.path.exists(self.__CALIBRATION_FILE):
             with open(self.__CALIBRATION_FILE, "r") as file:
                 lines = file.readlines()
