@@ -5,6 +5,7 @@ from core.utilities import *
 
 import behaviours.line_follow as line_follow
 import behaviours.evacuation_zone as evacuation_zone
+import behaviours.optimized_evacuation as optimized_evacuation_zone
 from hardware.robot import *
 
 record = True
@@ -32,7 +33,8 @@ def main() -> None:
                 line_follow.main(start_time)
                 
             elif listener.mode.value == 2:
-                evacuation_zone.main()
+                optimized_evacuation_zone.main()
+                # evacuation_zone.main()
             
             elif listener.mode.value == 3:
                 led.on()

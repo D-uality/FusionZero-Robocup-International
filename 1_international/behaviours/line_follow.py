@@ -193,7 +193,7 @@ class LineFollower():
             if robot_state.trigger["tilt_right"] and v1 < 0: v1 = v1 // 2
 
             self.v1, self.v2 = v1, v2
-            self.stuck_check()
+            # self.stuck_check()
             motors.run(self.v1, self.v2)
     
     def run_till_camera(self, v1, v2, threshold):
@@ -822,7 +822,7 @@ def main(start_time) -> None:
     update_triggers(robot_state)
     if robot_state.debug: print("updated triggers")
 
-    if not line_follow.black_infront(): find_silver(robot_state, silver_value)
+    find_silver(robot_state, silver_value)
     line_follow.find_red()
     if robot_state.debug: print("found silver and red")
 
@@ -863,8 +863,9 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
+    global line_follow
     print(silver_value)
-    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 120 else 0
+    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 120 and not line_follow.black_infront() else 0
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
