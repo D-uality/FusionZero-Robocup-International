@@ -31,9 +31,10 @@ class EvacuationState:
         self.ROUTE_APPROACH_DISTANCE = 7
         
         # Gap handling
+        self.SILVER_MIN       = 120
+        self.BLACK_MAX        = 30
         self.GAP_BLACK_COUNT  = 5
         self.GAP_SILVER_COUNT = 5
-        
 
 class Search():
     def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera):
@@ -41,7 +42,7 @@ class Search():
         self.DISPLAY: bool = evac_state.DISPLAY
         
         self.DEBUG_LIVE: bool       = False
-        self.DEBUG_DEAD: bool       = False
+        self.DEBUG_DEAD: bool       = True
         self.DEBUG_TRIANGLES: bool  = False
         
         self.TIMING_LIVE: bool      = False
@@ -57,14 +58,20 @@ class Search():
         self.LIVE_DILATE_KERNAL = np.ones((15, 15), np.uint8)
         
         # Dead settings
-        self.DEAD_THRESHOLD_BLACK = 100
+        self.DEAD_THRESHOLD_BLACK = 25
         self.DEAD_THRESHOLD_SILVER = 160
-        self.DEAD_DILATE_WHITE_KERNAL = np.ones((5, 5), np.uint8)
-        self.DEAD_DILATE_GREEN_KERNAL = np.ones((5, 5), np.uint8)
-        self.DEAD_DILATE_MAXIMA_KERNAL = np.ones((11, 11), np.uint8)
-        self.DEAD_COLOUR_VARIANCE_THRESHOLD = 15
-        self.DEAD_MIN_RADIUS = 20
-        self.DEAD_MAX_RADIUS = 230
+        self.DEAD_DILATE_WHITE_KERNAL = np.ones((3, 3), np.uint8)
+        self.DEAD_DILATE_GREEN_KERNAL = np.ones((3, 3), np.uint8)
+        self.DEAD_DILATE_MAXIMA_KERNAL = np.ones((7, 7), np.uint8)
+        self.DEAD_MORPH_KERNAL = (7, 7)
+        self.DEAD_COLOUR_VARIANCE_THRESHOLD = 25
+        self.DEAD_MIN_AREA = 200
+        self.DEAD_MAX_AREA = 50000
+        self.DEAD_MIN_RADIUS = 5
+        self.DEAD_MAX_RADIUS = 110
+        self.DEAD_TRANSFORM_SPLITTING_THRESHOLD = 8000
+        self.CIRCULARITY_THRESHOLD = 0.6
+        self.FILL_RATIO_THRESHOLD = 0.5
         
         # Triangle settings
         self.TRIANGLE_DILATE_KERNAL = np.ones((5, 5), np.uint8)
@@ -85,12 +92,10 @@ class Search():
             
         if self.TIMING_LIVE: crop_time = time.perf_counter()
         
-        working_image = cv2.cvtColor(working_image, cv2.COLOR_BGR2GRAY)
-        working_image = cv2.dilate(working_image, self.LIVE_DILATE_KERNAL, iterations=1)
         if self.TIMING_LIVE: preprocess_time = time.perf_counter()
         
         # Filter for spectral highlights
-        spectral_highlights = cv2.inRange(working_image, self.LIVE_THRESHOLD, 255)
+        spectral_highlights = cv2.inRange(working_image, (self.LIVE_THRESHOLD + 5, self.LIVE_THRESHOLD, self.LIVE_THRESHOLD), (255, 255, 255))
         if self.TIMING_LIVE: threshold_time = time.perf_counter()
         
         # Connected components analysis
@@ -190,6 +195,7 @@ class Search():
             x_lower = max(0, last_x - self.CROP_SIZE)
             x_upper = min(image.shape[1], last_x + self.CROP_SIZE)
             working_image = image[:, x_lower:x_upper] if x_upper > x_lower else image
+            
         else:
             working_image = image
             x_lower = 0
@@ -217,8 +223,7 @@ class Search():
         working_image[white_mask > 0] = [160, 160, 160]
         grey_image[white_mask > 0] = 160
         
-        if self.TIMING_DEAD:
-            preprocess_time = time.perf_counter()
+        if self.TIMING_DEAD: preprocess_time = time.perf_counter()
         
         # Step 1: Create initial dark mask but with color rejection
         # Only keep pixels that are dark AND neutral (not colored shadows)
@@ -233,9 +238,13 @@ class Search():
         candidate_mask = dark_mask & neutral_mask
         candidate_mask = candidate_mask.astype(np.uint8) * 255
         
+        if self.DEBUG_DEAD: show(candidate_mask, name="candidate_mask", display=True)
+        
         # Step 2: Morphological opening to remove thin shadows/connections
-        opening_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        opening_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.DEAD_MORPH_KERNAL)
         opened_mask = cv2.morphologyEx(candidate_mask, cv2.MORPH_OPEN, opening_kernel)
+        
+        if self.DEBUG_DEAD: show(opened_mask, "opened_mask")
         
         # Step 3: Connected components analysis
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(opened_mask, connectivity=8)
@@ -253,16 +262,16 @@ class Search():
         
         for i in range(1, num_labels):  # Skip background (label 0)
             area = stats[i, cv2.CC_STAT_AREA]
+            if self.DEBUG_DEAD: print(f"\tArea: {area}")
             
-            # Basic size filtering
-            if area < 500 or area > 50000:
-                continue
+            # Reject based on area
+            if area < self.DEAD_MIN_AREA or area > self.DEAD_MAX_AREA: continue
                 
             # Get component mask
             component_mask = (labels == i).astype(np.uint8) * 255
             
             # For large components, try distance transform splitting
-            if area > 8000:
+            if area > self.DEAD_TRANSFORM_SPLITTING_THRESHOLD:
                 # Distance transform to find peaks
                 dist_transform = cv2.distanceTransform(component_mask, cv2.DIST_L2, 5)
                 
@@ -292,13 +301,14 @@ class Search():
                 if self.DEAD_MIN_RADIUS <= est_radius <= self.DEAD_MAX_RADIUS:
                     valid_candidates.append((cx, cy, est_radius, area))
         
+        if self.DEBUG_DEAD: print(f"Valid candidates: {valid_candidates}")
+        
         if not valid_candidates:
             if self.TIMING_DEAD:
                 print(f"dead() | Preprocess: {(preprocess_time-start_time)*1000:.1f}ms | Detection: {(detection_time-preprocess_time)*1000:.1f}ms | Total: {(detection_time-start_time)*1000:.1f}ms | Status: no_valid")
             return None
         
-        if self.TIMING_DEAD:
-            validation_time = time.perf_counter()
+        if self.TIMING_DEAD: validation_time = time.perf_counter()
         
         # Step 5: Circularity and fill-ratio validation
         final_candidates = []
@@ -329,7 +339,8 @@ class Search():
                 circularity = 0
             
             # Accept if circular enough and well-filled
-            if circularity > 0.5 and fill_ratio > 0.6 and cy > 10:
+            if self.DEBUG_DEAD: print(f"\tCircularity: {circularity:.2f} | Fill Ratio: {fill_ratio:.2f}")
+            if circularity > self.CIRCULARITY_THRESHOLD and fill_ratio > self.FILL_RATIO_THRESHOLD and cy > 10:
                 final_candidates.append((cx, cy, radius, fill_ratio * circularity))
         
         if not final_candidates:
@@ -354,12 +365,6 @@ class Search():
         if self.DISPLAY:
             cv2.circle(display, (centre_x, y), r, (0, 255, 0), 2)
             cv2.circle(display, (centre_x, y), 1, (0, 255, 0), 2)
-            
-            if self.DEBUG_DEAD:
-                cv2.circle(working_image, (x, y), r, (0, 255, 0), 2)
-                cv2.circle(working_image, (x, y), 1, (0, 255, 0), 2)
-                show(working_image, "dead_result")
-                show(opened_mask, "dead_mask")
         
         if self.TIMING_DEAD:
             print(f"dead() | Preprocess: {(preprocess_time-start_time)*1000:.1f}ms | Detection: {(detection_time-preprocess_time)*1000:.1f}ms | Validation: {(validation_time-detection_time)*1000:.1f}ms | Selection: {(selection_time-validation_time)*1000:.1f}ms | Total: {(selection_time-start_time)*1000:.1f}ms | Status: success")
@@ -469,7 +474,11 @@ class Movement():
         v2 = min(self.ROUTE_MAX_VELOCITY, max(v2, self.ROUTE_MIN_VELOCITY))
         
         motors.run(v1, v2)
-        
+
+##########################################################################################################################################################
+##########################################################################################################################################################
+##########################################################################################################################################################
+
 def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last_x: Optional[int] = None) -> tuple[Optional[int], str]:      
     live_enable  = False
     dead_enable  = False
@@ -481,10 +490,10 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     dead_count  = claw.spaces.count("dead")
     empty_count = 2 - live_count - dead_count
         
-    if evac_state.victims_saved + live_count < 2 and empty_count != 0: live_enable  = True
+    if evac_state.victim_count + live_count < 2 and empty_count != 0: live_enable  = True
     if dead_count < 1 and empty_count != 0:                            dead_enable  = True
     if live_count > 0:                                                 green_enable = True
-    if dead_count == 1 and evac_state.victims_saved == 2:              red_enable   = True
+    if dead_count == 1 and evac_state.victim_count == 2:              red_enable   = True
             
     if search_type in ["live", "green", "default"] and live_enable:
         live_x = search.live(image, display_image, last_x)
@@ -534,7 +543,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
             elif gap_found:       motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.2)
             elif out_of_bounds:   motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)
             
-            motors.run9(0, 0, 0.1)
+            motors.run(0, 0, 0.1)
             motors.run(evac_state.SPEED_BASE, -evac_state.SPEED_BASE, randint(0, 3) / 10)
 
             spinning_start_time = time.perf_counter()
@@ -665,8 +674,8 @@ def dump(search_type: str) -> None:
 
 def validate_gap(colour_values: list[int], black_count: int, silver_count: int) -> bool:
     valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
-    silver_values = [1 if value >= evac_state.silver_min else 0 for value in valid_values]
-    black_values  = [1 if value <=  evac_state.black_max else 0 for value in valid_values]
+    silver_values = [1 if value >= evac_state.SILVER_MIN else 0 for value in valid_values]
+    black_values  = [1 if value <=  evac_state.BLACK_MAX else 0 for value in valid_values]
     
     silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else 0
     black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
@@ -678,7 +687,7 @@ def validate_gap(colour_values: list[int], black_count: int, silver_count: int) 
 ##########################################################################################################################################################
 
 evac_state = EvacuationState()
-search = Search()
+search = Search(evac_state, evac_camera)
 
 def main() -> None:
     black_count = silver_count = 0
@@ -721,4 +730,6 @@ def main() -> None:
 ##########################################################################################################################################################
 
 if __name__ == "__main__":
-    evac_state.victim_count = 3
+    # evac_state.victim_count = 3
+    
+    main()
