@@ -17,3 +17,5 @@ cython_debug/
 
 # Ignore all files in temp_frames
 temp_frames/
+
+1_international/timestamps.txt

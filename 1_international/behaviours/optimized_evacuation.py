@@ -666,7 +666,7 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str) ->
         x, search_type = analyse(image, display_image, search_type, last_x)
         if x is None: return False
         
-        movement.route(0.3, x, search_type)
+        movement.route(1, x, search_type)
         
         last_x = x
         if distance < evac_state.ROUTE_APPROACH_DISTANCE: return True
@@ -898,6 +898,8 @@ def main() -> None:
     led.off()
     
     for _ in range(0, 2): evac_camera.capture()
+    motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1.5)
+    motors.run(0, 0, 1) 
 
     while evac_state.victim_count != 3:
         black_count, silver_count, x, search_type = locate(black_count, silver_count)

@@ -1,7 +1,7 @@
 from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
 from core.utilities import *
 from hardware.robot import *
-import behaviours.evacuation_zone as evacuation_zone
+import behaviours.optimized_evacuation as evacuation_zone
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
@@ -35,7 +35,8 @@ class RobotState():
             "seasaw": False,
             "evacuation_zone": False
         }
-         
+        
+        self.silver_value = 0
         self.last_uphill = 0
         self.last_downhill = 1000
         
@@ -607,7 +608,7 @@ class LineFollower():
         cv2.circle(self.display_image, ref_point, 10, self.turn_color, 2)
 
         trigger_states = ", ".join([k for k, v in robot_state.trigger.items() if v])
-        info_text = f"Ref: {ref_point}, Angle: {angle}, Triggers: {trigger_states}"
+        info_text = f"Ref: {ref_point}, Angle: {angle}, Triggers: {trigger_states}, Silver: {robot_state.silver_value}"
 
         # Put text at the top-left corner
         cv2.putText(
@@ -778,7 +779,7 @@ class LineFollower():
     
     def black_infront(self):
         if self.black_mask is not None:
-            top_check = self.black_mask[:camera.LINE_HEIGHT // 4, :]
+            top_check = self.black_mask[:camera.LINE_HEIGHT // 5, :]
             if cv2.countNonZero(top_check) > 0: return True
 
             left_check = self.black_mask[:, :30]
@@ -864,7 +865,7 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     global line_follow
-    print(silver_value)
+    robot_state.silver_value = silver_value
     robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 120 and not line_follow.black_infront() else 0
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
