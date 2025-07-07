@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 import multiprocessing as mp
 from threading import Thread
+import random
 from random import randint
 
 from RPi import GPIO

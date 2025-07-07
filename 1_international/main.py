@@ -1,4 +1,4 @@
-from core.shared_imports import GPIO, time
+from core.shared_imports import GPIO, time, random
 
 from core.listener import listener
 from core.utilities import *
@@ -15,6 +15,7 @@ def main() -> None:
     motors.run(0, 0)
     led.off()
     start_time = time.perf_counter()
+    random.seed(time.time())
     
     try:
         listener.start()

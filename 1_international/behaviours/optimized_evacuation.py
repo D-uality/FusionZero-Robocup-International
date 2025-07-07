@@ -7,6 +7,8 @@ from core.shared_imports import time, np, cv2, Optional, randint
 from hardware.robot import *
 from core.utilities import *
 
+start_display()
+
 ##########################################################################################################################################################
 ##########################################################################################################################################################
 ##########################################################################################################################################################
@@ -22,19 +24,23 @@ class EvacuationState:
         self.SPEED_BASE  = 35
         self.SPEED_FAST  = 45
         self.SPEED_ROUTE = 25
-        self.GRAB_SPEED  = 30
+        self.SPEED_GRAB  = 30
         
         # Locate settings
-        self.DEBUG_LOCATE = True
+        self.DEBUG_LOCATE = False
+        
+        # Analyse settings
+        self.DEBUG_ANALYSE = False
         
         # Route settings
+        self.DEBUG_ROUTE = True
         self.ROUTE_APPROACH_DISTANCE = 7
         
         # Gap handling
-        self.SILVER_MIN       = 120
+        self.SILVER_MIN       = 105
         self.BLACK_MAX        = 30
-        self.GAP_BLACK_COUNT  = 5
-        self.GAP_SILVER_COUNT = 5
+        self.GAP_BLACK_COUNT  = 3
+        self.GAP_SILVER_COUNT = 3
 
 class Search():
     def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera):
@@ -42,7 +48,7 @@ class Search():
         self.DISPLAY: bool = evac_state.DISPLAY
         
         self.DEBUG_LIVE: bool       = False
-        self.DEBUG_DEAD: bool       = True
+        self.DEBUG_DEAD: bool       = False
         self.DEBUG_TRIANGLES: bool  = False
         
         self.TIMING_LIVE: bool      = False
@@ -87,7 +93,7 @@ class Search():
             working_image = image[:, x_lower:x_upper]
             
         else:
-            working_image = image
+            working_image = image.copy()
             x_lower = 0
             
         if self.TIMING_LIVE: crop_time = time.perf_counter()
@@ -95,6 +101,7 @@ class Search():
         if self.TIMING_LIVE: preprocess_time = time.perf_counter()
         
         # Filter for spectral highlights
+        working_image = cv2.dilate(working_image, self.LIVE_DILATE_KERNAL, iterations=1)
         spectral_highlights = cv2.inRange(working_image, (self.LIVE_THRESHOLD + 5, self.LIVE_THRESHOLD, self.LIVE_THRESHOLD), (255, 255, 255))
         if self.TIMING_LIVE: threshold_time = time.perf_counter()
         
@@ -467,8 +474,8 @@ class Movement():
         turn = kP * error
         scalar = 0.8 if abs(error) < 10 else 1
         
-        v1 = ((self.ROUTE_SPEED - turn) * scalar if search_type in ["live", "dead"] else self.fast_speed - turn)
-        v2 = ((self.ROUTE_SPEED + turn) * scalar if search_type in ["live", "dead"] else self.fast_speed + turn)
+        v1 = ((self.SPEED_ROUTE - turn) * scalar if search_type in ["live", "dead"] else self.fast_speed - turn)
+        v2 = ((self.SPEED_ROUTE + turn) * scalar if search_type in ["live", "dead"] else self.fast_speed + turn)
         
         v1 = min(self.ROUTE_MAX_VELOCITY, max(v1, self.ROUTE_MIN_VELOCITY))
         v2 = min(self.ROUTE_MAX_VELOCITY, max(v2, self.ROUTE_MIN_VELOCITY))
@@ -491,10 +498,12 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     empty_count = 2 - live_count - dead_count
         
     if evac_state.victim_count + live_count < 2 and empty_count != 0: live_enable  = True
-    if dead_count < 1 and empty_count != 0:                            dead_enable  = True
-    if live_count > 0:                                                 green_enable = True
+    if dead_count < 1 and empty_count != 0:                           dead_enable  = True
+    if live_count > 0:                                                green_enable = True
     if dead_count == 1 and evac_state.victim_count == 2:              red_enable   = True
-            
+    
+    if evac_state.DEBUG_ANALYSE: print(live_enable, dead_enable, green_enable, red_enable)
+    
     if search_type in ["live", "green", "default"] and live_enable:
         live_x = search.live(image, display_image, last_x)
         if live_x is not None: return live_x, "live"
@@ -519,6 +528,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
     forwards_start_time = time.perf_counter()
     spinning_time = randint(30, 80) / 10
     forwards_time = 5
+    spinning_direction = 1
     
     while True:
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
@@ -535,7 +545,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         
         if evac_state.DEBUG_LOCATE: print(f"\tForwards -> spinning conditions: {touch_activated} {forwards_expire} {gap_found}")
     
-        if touch_activated or forwards_expire or gap_found or out_of_bounds:
+        if (touch_activated or forwards_expire or gap_found or out_of_bounds) and mode == "forwards":
             mode = "spinning"
             
             if   touch_activated: motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)        
@@ -543,22 +553,32 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
             elif gap_found:       motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.2)
             elif out_of_bounds:   motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)
             
+            spinning_direction = 1 if randint(0, 100) < 90 else -1
+            
             motors.run(0, 0, 0.1)
-            motors.run(evac_state.SPEED_BASE, -evac_state.SPEED_BASE, randint(0, 3) / 10)
+            motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction, randint(1, 5) / 10)
 
+            backwards = True if randint(0, 100) < 35 else False
             spinning_start_time = time.perf_counter()
-            spinning_time = randint(30, 80) / 10
+            
+            # if backwards:
+            #     spinning_time = randint(30, 60) / 10
+            # else:
+            spinning_time = randint(5, 30) / 10
         
         elif time.perf_counter() - spinning_start_time > spinning_time and mode == "spinning":
             mode = "forwards"
-            forwards_time = time.perf_counter()
+            forwards_start_time = time.perf_counter()
         
         if   mode == "forwards": motors.run(evac_state.SPEED_FAST,  evac_state.SPEED_FAST)
-        elif mode == "spinning": motors.run(evac_state.SPEED_BASE, -evac_state.SPEED_BASE)
+        elif mode == "spinning": motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction)
         
         if evac_state.DEBUG_LOCATE:
             if mode == "forwards": print(f"\tTime remaining: {forwards_time - time.perf_counter() + forwards_start_time:.2f}")
             if mode == "spinning": print(f"\tTime remaining: {spinning_time - time.perf_counter() + spinning_start_time:.2f}")
+        
+        if mode == "forwards": time_remaining = forwards_time - time.perf_counter() + forwards_start_time
+        if mode == "spinning": time_remaining = spinning_time - time.perf_counter() + spinning_start_time
         
         image = evac_camera.capture()
         display_image = image.copy()
@@ -566,10 +586,11 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         x, search_type = analyse(image, display_image, "default")
         if x is not None: return black_count, silver_count, x, search_type
         
-        if evac_state.DEBUG_MAIN: debug(["LOCATE", f"mode: {mode}", f"search: {search_type}", f"victims: {evac_state.victim_count}", f"claw: {claw.spaces}", f"Black {black_count} Silver: {silver_count}"], [30, 20, 20, 20, 20, 20])
-        if evac_state.DISPLAY:    show(display_image, name="display", display=True)
+        if evac_state.DEBUG_MAIN: debug(["LOCATE", f"mode: {mode}", f"search: {search_type}", f"victims: {evac_state.victim_count}", f"claw: {claw.spaces}", f"Black {black_count} Silver: {silver_count}", f"Time: {time_remaining:.2f}"], [30, 20, 20, 20, 20, 20, 20])
+        if evac_state.DISPLAY:    show(np.uint8(display_image), name="display", display=True)
 
 def route(black_count: int, silver_count: int, last_x: int, search_type: str) -> bool:
+    
     start_time = time.perf_counter()
     max_route_time = 15
     
@@ -600,9 +621,15 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str) ->
         x, search_type = analyse(image, display_image, search_type, last_x)
         if x is None: return False
         
+        movement.route(0.3, x, search_type)
+        
+        last_x = x
         if distance < evac_state.ROUTE_APPROACH_DISTANCE: return True
-
-def grab() -> bool:    
+        
+        if evac_state.DEBUG_ROUTE: debug( ["ROUTING", f"{search_type}", f"x: {x} {last_x}", f"Counts: {black_count} {silver_count}"], [30, 20, 20, 20] )
+        if evac_state.DISPLAY:     show(display_image, name="Display", display=True)
+        
+def grab(insert: Optional[int]) -> bool:    
     if "" not in claw.spaces: return False
     
     # Left: -1, Right: 1
@@ -610,9 +637,10 @@ def grab() -> bool:
     
     debug( ["GRAB", "SETUP"], [30, 20] )
     # Setup
-    motors.run(         -evac_state.grab_speed,         -evac_state.grab_speed, 0.3)
-    motors.run(-evac_state.grab_speed * insert, evac_state.grab_speed * insert, 0.2)
-    motors.run(0, 0, 0.3)
+    motors.run(0, 0, 0.1)
+    motors.run(         -evac_state.SPEED_GRAB,         -evac_state.SPEED_GRAB, 0.3)
+    motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.2)
+    motors.run(0, 0, 0.1)
     
     debug( ["GRAB", "CUP"], [30, 20] )
     # Cup
@@ -677,8 +705,11 @@ def validate_gap(colour_values: list[int], black_count: int, silver_count: int) 
     silver_values = [1 if value >= evac_state.SILVER_MIN else 0 for value in valid_values]
     black_values  = [1 if value <=  evac_state.BLACK_MAX else 0 for value in valid_values]
     
-    silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else 0
-    black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else 0
+    silver_count = silver_count + sum(silver_values) if sum(silver_values) >= 1 else silver_count - 1
+    black_count  = black_count  + sum(black_values)  if sum(black_values)  >= 1 else black_count  - 1
+    
+    if silver_count < 0: silver_count = 0
+    if black_count  < 0: black_count  = 0
     
     return black_count, silver_count
 
@@ -688,6 +719,7 @@ def validate_gap(colour_values: list[int], black_count: int, silver_count: int) 
 
 evac_state = EvacuationState()
 search = Search(evac_state, evac_camera)
+movement = Movement(evac_state, evac_camera, touch_sensors, colour_sensors, motors)
 
 def main() -> None:
     black_count = silver_count = 0
@@ -716,13 +748,13 @@ def main() -> None:
             
             dump(search_type)
             
-            motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.2)
-            motors.run( evac_state.fast_speed, -evac_state.fast_speed, 1)
+            motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.2)
+            motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
             
         else:
             grab_success = grab()
             if not grab_success:
-                motors.run(-evac_state.fast_speed, -evac_state.fast_speed, 0.7)
+                motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.7)
                 continue
             
 ##########################################################################################################################################################
