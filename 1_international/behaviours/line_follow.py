@@ -404,7 +404,6 @@ class LineFollower():
                 motors.run(-25, -25, f+0.6)
 
         print("Gap handling complete.")
-        motors.pause()
     
     def __wait_for_black_contour(self):
         while True:
@@ -1019,9 +1018,9 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     for i in range(3):
         if robot_state.count["downhill"] > 0:
-            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 20, "TURNING PAST OBSTACLE (MIDDLE)")
+            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 9.5, "TURNING PAST OBSTACLE (MIDDLE)")
         else:
-            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 15, "TURNING PAST OBSTACLE (MIDDLE)")
+            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 9.5, "TURNING PAST OBSTACLE (MIDDLE)")
         motors.run(v1, v2, 0.01)
 
     if robot_state.count["uphill"] > 5:
@@ -1040,7 +1039,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
     while True:
-        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         if robot_state.count["uphill"] > 1:
             motors.run(30, 30, 0.1)
@@ -1050,16 +1049,16 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
             motors.run(-30, -30, 0.3)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 10, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 10, "TURNING TILL OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.4)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
