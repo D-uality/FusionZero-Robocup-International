@@ -701,11 +701,11 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
         
         last_x = x
         print(f"time: {time.perf_counter() - evac_state.last_victim_time}, search type: {search_type}")
-        if distance < evac_state.ROUTE_APPROACH_DISTANCE:
-            if search_type in ["red", "green"] and time.perf_counter() - evac_state.last_victim_time > evac_state.MIN_VICTIM_TRIANGLE_SWITCH_TIME: 
+        if search_type in ["red", "green"] and time.perf_counter() - evac_state.last_victim_time > evac_state.MIN_VICTIM_TRIANGLE_SWITCH_TIME: 
+            if sum(touch_values) != 2:    
                 return True
-            elif search_type in ["live", "dead"]:
-                return True
+        elif distance < evac_state.ROUTE_APPROACH_DISTANCE and search_type in ["live", "dead"]:
+            return True
         
 
         text = "ROUTING" if not retry else "ROUTING RETRY"
@@ -786,8 +786,8 @@ def dump(search_type: str) -> None:
     claw.read()
 
 def validate_gap(silver_value: int, black_count: int, silver_count: int) -> tuple[int, int]:
-    silver_count += 1 if silver_value >= evac_state.SILVER_MIN else (silver_count - 1) 
-    black_count  += 1 if silver_value <=  evac_state.BLACK_MAX else (black_count - 1)
+    silver_count += 1 if silver_value >= evac_state.SILVER_MIN else -1
+    black_count  += 1 if silver_value <=  evac_state.BLACK_MAX else -1
 
     if silver_count < 0: silver_count = 0
     if black_count  < 0: black_count  = 0

@@ -542,7 +542,7 @@ class LineFollower():
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 20]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 20]
 
-            if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 70) + 20 * (robot_state.last_downhill < 100)):
+            if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 30) + 20 * (robot_state.last_downhill < 100)):
                 # if robot_state.last_downhill > 100: self.prev_side = None
                 timing['edges'] = time.perf_counter() - t0
                 t1 = time.perf_counter()
@@ -642,7 +642,7 @@ class LineFollower():
         # Define scan band
         min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
         if robot_state.trigger["uphill"]:
-            min_y = camera.LINE_HEIGHT // 2 - 40
+            min_y = camera.LINE_HEIGHT // 2
         elif robot_state.trigger["downhill"]:
             min_y = 50  
         max_y = min(camera.LINE_HEIGHT, min_y + 10)
@@ -806,7 +806,7 @@ class LineFollower():
             mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
 
-            if cv2.countNonZero(mask) > 500:
+            if cv2.countNonZero(mask) > 300:
                 robot_state.count["red"] += 1
                 print(f"red: {cv2.countNonZero(mask)}")
                 return

@@ -5,7 +5,7 @@ from core.utilities import debug
 class Claw():
     def __init__(self):
         TRIALS = 50
-        self.debug = True
+        self.debug = False
         
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
@@ -31,8 +31,8 @@ class Claw():
             self.pca.servo[self.closer_pin].angle = 90
             
         else:
-            self.EMPTY_TOLERANCE = 3
-            self.OPPOSITE_LIVE_TOLERANCE = 10
+            self.EMPTY_TOLERANCE = 8
+            self.OPPOSITE_LIVE_TOLERANCE = 25
             self.LIVE_TOLERANCE = 230
             
             self.left_cup = AnalogIn(self.__ADC, 6)
@@ -106,7 +106,7 @@ class Claw():
                 average = average / TRIALS
                 if self.debug: print(f"{average:.2f}, {self.__empty_average[i]:.2f}", end="     ")
                 # If opposite side has live
-                tolerance =  self.OPPOSITE_LIVE_TOLERANCE if self.spaces[0 if i == 1 else 0] == "live" else self.EMPTY_TOLERANCE
+                tolerance =  self.OPPOSITE_LIVE_TOLERANCE if self.spaces[1 if i == 0 else 0] == "live" else self.EMPTY_TOLERANCE
                 
                 if average < self.__empty_average[i] + tolerance:
                     self.spaces[i] = ""
