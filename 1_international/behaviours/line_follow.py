@@ -36,6 +36,7 @@ class RobotState():
             "evacuation_zone": False
         }
         
+        self.silver_min = 120
         self.silver_value = 0
         self.silver_timer = 0
         self.found_silver = False
@@ -388,7 +389,7 @@ class LineFollower():
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        f = 2.5 + 0.5 * (robot_state.last_uphill < 100)
+        f = 2 + 0.5 * (robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
@@ -403,6 +404,7 @@ class LineFollower():
                 motors.run(-25, -25, f+0.6)
 
         print("Gap handling complete.")
+        motors.pause()
     
     def __wait_for_black_contour(self):
         while True:
@@ -884,7 +886,7 @@ def find_silver(robot_state: RobotState, silver_value: int) -> None:
     robot_state.silver_value = silver_value
 
     if robot_state.count["silver"] == 0:
-        robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 130 else 0
+        robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > robot_state.silver_min else 0
         # if silver_value > 130: motors.pause()
     elif robot_state.validate_silver is False:
         robot_state.validate_silver = True

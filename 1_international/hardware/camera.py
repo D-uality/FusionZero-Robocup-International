@@ -21,8 +21,8 @@ class Camera():
         # Transformation points
         self.top_left     = (int(self.LINE_WIDTH / 4),     20)
         self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 20)
-        self.bottom_left  = (0,                            self.LINE_HEIGHT - 50)
-        self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 50)
+        self.bottom_left  = (0,                            self.LINE_HEIGHT - 70)
+        self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 70)
 
         if self.user_at_host == "frederick@raspberrypi":
             self.top_left     = (int(self.LINE_WIDTH / 4),     40)
