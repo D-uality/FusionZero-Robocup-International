@@ -6,6 +6,7 @@ if __name__ == "__main__":
 from core.shared_imports import time, np, cv2, Optional, randint, socket, getpass
 from hardware.robot import *
 from core.utilities import *
+from core.listener import listener
 
 start_display()
 
@@ -592,7 +593,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
     
     spinning_direction = 1
     
-    while True:
+    while listener.mode.value != 0:
         # Read sensor stack
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         silver_value = silver_sensor.read()
@@ -657,7 +658,7 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
     max_route_time = 15
     retry_count = 0
     
-    while True:
+    while listener.mode.value != 0:
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         distance = laser_sensors.read([1])[0]
         if distance is None: continue
@@ -810,7 +811,7 @@ def align_line(align_type: str, align_count: int) -> None:
         left_silver, right_silver = False, False
         
         # Move backwards till 1 finds silver
-        while not left_silver and not right_silver:
+        while (not left_silver and not right_silver) and listener.mode.value != 0:
             colour_values = colour_sensors.read()
 
             if colour_values[0] > evac_state.SILVER_MIN or colour_values[1] > evac_state.SILVER_MIN:
@@ -850,7 +851,7 @@ def align_line(align_type: str, align_count: int) -> None:
         motors.run( evac_state.SPEED_BASE * 0.3,  evac_state.SPEED_BASE * 0.3)
         left_black, right_black = None, None
         
-        while left_black is None and right_black is None:
+        while (left_black is None and right_black is None) and listener.mode.value != 0:
             colour_values = colour_sensors.read()
 
             if colour_values[0] < 40 or colour_values[1] < 40:
@@ -885,9 +886,8 @@ def leave():
     motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
     motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
     
-    while True:
+    while listener.mode.value != 0:
         movement.wall_follow()
-        colour_values = colour_sensors.read()
         silver_value = silver_sensor.read()
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
 
@@ -906,7 +906,7 @@ def leave():
             motors.run(evac_state.SPEED_BASE, -evac_state.SPEED_BASE, 2.2)
             motors.run(0, 0, 0.3)
 
-            while True:
+            while listener.mode.value != 0:
                 distance = laser_sensors.read([0])[0]
                 touch_values = touch_sensors.read()
                 
@@ -944,7 +944,7 @@ def main() -> None:
     motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1.5)
     motors.run(0, 0, 1) 
 
-    while evac_state.victim_count != 3:
+    while evac_state.victim_count != 3 and listener.mode.value != 0:
         black_count, silver_count, x, search_type = locate(black_count, silver_count)
         
         route_success = route(black_count, silver_count, x, search_type)
