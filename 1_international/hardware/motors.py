@@ -97,8 +97,8 @@ class Motors():
             self.run(v1, v2)
             
             if value is not None: 
-                debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
-                print()
+                # debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
+                # print()
                 if comparison_function(value, target_value): break
 
         self.run(0, 0)

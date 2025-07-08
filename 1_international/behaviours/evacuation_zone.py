@@ -40,7 +40,7 @@ class Search():
         self.debug_triangles = False
 
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 245
+        THRESHOLD = 230
         KERNEL_SIZE = 15
         CROP_SIZE = 100
         
@@ -469,7 +469,7 @@ def route(last_x: int, search_type: str, black_count: int, silver_count: int) ->
         if evac_state.debug_stuck: print("route - passed exit conditions")
         
         # Route with kP        
-        movement.route(0.3, x, search_type)
+        movement.route(0.18, x, search_type)
         if evac_state.debug_stuck: print("route - routing")
         
         last_x = x

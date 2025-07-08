@@ -3,7 +3,7 @@ if __name__ == "__main__":
     root = pathlib.Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(root))
 
-from core.shared_imports import time, np, cv2, Optional, randint
+from core.shared_imports import time, np, cv2, Optional, randint, socket, getpass
 from hardware.robot import *
 from core.utilities import *
 
@@ -21,11 +21,21 @@ class EvacuationState:
         self.victim_count = 0
         
         # Speeds
-        self.SPEED_BASE  = 35
-        self.SPEED_FAST  = 45
-        self.SPEED_ROUTE = 25
-        self.SPEED_GRAB  = 30
+        username = getpass.getuser()
+        hostname = socket.gethostname()
+        self.user_at_host = f"{username}@{hostname}"
         
+        if self.user_at_host == "frederick@raspberrypi":
+            self.SPEED_BASE  = 35
+            self.SPEED_FAST  = 45
+            self.SPEED_ROUTE = 25
+            self.SPEED_GRAB  = 30
+        else:
+            self.SPEED_BASE  = 35
+            self.SPEED_FAST  = 45
+            self.SPEED_ROUTE = 20
+            self.SPEED_GRAB  = 30
+            
         # Locate settings
         self.DEBUG_LOCATE = False
         
@@ -35,6 +45,8 @@ class EvacuationState:
         # Route settings
         self.DEBUG_ROUTE = True
         self.ROUTE_APPROACH_DISTANCE = 7
+        self.last_victim_time = 0
+        self.MIN_VICTIM_TRIANGLE_SWITCH_TIME = 1
         
         # Gap handling
         self.SILVER_MIN       = 120
@@ -346,9 +358,9 @@ class Search():
             else:
                 circularity = 0
             
-            # Accept if circular enough and well-filled
+            # Accept if circular enough and well-filled and low enough y-coordinate
             if self.DEBUG_DEAD: print(f"\tCircularity: {circularity:.2f} | Fill Ratio: {fill_ratio:.2f}")
-            if circularity > self.CIRCULARITY_THRESHOLD and fill_ratio > self.FILL_RATIO_THRESHOLD and cy > 10:
+            if circularity > self.CIRCULARITY_THRESHOLD and fill_ratio > self.FILL_RATIO_THRESHOLD and cy > 30:
                 final_candidates.append((cx, cy, radius, fill_ratio * circularity))
         
         if not final_candidates:
@@ -382,6 +394,9 @@ class Search():
     def triangle(self, image: np.ndarray, display_image: np.ndarray, triangle: str) -> tuple[Optional[int], Optional[int]]:
         if image is None or image.size == 0: return None, None
         if self.TIMING_TRIANGLES: start_time = time.perf_counter()
+
+        # Crop the image to remove the top 30 pixels
+        image = image[30:, :]
         
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         if self.TIMING_TRIANGLES: hsv_time = time.perf_counter()
@@ -578,10 +593,11 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
     while True:
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         colour_values = colour_sensors.read()
+        silver_value = silver_sensor.read()
         touch_values = touch_sensors.read()
         _, pitch, _ = gyroscope.read()
         
-        black_count, silver_count = validate_gap(colour_values, black_count, silver_count)
+        black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         
         touch_activated = sum(touch_values) != 2
         forwards_expire = time.perf_counter() - forwards_start_time > forwards_time
@@ -634,10 +650,12 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         if evac_state.DEBUG_MAIN: debug(["LOCATE", f"mode: {mode}", f"search: {search_type}", f"victims: {evac_state.victim_count}", f"claw: {claw.spaces}", f"Black {black_count} Silver: {silver_count}", f"Time: {time_remaining:.2f}"], [30, 20, 20, 20, 20, 20, 20])
         if evac_state.DISPLAY:    show(np.uint8(display_image), name="display", display=True)
 
-def route(black_count: int, silver_count: int, last_x: int, search_type: str) -> bool:
+def route(black_count: int, silver_count: int, last_x: int, search_type: str, retry: bool = False) -> bool:
+    MAX_RETRYS = 5
     
     start_time = time.perf_counter()
     max_route_time = 15
+    retry_count = 0
     
     while True:
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
@@ -645,10 +663,11 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str) ->
         if distance is None: continue
         
         colour_values = colour_sensors.read()
+        silver_value = silver_sensor.read()
         touch_values = touch_sensors.read()
         _, pitch, _ = gyroscope.read()
         
-        black_count, silver_count = validate_gap(colour_values, black_count, silver_count)
+        black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         
         touch_activated = sum(touch_values) != 2
         timeout         = time.perf_counter() - start_time > max_route_time
@@ -664,28 +683,48 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str) ->
         display_image = image.copy()
         
         x, search_type = analyse(image, display_image, search_type, last_x)
-        if x is None: return False
+
+        if search_type in ["live", "dead"]:
+            evac_state.last_victim_time = time.perf_counter()
+
+        if x is None:
+            if not retry: return False
+            else:
+                retry_count += 1
+                motors.run(0, 0, 0.1)
+                for _ in range(0, 3): evac_camera.capture()
+
+                if retry_count == MAX_RETRYS: return False
+                else: continue
         
-        movement.route(1, x, search_type)
+        movement.route(0.3, x, search_type)
         
         last_x = x
-        if distance < evac_state.ROUTE_APPROACH_DISTANCE: return True
+        print(f"time: {time.perf_counter() - evac_state.last_victim_time}, search type: {search_type}")
+        if distance < evac_state.ROUTE_APPROACH_DISTANCE:
+            if search_type in ["red", "green"] and time.perf_counter() - evac_state.last_victim_time > evac_state.MIN_VICTIM_TRIANGLE_SWITCH_TIME: 
+                return True
+            elif search_type in ["live", "dead"]:
+                return True
         
-        if evac_state.DEBUG_ROUTE: debug( ["ROUTING", f"{search_type}", f"x: {x} {last_x}", f"Counts: {black_count} {silver_count}"], [30, 20, 20, 20] )
+
+        text = "ROUTING" if not retry else "ROUTING RETRY"
+        if evac_state.DEBUG_ROUTE: debug( [text, f"{search_type}", f"x: {x} {last_x}", f"Counts: {black_count} {silver_count}"], [30, 20, 20, 20] )
         if evac_state.DISPLAY:     show(display_image, name="Display", display=True)
         
 def grab(prev_insert: Optional[int]) -> tuple[bool, int]:    
     if "" not in claw.spaces: return False, None
     
     # Left: -1, Right: 1
-    if prev_insert is None: insert = -1 if claw.spaces[0] == "" else 1
-    else:                   insert = 1 if prev_insert == -1 else -1
+    insert = -1 if claw.spaces[0] == "" else 1
+    if prev_insert is None and prev_insert == insert: insert = 1 if insert == -1 else -1
     
     debug( ["GRAB", "SETUP"], [30, 20] )
     # Setup
     motors.run(0, 0, 0.1)
     motors.run(         -evac_state.SPEED_GRAB,         -evac_state.SPEED_GRAB, 0.3)
-    motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.2)
+    if insert == 1:  motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.2)
+    if insert == -1: motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.35)
     motors.run(0, 0, 0.1)
     
     debug( ["GRAB", "CUP"], [30, 20] )
@@ -746,14 +785,10 @@ def dump(search_type: str) -> None:
     
     claw.read()
 
-def validate_gap(colour_values: list[int], black_count: int, silver_count: int) -> tuple[int, int]:
-    valid_values = [colour_values[0], colour_values[1], colour_values[3], colour_values[4]]
-    silver_values = [1 if value >= evac_state.SILVER_MIN else 0 for value in valid_values]
-    black_values  = [1 if value <=  evac_state.BLACK_MAX else 0 for value in valid_values]
-    
-    silver_count = (silver_count + sum(silver_values)) if sum(silver_values) >= 1 else (silver_count - 1)
-    black_count  = (black_count  + sum(black_values))  if sum(black_values)  >= 1 else (black_count  - 1)
-    
+def validate_gap(silver_value: int, black_count: int, silver_count: int) -> tuple[int, int]:
+    silver_count += 1 if silver_value >= evac_state.SILVER_MIN else (silver_count - 1) 
+    black_count  += 1 if silver_value <=  evac_state.BLACK_MAX else (black_count - 1)
+
     if silver_count < 0: silver_count = 0
     if black_count  < 0: black_count  = 0
     
@@ -837,16 +872,16 @@ def align_line(align_type: str, align_count: int) -> None:
 def leave():
     silver_count = black_count = 0
     
-    if evac_state.victim_count != 3:
-        motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
-        motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
-        motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
-        motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)    
+    motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
+    motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
+    motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
+    motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
     
     while True:
         movement.wall_follow()
         colour_values = colour_sensors.read()
-        black_count, silver_count = validate_gap(colour_values, black_count, silver_count)
+        silver_value = silver_sensor.read()
+        black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
 
         if black_count >= 5:
             debug(["EXITING", "FOUND EXIT!"], [24, 30])
@@ -894,7 +929,7 @@ def main() -> None:
     black_count = silver_count = 0
     evac_state.victim_count = 0
     prev_insert = None
-    
+
     led.off()
     
     for _ in range(0, 2): evac_camera.capture()
@@ -908,15 +943,17 @@ def main() -> None:
         if not route_success: continue
         
         if search_type in ["red", "green"]:
-            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0)
-            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0)
+            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
+            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
             
             motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 2)
             motors.run(0, 0)
             
-            black_count, silver_count, x, search_type = locate(black_count, silver_count)
-            
-            route_success = route(black_count, silver_count, x, search_type)
+            # black_count, silver_count, x, search_type = locate(black_count, silver_count)
+            for _ in range(0, 5): evac_camera.capture()
+            motors.run(0, 0, 0.5)
+
+            route_success = route(black_count, silver_count, None, search_type, retry=True)
             if not route_success: continue
             
             dump(search_type)
@@ -945,6 +982,6 @@ def main() -> None:
 if __name__ == "__main__":
     # evac_state.victim_count = 3
     
-    # main()
+    main()
     
-    leave()
+    # leave()

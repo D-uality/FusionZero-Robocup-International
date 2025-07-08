@@ -37,6 +37,9 @@ class RobotState():
         }
         
         self.silver_value = 0
+        self.silver_timer = 0
+        self.found_silver = False
+        self.validate_silver = False
         self.last_uphill = 0
         self.last_downhill = 1000
         
@@ -80,6 +83,9 @@ class LineFollower():
         timings['capture'] = time.perf_counter() - t0
         if robot_state.debug: print("captured image")
 
+        silver_value = silver_sensor.read()
+        find_silver(robot_state, silver_value)
+
         t0 = time.perf_counter()
         self.find_black()
         timings['find_black'] = time.perf_counter() - t0
@@ -100,6 +106,9 @@ class LineFollower():
             self.calculate_angle(self.black_contour)
             timings['calculate_angle'] = time.perf_counter() - t0
             if robot_state.debug: print("calculated angle")
+
+            silver_value = silver_sensor.read()
+            find_silver(robot_state, silver_value)
 
             if not starting:
                 t0 = time.perf_counter()
@@ -721,7 +730,7 @@ class LineFollower():
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
         black_mask = cv2.erode(black_mask, kernel, iterations=2)
-        black_mask = cv2.dilate(black_mask, kernel, iterations=5)
+        black_mask = cv2.dilate(black_mask, kernel, iterations=10)
 
         self.full_black = black_mask.copy()
 
@@ -779,7 +788,7 @@ class LineFollower():
     
     def black_infront(self):
         if self.black_mask is not None:
-            top_check = self.black_mask[:camera.LINE_HEIGHT // 5, :]
+            top_check = self.black_mask[:10, :]
             if cv2.countNonZero(top_check) > 0: return True
 
             left_check = self.black_mask[:, :30]
@@ -809,6 +818,7 @@ line_follow = LineFollower()
 
 def main(start_time) -> None:
     global robot_state, line_follow
+    overall_start = time.perf_counter()
     led.on()
     fps = error = 0
     green_signal = None
@@ -827,7 +837,7 @@ def main(start_time) -> None:
     line_follow.find_red()
     if robot_state.debug: print("found silver and red")
 
-    if robot_state.count["silver"] >= 1:
+    if robot_state.found_silver is True:
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.run(0, 0, 1)
@@ -849,13 +859,19 @@ def main(start_time) -> None:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
     else:
+        silver_value = silver_sensor.read()
+        find_silver(robot_state, silver_value)
         if robot_state.debug: print("beginning line follow")
         fps, error, green_signal = line_follow.follow()
+        silver_value = silver_sensor.read()
+        find_silver(robot_state, silver_value)
 
         active_triggers = ["LINE"]
         for key in robot_state.trigger:
             if robot_state.trigger[key]: active_triggers.append(key)
 
+        total_elapsed = time.perf_counter() - overall_start
+        fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
         debug([f" ".join(active_triggers), str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
     robot_state.main_loop_count += 1
@@ -866,7 +882,24 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     global line_follow
     robot_state.silver_value = silver_value
-    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 120 and not line_follow.black_infront() else 0
+
+    if robot_state.count["silver"] == 0:
+        robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 130 else 0
+        # if silver_value > 130: motors.pause()
+    elif robot_state.validate_silver is False:
+        robot_state.validate_silver = True
+        robot_state.silver_timer = time.perf_counter()
+
+    if robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.7:
+        robot_state.validate_silver = False
+        robot_state.silver_timer = 0  
+        robot_state.count["silver"] = 0
+    elif robot_state.validate_silver is True:
+        robot_state.found_silver = True if not line_follow.black_infront() else False
+    else:
+        robot_state.found_silver = False
+
+    print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
