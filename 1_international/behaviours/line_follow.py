@@ -1,5 +1,6 @@
 from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
 from core.utilities import *
+from core.listener import listener
 from hardware.robot import *
 import behaviours.optimized_evacuation as evacuation_zone
 
@@ -210,7 +211,8 @@ class LineFollower():
     def run_till_camera(self, v1, v2, threshold):
         motors.run(v1, v2)
         self.angle = 90
-        while True:
+        
+        while listener.mode.value != 0:
             self.image = camera.capture_array()
             self.display_image = self.image.copy()
 
@@ -221,6 +223,7 @@ class LineFollower():
                 show(np.uint8(self.display_image), display=camera.X11, name="line")
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
+            
         motors.run(0, 0)
 
     def stuck_check(self):
@@ -406,7 +409,7 @@ class LineFollower():
         print("Gap handling complete.")
     
     def __wait_for_black_contour(self):
-        while True:
+        while listener.mode.value != 0:
             self.image = camera.capture_array()
             self.display_image = self.image.copy()
             self.find_black()
@@ -420,7 +423,7 @@ class LineFollower():
                 show(np.uint8(self.display_image), display=camera.X11, name="line")
 
     def __align_to_contour_angle(self):
-        while True:
+        while listener.mode.value != 0:
             self.image = camera.capture_array()
             self.display_image = self.image.copy()
             self.find_black()
@@ -827,10 +830,13 @@ def main(start_time) -> None:
     silver_value = silver_sensor.read()
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
+    
     touch_check(robot_state, touch_values)
     if robot_state.debug: print("touch checked")
+    
     ramp_check(robot_state, gyro_values)
     if robot_state.debug: print("ramp checked")
+    
     update_triggers(robot_state)
     if robot_state.debug: print("updated triggers")
 
@@ -849,21 +855,26 @@ def main(start_time) -> None:
         led.on()
 
     if time.perf_counter() - start_time < 3:
-        while time.perf_counter() - start_time < 3:
+        while (time.perf_counter() - start_time < 3) and listener.mode.value != 0:
             motors.run(0, 0)
             line_follow.follow(True)
+            
     elif robot_state.count["red"] >= 5:
         print("Red Found!")
         motors.run(0, 0, 8)
         robot_state.count["red"] = 0
+        
     elif robot_state.count["touch"] > 3:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
+        
     else:
         silver_value = silver_sensor.read()
         find_silver(robot_state, silver_value)
+        
         if robot_state.debug: print("beginning line follow")
         fps, error, green_signal = line_follow.follow()
+        
         silver_value = silver_sensor.read()
         find_silver(robot_state, silver_value)
 
@@ -953,32 +964,38 @@ def update_triggers(robot_state: RobotState) -> list[str]:
 def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     if robot_state.trigger["downhill"] or robot_state.trigger["uphill"] or robot_state.trigger["tilt_left"] or robot_state.trigger["tilt_right"]:
         touch_count = 0
-        while True:
+        
+        while listener.mode.value != 0:
             touch_values = touch_sensors.read()
+            
             if sum(touch_values) == 0:
                 touch_count += 1
+                
             elif sum(touch_values) == 2:
                 touch_count = 0
                 motors.run(25, 25)
+                
             elif touch_values[0] == 0:
                 motors.run(-15, 25)
                 touch_count = 0
+                
             elif touch_values[1] == 0:
                 motors.run(25, -15)
                 touch_count = 0
+                
             if touch_count > 5:
                 break
 
     motors.run(0, 0)
 
-    for i in range(100): 
+    for _ in range(100): 
         right_value = laser_sensors.read([2])[0]
         left_value = laser_sensors.read([0])[0]
         time.sleep(0.001)
 
     # Clockwise if left > right
     side_values = [left_value, right_value]
-
+    
     # Immediately update OLED for obstacle detection
     # oled_display.reset()
     # oled_display.text("Obstacle Detected", 0, 0, size=10)
@@ -1038,7 +1055,7 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
-    while True:
+    while listener.mode.value != 0:
         if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         if robot_state.count["uphill"] > 1:
@@ -1092,7 +1109,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
 
-    while True:
+    while listener.mode.value != 0:
         show(np.uint8(camera.capture_array()), display=camera.X11, name="line") 
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()

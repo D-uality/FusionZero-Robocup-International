@@ -6,6 +6,7 @@ if __name__ == "__main__":
 from core.shared_imports import time, np, cv2, Optional, randint, socket, getpass
 from hardware.robot import *
 from core.utilities import *
+from core.listener import listener
 
 start_display()
 
@@ -586,11 +587,14 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
     mode = "forwards" 
     spinning_start_time = time.perf_counter()
     forwards_start_time = time.perf_counter()
-    spinning_time = randint(30, 80) / 10
-    forwards_time = 5
+    
+    spinning_time = randint(30, 50) / 10
+    forwards_time = randint(30, 50) / 10
+    
     spinning_direction = 1
     
-    while True:
+    while listener.mode.value != 0:
+        # Read sensor stack
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         silver_value = silver_sensor.read()
         touch_values = touch_sensors.read()
@@ -598,12 +602,13 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         
+        # Reset conditions
         touch_activated = sum(touch_values) != 2
         forwards_expire = time.perf_counter() - forwards_start_time > forwards_time
         gap_found       = black_count > evac_state.GAP_BLACK_COUNT or silver_count > evac_state.GAP_SILVER_COUNT
         out_of_bounds   = pitch > 10 if pitch is not None else False
         
-        if evac_state.DEBUG_LOCATE: print(f"\tForwards -> spinning conditions: {touch_activated} {forwards_expire} {gap_found}")
+        if evac_state.DEBUG_LOCATE: print(f"\tConditions | Touch: {touch_activated} Expire: {forwards_expire} Gap: {gap_found}")
     
         if (touch_activated or forwards_expire or gap_found or out_of_bounds) and mode == "forwards":
             mode = "spinning"
@@ -613,39 +618,36 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
             elif gap_found:       motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.2)
             elif out_of_bounds:   motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)
             
-            spinning_direction = 1 if randint(0, 100) < 90 else -1
+            spinning_direction = 1 if randint(0, 100) < 95 else -1
             
             motors.run(0, 0, 0.1)
-            motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction, randint(1, 5) / 10)
+            motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction, randint(1, 25) / 10)
 
-            backwards = True if randint(0, 100) < 35 else False
             spinning_start_time = time.perf_counter()
-            
-            # if backwards:
-            #     spinning_time = randint(30, 60) / 10
-            # else:
-            spinning_time = randint(5, 30) / 10
+            spinning_time = randint(10, 30) / 10
         
         elif time.perf_counter() - spinning_start_time > spinning_time and mode == "spinning":
             mode = "forwards"
             forwards_start_time = time.perf_counter()
+            forwards_time = randint(30, 50) / 10
         
-        if   mode == "forwards": motors.run(evac_state.SPEED_FAST,  evac_state.SPEED_FAST)
-        elif mode == "spinning": motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction)
+        # Handle movement
+        if mode == "forwards":
+            motors.run(evac_state.SPEED_FAST,  evac_state.SPEED_FAST)
+            time_remaining = forwards_time - time.perf_counter() + forwards_start_time
+            
+        elif mode == "spinning":
+            motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction)
+            time_remaining = spinning_time - time.perf_counter() + spinning_start_time
         
-        if evac_state.DEBUG_LOCATE:
-            if mode == "forwards": print(f"\tTime remaining: {forwards_time - time.perf_counter() + forwards_start_time:.2f}")
-            if mode == "spinning": print(f"\tTime remaining: {spinning_time - time.perf_counter() + spinning_start_time:.2f}")
-        
-        if mode == "forwards": time_remaining = forwards_time - time.perf_counter() + forwards_start_time
-        if mode == "spinning": time_remaining = spinning_time - time.perf_counter() + spinning_start_time
-        
+        # Exit condition
         image = evac_camera.capture()
         display_image = image.copy()
         
         x, search_type = analyse(image, display_image, "default")
         if x is not None: return black_count, silver_count, x, search_type
         
+        # Debug 
         if evac_state.DEBUG_MAIN: debug(["LOCATE", f"mode: {mode}", f"search: {search_type}", f"victims: {evac_state.victim_count}", f"claw: {claw.spaces}", f"Black {black_count} Silver: {silver_count}", f"Time: {time_remaining:.2f}"], [30, 20, 20, 20, 20, 20, 20])
         if evac_state.DISPLAY:    show(np.uint8(display_image), name="display", display=True)
 
@@ -656,7 +658,7 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
     max_route_time = 15
     retry_count = 0
     
-    while True:
+    while listener.mode.value != 0:
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         distance = laser_sensors.read([1])[0]
         if distance is None: continue
@@ -809,7 +811,7 @@ def align_line(align_type: str, align_count: int) -> None:
         left_silver, right_silver = False, False
         
         # Move backwards till 1 finds silver
-        while not left_silver and not right_silver:
+        while (not left_silver and not right_silver) and listener.mode.value != 0:
             colour_values = colour_sensors.read()
 
             if colour_values[0] > evac_state.SILVER_MIN or colour_values[1] > evac_state.SILVER_MIN:
@@ -849,7 +851,7 @@ def align_line(align_type: str, align_count: int) -> None:
         motors.run( evac_state.SPEED_BASE * 0.3,  evac_state.SPEED_BASE * 0.3)
         left_black, right_black = None, None
         
-        while left_black is None and right_black is None:
+        while (left_black is None and right_black is None) and listener.mode.value != 0:
             colour_values = colour_sensors.read()
 
             if colour_values[0] < 40 or colour_values[1] < 40:
@@ -884,9 +886,8 @@ def leave():
     motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
     motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
     
-    while True:
+    while listener.mode.value != 0:
         movement.wall_follow()
-        colour_values = colour_sensors.read()
         silver_value = silver_sensor.read()
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
 
@@ -905,7 +906,7 @@ def leave():
             motors.run(evac_state.SPEED_BASE, -evac_state.SPEED_BASE, 2.2)
             motors.run(0, 0, 0.3)
 
-            while True:
+            while listener.mode.value != 0:
                 distance = laser_sensors.read([0])[0]
                 touch_values = touch_sensors.read()
                 
@@ -943,7 +944,7 @@ def main() -> None:
     motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1.5)
     motors.run(0, 0, 1) 
 
-    while evac_state.victim_count != 3:
+    while evac_state.victim_count != 3 and listener.mode.value != 0:
         black_count, silver_count, x, search_type = locate(black_count, silver_count)
         
         route_success = route(black_count, silver_count, x, search_type)
