@@ -897,13 +897,21 @@ def main() -> None:
     
     led.off()
     
+    oled_display.reset()
+    oled_display.text("Evac start", 0, 0)
     for _ in range(0, 2): evac_camera.capture()
+
     motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1.5)
     motors.run(0, 0, 1) 
 
+
     while evac_state.victim_count != 3:
+        oled_display.reset()
+        oled_display.text(f"locate: {evac_state.victim_count}", 0, 0)
+
         black_count, silver_count, x, search_type = locate(black_count, silver_count)
         
+        oled_display.text(f"route {search_type}", 0, 10)
         route_success = route(black_count, silver_count, x, search_type)
         if not route_success: continue
         
@@ -919,17 +927,20 @@ def main() -> None:
             route_success = route(black_count, silver_count, x, search_type)
             if not route_success: continue
             
+            oled_display.text(f"dump", 0, 20)
             dump(search_type)
             
             motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.2)
             motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
             
         else:
+            oled_display.text(f"grab", 0, 20)
             grab_success, prev_insert = grab(prev_insert)
             if not grab_success:
                 motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.7)
                 continue
             
+    oled_display.text(f"leaving", 0, 20)
     print("LEAVING")
     
     motors.run(0, 0, 0.5)

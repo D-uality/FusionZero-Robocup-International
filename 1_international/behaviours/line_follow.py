@@ -106,6 +106,7 @@ class LineFollower():
                 self.__turn()
                 timings['__turn'] = time.perf_counter() - t0
                 if robot_state.debug: print("turned")
+
         elif not starting and robot_state.trigger["uphill"] is False and robot_state.trigger["downhill"] is False:
             self.gap_handling()
             if robot_state.debug: print("handled gap")
@@ -683,14 +684,14 @@ class LineFollower():
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
         # Threshold masks for different brightness levels
-        base_mask = cv2.inRange(self.gray_image, 0, self.base_black)
-        light_mask = cv2.inRange(self.gray_image, 0, self.light_black)
+        base_mask     = cv2.inRange(self.gray_image, 0,     self.base_black)
+        light_mask    = cv2.inRange(self.gray_image, 0,    self.light_black)
         lightest_mask = cv2.inRange(self.gray_image, 0, self.lightest_black)
 
         # Create region masks
         region_mask_lightest = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_light = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_base = np.ones_like(self.gray_image, dtype=np.uint8) * 255
+        region_mask_light    = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_base     = np.ones_like(self.gray_image, dtype=np.uint8) * 255
 
         cv2.fillPoly(region_mask_lightest, [np.int32(camera.lightest_points)], 255)
         cv2.fillPoly(region_mask_light, [np.int32(camera.light_points)], 255)
@@ -809,6 +810,7 @@ line_follow = LineFollower()
 
 def main(start_time) -> None:
     global robot_state, line_follow
+    overall_start = time.perf_counter()
     led.on()
     fps = error = 0
     green_signal = None
@@ -816,10 +818,13 @@ def main(start_time) -> None:
     silver_value = silver_sensor.read()
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
+
     touch_check(robot_state, touch_values)
     if robot_state.debug: print("touch checked")
+
     ramp_check(robot_state, gyro_values)
     if robot_state.debug: print("ramp checked")
+
     update_triggers(robot_state)
     if robot_state.debug: print("updated triggers")
 
@@ -830,9 +835,11 @@ def main(start_time) -> None:
     if robot_state.count["silver"] >= 1:
         print("Silver Found!")
         robot_state.count["silver"] = 0
+
         motors.run(0, 0, 1)
         evacuation_zone.main()
         motors.run(0, 0, 1)
+
         robot_state.trigger["evacuation_zone"] = True
         start_time = time.perf_counter()
         led.on()
@@ -841,13 +848,16 @@ def main(start_time) -> None:
         while time.perf_counter() - start_time < 3:
             motors.run(0, 0)
             line_follow.follow(True)
+
     elif robot_state.count["red"] >= 5:
         print("Red Found!")
         motors.run(0, 0, 8)
         robot_state.count["red"] = 0
-    elif robot_state.count["touch"] > 3:
+
+    elif robot_state.count["touch"] >= 3:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
+
     else:
         if robot_state.debug: print("beginning line follow")
         fps, error, green_signal = line_follow.follow()
@@ -856,6 +866,8 @@ def main(start_time) -> None:
         for key in robot_state.trigger:
             if robot_state.trigger[key]: active_triggers.append(key)
 
+        total_elapsed = time.perf_counter() - overall_start
+        fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
         debug([f" ".join(active_triggers), str(robot_state.main_loop_count), str(fps), str(error), str(green_signal)], [10, 15, 10, 10, 15])
 
     robot_state.main_loop_count += 1
