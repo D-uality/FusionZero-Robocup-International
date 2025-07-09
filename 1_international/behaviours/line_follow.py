@@ -1,5 +1,6 @@
 from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
 from core.utilities import *
+from core.listener import listener
 from hardware.robot import *
 import behaviours.optimized_evacuation as evacuation_zone
 
@@ -36,7 +37,11 @@ class RobotState():
             "evacuation_zone": False
         }
         
+        self.silver_min = 120
         self.silver_value = 0
+        self.silver_timer = 0
+        self.found_silver = False
+        self.validate_silver = False
         self.last_uphill = 0
         self.last_downhill = 1000
         
@@ -55,6 +60,10 @@ class LineFollower():
 
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
+        self.blue_pixels = [None for _ in range(25)]
+        self.blue_index = 0
+        self.prev_speedbump = False
+        self.last_speedbump = 0
         
         self.turn_color = (0, 255, 0)
         self.prev_side = None
@@ -63,7 +72,7 @@ class LineFollower():
         self.turn = 0
         self.low_turn = False
         self.last_check_front = 0
-        self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
+        self.raw_image = self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
         self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = None
         self.last_seen_green = 100
         self.black_contour = self.black_mask = self.full_black = None
@@ -75,10 +84,14 @@ class LineFollower():
         timings = {}
 
         t0 = time.perf_counter()
-        self.image = camera.capture_array()
+        self.raw_image = camera.capture_array()
+        self.image = camera.perspective_transform(self.raw_image)
         self.display_image = self.image.copy()
         timings['capture'] = time.perf_counter() - t0
         if robot_state.debug: print("captured image")
+
+        silver_value = silver_sensor.read()
+        find_silver(robot_state, silver_value)
 
         t0 = time.perf_counter()
         self.find_black()
@@ -100,6 +113,9 @@ class LineFollower():
             self.calculate_angle(self.black_contour)
             timings['calculate_angle'] = time.perf_counter() - t0
             if robot_state.debug: print("calculated angle")
+
+            silver_value = silver_sensor.read()
+            find_silver(robot_state, silver_value)
 
             if not starting:
                 t0 = time.perf_counter()
@@ -201,8 +217,9 @@ class LineFollower():
     def run_till_camera(self, v1, v2, threshold):
         motors.run(v1, v2)
         self.angle = 90
-        while True:
-            self.image = camera.capture_array()
+        
+        while listener.mode.value != 0:
+            self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
 
             self.find_black()
@@ -212,6 +229,7 @@ class LineFollower():
                 show(np.uint8(self.display_image), display=camera.X11, name="line")
             
             if self.angle < 90+threshold and self.angle > 90-threshold and self.angle != 90: break
+            
         motors.run(0, 0)
 
     def stuck_check(self):
@@ -373,32 +391,32 @@ class LineFollower():
         motors.run(0, 0, 1)
         motors.run(-20, -20)
 
-        self.__wait_for_black_contour()
-        motors.run(-20, -20, 0.2)
+        for i in range(3): self.__wait_for_black_contour()
+        motors.run(-20, -20, 0.5)
         motors.run(0, 0, 0.3)
 
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        f = 2.5 + 0.5 * (robot_state.last_uphill < 100)
+        f = 3 + 0.5 * (robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
-            motors.run(-25, -25, f+0.2)
+            motors.run(-25, -25, f+0.5)
             motors.run(0, 0, 0.2)
 
             self.__align_to_contour_angle()
             motors.run(0, 0, 0.2)
 
-            if not self.__move_and_check_black(f+0.4):
+            if not self.__move_and_check_black(f+0.8):
                 print("Still no black. Exiting gap handler.")
-                motors.run(-25, -25, f+0.6)
+                motors.run(-25, -25, f+1)
 
         print("Gap handling complete.")
     
     def __wait_for_black_contour(self):
-        while True:
-            self.image = camera.capture_array()
+        while listener.mode.value != 0:
+            self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
             self.find_black()
 
@@ -411,8 +429,8 @@ class LineFollower():
                 show(np.uint8(self.display_image), display=camera.X11, name="line")
 
     def __align_to_contour_angle(self):
-        while True:
-            self.image = camera.capture_array()
+        while listener.mode.value != 0:
+            self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
             self.find_black()
 
@@ -495,7 +513,7 @@ class LineFollower():
         motors.run(25, 25, duration)
         motors.run(0, 0, 0.3)
 
-        self.image = camera.capture_array()
+        self.image = camera.perspective_transform(camera.capture_array())
         self.display_image = self.image.copy()
         self.find_black()
 
@@ -534,7 +552,7 @@ class LineFollower():
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 20]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 20]
 
-            if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 70) + 20 * (robot_state.last_downhill < 100)):
+            if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 30) + 20 * (robot_state.last_downhill < 100)):
                 # if robot_state.last_downhill > 100: self.prev_side = None
                 timing['edges'] = time.perf_counter() - t0
                 t1 = time.perf_counter()
@@ -634,7 +652,7 @@ class LineFollower():
         # Define scan band
         min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
         if robot_state.trigger["uphill"]:
-            min_y = camera.LINE_HEIGHT // 2 - 40
+            min_y = camera.LINE_HEIGHT // 2
         elif robot_state.trigger["downhill"]:
             min_y = 50  
         max_y = min(camera.LINE_HEIGHT, min_y + 10)
@@ -722,7 +740,7 @@ class LineFollower():
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
         black_mask = cv2.erode(black_mask, kernel, iterations=2)
-        black_mask = cv2.dilate(black_mask, kernel, iterations=5)
+        black_mask = cv2.dilate(black_mask, kernel, iterations=10)
 
         self.full_black = black_mask.copy()
 
@@ -780,7 +798,7 @@ class LineFollower():
     
     def black_infront(self):
         if self.black_mask is not None:
-            top_check = self.black_mask[:camera.LINE_HEIGHT // 5, :]
+            top_check = self.black_mask[:10, :]
             if cv2.countNonZero(top_check) > 0: return True
 
             left_check = self.black_mask[:, :30]
@@ -791,6 +809,42 @@ class LineFollower():
             
         return False
 
+    def speedbump(self):
+        if self.raw_image is not None and time.perf_counter() - self.last_speedbump > 0.3:
+            top_check = self.raw_image[:30, 80:camera.LINE_WIDTH - 60]
+            hsv_image = cv2.cvtColor(top_check, cv2.COLOR_BGR2HSV)
+
+            blue_mask = cv2.inRange(hsv_image, self.lower_blue, self.upper_blue)
+            
+            if all(self.blue_pixels) == False: 
+                for i in range(len(self.blue_pixels)): self.blue_pixels[i] = cv2.countNonZero(blue_mask)
+            elif -200 < sum(self.blue_pixels)/len(self.blue_pixels) - cv2.countNonZero(blue_mask) < 100: self.blue_pixels[self.blue_index] = cv2.countNonZero(blue_mask)
+            self.blue_index = (self.blue_index + 1) % len(self.blue_pixels)
+
+            print(f"blue: {cv2.countNonZero(blue_mask)}")
+            show(np.uint8(top_check), display=camera.X11, name="blue")
+            blue_sum = 0
+            
+            for i in range(len(self.blue_pixels)):
+                if self.blue_pixels[i] is None: break
+                blue_average_size = i
+                
+            for i in range(blue_average_size): blue_sum += self.blue_pixels[i]
+
+            print(f"blue average: {blue_sum/(blue_average_size+1)}")
+
+            if cv2.countNonZero(blue_mask) < blue_sum/(blue_average_size+1) - 20: 
+                self.prev_speedbump = True
+                return True
+
+        if self.prev_speedbump:
+            self.blue_pixels = [None for _ in range(25)]
+            self.blue_index = 0
+            self.prev_speedbump = False
+            self.last_speedbump = time.perf_counter()
+
+        return False
+
     # RED
     def find_red(self):
         if self.hsv_image is not None:
@@ -798,7 +852,7 @@ class LineFollower():
             mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
 
-            if cv2.countNonZero(mask) > 500:
+            if cv2.countNonZero(mask) > 300:
                 robot_state.count["red"] += 1
                 print(f"red: {cv2.countNonZero(mask)}")
                 return
@@ -819,9 +873,11 @@ def main(start_time) -> None:
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
 
+    line_follow.speedbump()
+    
     touch_check(robot_state, touch_values)
     if robot_state.debug: print("touch checked")
-
+    
     ramp_check(robot_state, gyro_values)
     if robot_state.debug: print("ramp checked")
 
@@ -832,11 +888,15 @@ def main(start_time) -> None:
     line_follow.find_red()
     if robot_state.debug: print("found silver and red")
 
-    if robot_state.count["silver"] >= 1:
+    if robot_state.found_silver is None:
         print("Silver Found!")
         robot_state.count["silver"] = 0
 
         motors.run(0, 0, 1)
+        robot_state.silver_timer = 0
+        robot_state.found_silver = False
+        robot_state.validate_silver = False
+        
         evacuation_zone.main()
         motors.run(0, 0, 1)
 
@@ -845,7 +905,7 @@ def main(start_time) -> None:
         led.on()
 
     if time.perf_counter() - start_time < 3:
-        while time.perf_counter() - start_time < 3:
+        while (time.perf_counter() - start_time < 3) and listener.mode.value != 0:
             motors.run(0, 0)
             line_follow.follow(True)
 
@@ -853,14 +913,20 @@ def main(start_time) -> None:
         print("Red Found!")
         motors.run(0, 0, 8)
         robot_state.count["red"] = 0
-
-    elif robot_state.count["touch"] >= 3:
+        
+    elif robot_state.count["touch"] > 3:
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
-
+        
     else:
+        silver_value = silver_sensor.read()
+        find_silver(robot_state, silver_value)
+        
         if robot_state.debug: print("beginning line follow")
         fps, error, green_signal = line_follow.follow()
+        
+        silver_value = silver_sensor.read()
+        find_silver(robot_state, silver_value)
 
         active_triggers = ["LINE"]
         for key in robot_state.trigger:
@@ -878,7 +944,24 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     global line_follow
     robot_state.silver_value = silver_value
-    robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > 120 and not line_follow.black_infront() else 0
+
+    if robot_state.count["silver"] == 0:
+        robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > robot_state.silver_min else 0
+        # if silver_value > 130: motors.pause()
+    elif robot_state.validate_silver is False and not line_follow.speedbump():
+        robot_state.validate_silver = True
+        robot_state.silver_timer = time.perf_counter()
+
+    if robot_state.validate_silver is True and (time.perf_counter() - robot_state.silver_timer > 0.7 or line_follow.speedbump()):
+        robot_state.validate_silver = False
+        robot_state.silver_timer = 0  
+        robot_state.count["silver"] = 0
+    elif robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.4:
+        robot_state.found_silver = True if not line_follow.black_infront() and not line_follow.speedbump() else False
+    else:
+        robot_state.found_silver = False
+
+    # print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
@@ -931,32 +1014,38 @@ def update_triggers(robot_state: RobotState) -> list[str]:
 def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
     if robot_state.trigger["downhill"] or robot_state.trigger["uphill"] or robot_state.trigger["tilt_left"] or robot_state.trigger["tilt_right"]:
         touch_count = 0
-        while True:
+        
+        while listener.mode.value != 0:
             touch_values = touch_sensors.read()
+            
             if sum(touch_values) == 0:
                 touch_count += 1
+                
             elif sum(touch_values) == 2:
                 touch_count = 0
                 motors.run(25, 25)
+                
             elif touch_values[0] == 0:
                 motors.run(-15, 25)
                 touch_count = 0
+                
             elif touch_values[1] == 0:
                 motors.run(25, -15)
                 touch_count = 0
+                
             if touch_count > 5:
                 break
 
     motors.run(0, 0)
 
-    for i in range(100): 
+    for _ in range(100): 
         right_value = laser_sensors.read([2])[0]
         left_value = laser_sensors.read([0])[0]
         time.sleep(0.001)
 
     # Clockwise if left > right
     side_values = [left_value, right_value]
-
+    
     # Immediately update OLED for obstacle detection
     # oled_display.reset()
     # oled_display.text("Obstacle Detected", 0, 0, size=10)
@@ -996,9 +1085,9 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     for i in range(3):
         if robot_state.count["downhill"] > 0:
-            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 20, "TURNING PAST OBSTACLE (MIDDLE)")
+            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 9.5, "TURNING PAST OBSTACLE (MIDDLE)")
         else:
-            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 15, "TURNING PAST OBSTACLE (MIDDLE)")
+            motors.run_until(v1, v2, laser_sensors.read, 1, ">=", 9.5, "TURNING PAST OBSTACLE (MIDDLE)")
         motors.run(v1, v2, 0.01)
 
     if robot_state.count["uphill"] > 5:
@@ -1016,8 +1105,8 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
 
     circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
-    while True:
-        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", initial_sequence, direction): pass
+    while listener.mode.value != 0:
+        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         if robot_state.count["uphill"] > 1:
             motors.run(30, 30, 0.1)
@@ -1027,16 +1116,16 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
             motors.run(-30, -30, 0.3)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 10, "TURNING TILL OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 10, "TURNING TILL OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.4)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", initial_sequence, direction): pass
+        if circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
@@ -1070,8 +1159,8 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
 
-    while True:
-        show(np.uint8(camera.capture_array()), display=camera.X11, name="line") 
+    while listener.mode.value != 0:
+        show(np.uint8(camera.perspective_transform(camera.capture_array())), display=camera.X11, name="line")
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()

@@ -1,5 +1,6 @@
 from core.shared_imports import time, ServoKit, socket, getpass, math, mp, operator, np
 from core.utilities import debug, show
+from core.listener import listener
 
 class Motors():
     def __init__(self, camera) -> None:
@@ -73,7 +74,7 @@ class Motors():
             if delay > 0:
                 capture_start = time.perf_counter()
                 
-                while True:
+                while listener.mode.value != 0:
                     if delay > 0.2: show(np.uint8(self.camera.capture_array()), display=self.camera.X11, name="line")
                     if delay - (time.perf_counter() - capture_start) < 0: break
                         
@@ -88,17 +89,17 @@ class Motors():
         elif comparison == ">=": comparison_function = operator.ge
         elif comparison == "!=": comparison_function = operator.ne
 
-        while True:
+        while listener.mode.value != 0:
             value = trigger_function()[index]
             if value is not None: break
             
-        while True:
+        while listener.mode.value != 0:
             value = trigger_function()[index]
             self.run(v1, v2)
             
             if value is not None: 
-                debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
-                print()
+                # debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
+                # print()
                 if comparison_function(value, target_value): break
 
         self.run(0, 0)

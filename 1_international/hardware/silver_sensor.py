@@ -34,7 +34,7 @@ class SilverSensor():
         value = int(AnalogIn(self.__ADC, self.sensor_pin).value / 256)
         return value
     
-    def read(self) -> list[int]:
+    def read(self) -> int:
         return int((self.read_raw() - self.__min_value) * 100 / (self.__max_value - self.__min_value))
     
         

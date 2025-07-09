@@ -36,11 +36,11 @@ class EvacuationState():
 class Search():
     def __init__(self):
         self.debug_live      = False
-        self.debug_dead      = False
+        self.debug_dead      = True
         self.debug_triangles = False
 
     def classic_live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
-        THRESHOLD = 245
+        THRESHOLD = 230
         KERNEL_SIZE = 15
         CROP_SIZE = 100
         
@@ -109,11 +109,11 @@ class Search():
         KERNAL_SIZE_3 = 31
         
         DP =           1                               # "Resolution" of the accumulator
-        MIN_DISTANCE = 300
-        PARAMETER_1 =  55                              # Lower -> detect more circles   |  Higher -> detect less circles
-        PARAMETER_2 =  25                              # Lower -> accepts more circles  |  Higher -> rejects more circles
-        MIN_RADIUS =   20
-        MAX_RADIUS =   230
+        MIN_DISTANCE = 130
+        PARAMETER_1 =  50                              # Lower -> detect more circles   |  Higher -> detect less circles
+        PARAMETER_2 =  30                              # Lower -> accepts more circles  |  Higher -> rejects more circles
+        MIN_RADIUS =   5
+        MAX_RADIUS =   150
                 
         working_image = image.copy()
         
@@ -156,7 +156,7 @@ class Search():
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         filtered_mask = np.zeros_like(mask)
         for contour in contours:
-            if cv2.contourArea(contour) >= 6000:
+            if cv2.contourArea(contour) >= 1000:
                 cv2.fillPoly(filtered_mask, [contour], 255)
         mask = filtered_mask
         
@@ -174,6 +174,7 @@ class Search():
         t4 = time.perf_counter()
         # Process circles
         circles = np.round(circles[0, :]).astype("int")
+        print(circles)
         # Validate circles based on: colour, position, size
         valid = []
         for (x, y, r) in circles:
@@ -469,7 +470,7 @@ def route(last_x: int, search_type: str, black_count: int, silver_count: int) ->
         if evac_state.debug_stuck: print("route - passed exit conditions")
         
         # Route with kP        
-        movement.route(0.3, x, search_type)
+        movement.route(0.18, x, search_type)
         if evac_state.debug_stuck: print("route - routing")
         
         last_x = x

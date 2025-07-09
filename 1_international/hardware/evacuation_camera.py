@@ -23,7 +23,7 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        self._set_manual_exposure(130)
+        self._set_manual_exposure(120)
         
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
     
@@ -50,7 +50,7 @@ class EvacuationCamera():
                 image = cv2.flip(image, 0)
                 image = cv2.flip(image, 1)
             else:
-                image = image[int(0.5 * image.shape[0]):, :]
+                image = image[int(CROP_PRECENTAGE * image.shape[0]):, :]
                 
         except Exception as e:
             debug( [f"ERROR", f"CAMERA", f"{e}"], [30, 20, 50] )
