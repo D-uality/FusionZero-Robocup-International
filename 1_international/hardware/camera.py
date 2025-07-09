@@ -56,9 +56,7 @@ class Camera():
         print()
             
     def capture_array(self) -> np.ndarray:
-        image = self.camera.capture_array()
-
-        return self.perspective_transform(image)
+        return self.camera.capture_array()
 
     def perspective_transform(self, image: np.ndarray) -> np.ndarray:
         src_points = np.array([self.top_left, self.top_right, self.bottom_left, self.bottom_right], dtype=np.float32)

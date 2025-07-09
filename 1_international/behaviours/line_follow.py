@@ -392,7 +392,7 @@ class LineFollower():
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        f = 2 + 0.5 * (robot_state.last_uphill < 100)
+        f = 2.3 + 0.5 * (robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
@@ -844,10 +844,14 @@ def main(start_time) -> None:
     line_follow.find_red()
     if robot_state.debug: print("found silver and red")
 
-    if robot_state.found_silver is True:
+    if robot_state.found_silver is None:
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.run(0, 0, 1)
+        robot_state.silver_timer = 0
+        robot_state.found_silver = False
+        robot_state.validate_silver = False
+        
         evacuation_zone.main()
         motors.run(0, 0, 1)
         robot_state.trigger["evacuation_zone"] = True

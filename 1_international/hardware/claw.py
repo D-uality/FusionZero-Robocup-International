@@ -31,7 +31,7 @@ class Claw():
             self.pca.servo[self.closer_pin].angle = 90
             
         else:
-            self.EMPTY_TOLERANCE = 8
+            self.EMPTY_TOLERANCE = 4
             self.OPPOSITE_LIVE_TOLERANCE = 25
             self.LIVE_TOLERANCE = 230
             

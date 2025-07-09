@@ -18,8 +18,8 @@ def evac_image():
     image = evac_camera.capture()
     display_image = image.copy()
         
-    # green_x = search.triangle(image, display_image, "green")
-    # red_x = search.triangle(image, display_image, "red")
+    green_x = search.triangle(image, display_image, "green")
+    red_x = search.triangle(image, display_image, "red")
     
     live_x = search.live(image, display_image, last_live_x)
     dead_x = search.dead(image, display_image, last_dead_x)
