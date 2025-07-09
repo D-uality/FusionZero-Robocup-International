@@ -68,7 +68,7 @@ class LineFollower():
         self.turn = 0
         self.low_turn = False
         self.last_check_front = 0
-        self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
+        self.raw_image = self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
         self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = None
         self.last_seen_green = 100
         self.black_contour = self.black_mask = self.full_black = None
@@ -80,13 +80,14 @@ class LineFollower():
         timings = {}
 
         t0 = time.perf_counter()
-        self.image = camera.capture_array()
+        self.raw_image = camera.capture_array()
+        self.image = camera.perspective_transform(self.raw_image)
         self.display_image = self.image.copy()
         timings['capture'] = time.perf_counter() - t0
         if robot_state.debug: print("captured image")
 
         silver_value = silver_sensor.read()
-        find_silver(robot_state, silver_value)
+        if self.speedbump() is False: find_silver(robot_state, silver_value)
 
         t0 = time.perf_counter()
         self.find_black()
@@ -213,7 +214,7 @@ class LineFollower():
         self.angle = 90
         
         while listener.mode.value != 0:
-            self.image = camera.capture_array()
+            self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
 
             self.find_black()
@@ -385,14 +386,14 @@ class LineFollower():
         motors.run(0, 0, 1)
         motors.run(-20, -20)
 
-        self.__wait_for_black_contour()
-        motors.run(-20, -20, 0.2)
+        for i in range(3): self.__wait_for_black_contour()
+        motors.run(-20, -20, 0.5)
         motors.run(0, 0, 0.3)
 
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        f = 2.3 + 0.5 * (robot_state.last_uphill < 100)
+        f = 2.5 + 0.5 * (robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
@@ -410,7 +411,7 @@ class LineFollower():
     
     def __wait_for_black_contour(self):
         while listener.mode.value != 0:
-            self.image = camera.capture_array()
+            self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
             self.find_black()
 
@@ -424,7 +425,7 @@ class LineFollower():
 
     def __align_to_contour_angle(self):
         while listener.mode.value != 0:
-            self.image = camera.capture_array()
+            self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
             self.find_black()
 
@@ -507,7 +508,7 @@ class LineFollower():
         motors.run(25, 25, duration)
         motors.run(0, 0, 0.3)
 
-        self.image = camera.capture_array()
+        self.image = camera.perspective_transform(camera.capture_array())
         self.display_image = self.image.copy()
         self.find_black()
 
@@ -800,6 +801,19 @@ class LineFollower():
 
             right_check = self.black_mask[:, camera.LINE_WIDTH - 30:]
             if cv2.countNonZero(right_check) > 0: return True
+            
+        return False
+
+    def speedbump(self):
+        if self.raw_image is not None:
+            top_check = self.raw_image[:30, :]
+            hsv_image = cv2.cvtColor(top_check, cv2.COLOR_BGR2HSV)
+
+            blue_mask = cv2.inRange(hsv_image, self.lower_blue, self.upper_blue)
+            
+            print(f"blue: {cv2.countNonZero(blue_mask)}")
+            show(np.uint8(top_check), display=camera.X11, name="blue")
+            if cv2.countNonZero(blue_mask) < 1850: return True
             
         return False
 
@@ -1114,7 +1128,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
     elif comparison == ">=": comparison_function = operator.ge
 
     while listener.mode.value != 0:
-        show(np.uint8(camera.capture_array()), display=camera.X11, name="line") 
+        show(np.uint8(camera.perspective_transform(camera.capture_array())), display=camera.X11, name="line")
         laser_value = laser_sensors.read([laser_pin])[0]
         colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()
