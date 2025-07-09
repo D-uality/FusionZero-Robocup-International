@@ -60,6 +60,10 @@ class LineFollower():
 
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
+        self.blue_pixels = [None for _ in range(25)]
+        self.blue_index = 0
+        self.prev_speedbump = False
+        self.last_speedbump = 0
         
         self.turn_color = (0, 255, 0)
         self.prev_side = None
@@ -87,7 +91,7 @@ class LineFollower():
         if robot_state.debug: print("captured image")
 
         silver_value = silver_sensor.read()
-        if self.speedbump() is False: find_silver(robot_state, silver_value)
+        find_silver(robot_state, silver_value)
 
         t0 = time.perf_counter()
         self.find_black()
@@ -393,19 +397,19 @@ class LineFollower():
         self.__align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        f = 2.5 + 0.5 * (robot_state.last_uphill < 100)
+        f = 3 + 0.5 * (robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
-            motors.run(-25, -25, f+0.2)
+            motors.run(-25, -25, f+0.5)
             motors.run(0, 0, 0.2)
 
             self.__align_to_contour_angle()
             motors.run(0, 0, 0.2)
 
-            if not self.__move_and_check_black(f+0.4):
+            if not self.__move_and_check_black(f+0.8):
                 print("Still no black. Exiting gap handler.")
-                motors.run(-25, -25, f+0.6)
+                motors.run(-25, -25, f+1)
 
         print("Gap handling complete.")
     
@@ -805,16 +809,39 @@ class LineFollower():
         return False
 
     def speedbump(self):
-        if self.raw_image is not None:
-            top_check = self.raw_image[:30, :]
+        if self.raw_image is not None and time.perf_counter() - self.last_speedbump > 0.3:
+            top_check = self.raw_image[:30, 80:camera.LINE_WIDTH - 60]
             hsv_image = cv2.cvtColor(top_check, cv2.COLOR_BGR2HSV)
 
             blue_mask = cv2.inRange(hsv_image, self.lower_blue, self.upper_blue)
             
+            if all(self.blue_pixels) == False: 
+                for i in range(len(self.blue_pixels)): self.blue_pixels[i] = cv2.countNonZero(blue_mask)
+            elif -200 < sum(self.blue_pixels)/len(self.blue_pixels) - cv2.countNonZero(blue_mask) < 100: self.blue_pixels[self.blue_index] = cv2.countNonZero(blue_mask)
+            self.blue_index = (self.blue_index + 1) % len(self.blue_pixels)
+
             print(f"blue: {cv2.countNonZero(blue_mask)}")
             show(np.uint8(top_check), display=camera.X11, name="blue")
-            if cv2.countNonZero(blue_mask) < 1850: return True
+            blue_sum = 0
             
+            for i in range(len(self.blue_pixels)):
+                if self.blue_pixels[i] is None: break
+                blue_average_size = i
+                
+            for i in range(blue_average_size): blue_sum += self.blue_pixels[i]
+
+            print(f"blue average: {blue_sum/(blue_average_size+1)}")
+
+            if cv2.countNonZero(blue_mask) < blue_sum/(blue_average_size+1) - 20: 
+                self.prev_speedbump = True
+                return True
+
+        if self.prev_speedbump:
+            self.blue_pixels = [None for _ in range(25)]
+            self.blue_index = 0
+            self.prev_speedbump = False
+            self.last_speedbump = time.perf_counter()
+
         return False
 
     # RED
@@ -844,6 +871,7 @@ def main(start_time) -> None:
     silver_value = silver_sensor.read()
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
+    line_follow.speedbump()
     
     touch_check(robot_state, touch_values)
     if robot_state.debug: print("touch checked")
@@ -916,20 +944,20 @@ def find_silver(robot_state: RobotState, silver_value: int) -> None:
     if robot_state.count["silver"] == 0:
         robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > robot_state.silver_min else 0
         # if silver_value > 130: motors.pause()
-    elif robot_state.validate_silver is False:
+    elif robot_state.validate_silver is False and not line_follow.speedbump():
         robot_state.validate_silver = True
         robot_state.silver_timer = time.perf_counter()
 
-    if robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.7:
+    if robot_state.validate_silver is True and (time.perf_counter() - robot_state.silver_timer > 0.7 or line_follow.speedbump()):
         robot_state.validate_silver = False
         robot_state.silver_timer = 0  
         robot_state.count["silver"] = 0
-    elif robot_state.validate_silver is True:
-        robot_state.found_silver = True if not line_follow.black_infront() else False
+    elif robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.4:
+        robot_state.found_silver = True if not line_follow.black_infront() and not line_follow.speedbump() else False
     else:
         robot_state.found_silver = False
 
-    print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
+    # print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:
