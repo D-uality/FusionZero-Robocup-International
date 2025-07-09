@@ -17,5 +17,5 @@ colour_sensors = ColourSensors()
 gyroscope = Gyroscope()
 led = LED()
 evac_camera = EvacuationCamera()
-claw = Claw()
+claw = Claw()z
 silver_sensor = SilverSensor()
