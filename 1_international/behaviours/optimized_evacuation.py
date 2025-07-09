@@ -3,7 +3,7 @@ if __name__ == "__main__":
     root = pathlib.Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(root))
 
-from core.shared_imports import time, np, cv2, Optional, randint, socket, getpass
+from core.shared_imports import time, np, cv2, Optional, randint, socket, getpass, math
 from hardware.robot import *
 from core.utilities import *
 from core.listener import listener
@@ -79,24 +79,34 @@ class Search():
         self.LIVE_DILATE_KERNAL = np.ones((15, 15), np.uint8)
         
         # Dead settings
-        self.DEAD_THRESHOLD_BLACK = 25
-        self.DEAD_THRESHOLD_SILVER = 160
-        self.DEAD_DILATE_WHITE_KERNAL = np.ones((3, 3), np.uint8)
-        self.DEAD_DILATE_GREEN_KERNAL = np.ones((3, 3), np.uint8)
-        self.DEAD_DILATE_MAXIMA_KERNAL = np.ones((7, 7), np.uint8)
-        self.DEAD_MORPH_KERNAL = (7, 7)
-        self.DEAD_COLOUR_VARIANCE_THRESHOLD = 25
-        self.DEAD_MIN_AREA = 200
-        self.DEAD_MAX_AREA = 50000
-        self.DEAD_MIN_RADIUS = 5
-        self.DEAD_MAX_RADIUS = 110
-        self.DEAD_TRANSFORM_SPLITTING_THRESHOLD = 8000
-        self.CIRCULARITY_THRESHOLD = 0.6
-        self.FILL_RATIO_THRESHOLD = 0.5
+        self.DEAD_GREEN_KERNAL = np.ones(( 7,  7), np.uint8)
+        self.DEAD_WHITE_KERNAL = np.ones(( 7,  7), np.uint8)
+        self.DEAD_BLACK_KERNAL = np.ones((31, 31), np.uint8)
+        
+        self.DEAD_WHITE_THRESHOLD = (160, 160, 160)
+        self.DEAD_BLACK_THRESHOLD = (50, 50, 50)
+        
+        self.DEAD_MIN_BLACK_AREA = 300
+        self.DEAD_MIN_Y = 30
+        
+        self.HOUGH_DP =           1                               # "Resolution" of the accumulator
+        self.HOUGH_MIN_DISTANCE = 200
+        self.HOUGH_PARAMETER_1 =  50                              # Lower -> detect more circles   |  Higher -> detect less circles
+        self.HOUGH_PARAMETER_2 =  30                              # Lower -> accepts more circles  |  Higher -> rejects more circles
+        self.HOUGH_MIN_RADIUS =   5
+        self.HOUGH_MAX_RADIUS =   150
         
         # Triangle settings
+        self.TRIANGLE_TOP_CROP = 15
+        
+        self.TRIANGLE_GREEN_HSV = ((50, 120, 15), (85, 255, 255))
+        self.TRIANGLE_ERODE_KERNAL = np.ones((5, 5), np.uint8)
         self.TRIANGLE_DILATE_KERNAL = np.ones((5, 5), np.uint8)
-        self.TRIANGLE_MIN_AREA = 800
+        
+        self.TRIANGLE_MIN_Y = 50 - self.TRIANGLE_TOP_CROP
+        self.TRIANGLE_MIN_AREA = 600
+        self.TRIANGLE_MIN_TRIANGULARITY = 0.7
+        
         
     def live(self, image: np.ndarray, display: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         if image is None or image.size == 0: return None
@@ -208,199 +218,102 @@ class Search():
         
         return final_centre_x
     
-    def dead(self, image: np.ndarray, display: np.ndarray, last_x: Optional[int] = None) -> Optional[int]:
+    def dead(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         if image is None or image.size == 0: return None
+        if self.TIMING_DEAD: start_time = time.perf_counter()
             
-        if self.TIMING_DEAD:
-            start_time = time.perf_counter()
-        
         # Crop according to last x
         if last_x is not None:
             x_lower = max(0, last_x - self.CROP_SIZE)
             x_upper = min(image.shape[1], last_x + self.CROP_SIZE)
-            working_image = image[:, x_lower:x_upper] if x_upper > x_lower else image
+            working_image = image[:, x_lower:x_upper]
             
         else:
-            working_image = image
+            working_image = image.copy()
             x_lower = 0
+            
+        if self.TIMING_DEAD: green_done_time = time.perf_counter()
+                
+        # Normalise white
+        white = cv2.inRange(working_image, self.DEAD_WHITE_THRESHOLD, (255, 255, 255))
+        white = cv2.dilate(white, self.DEAD_WHITE_KERNAL, iterations=1)
+        working_image[white > 0] = [160, 160, 160]
+        if self.TIMING_DEAD: white_done_time = time.perf_counter()
         
-        # Combined preprocessing - do all color operations in fewer passes
-        hsv_image = cv2.cvtColor(working_image, cv2.COLOR_BGR2HSV)
-        green_mask = cv2.inRange(hsv_image, (50, 120, 50), (70, 255, 255))
-        green_mask = cv2.dilate(green_mask, self.DEAD_DILATE_GREEN_KERNAL, iterations=1)
+        # crop based on black mask
+        black_mask  = cv2.inRange(working_image, (0, 0, 0), self.DEAD_BLACK_THRESHOLD)
+        if self.DEBUG_DEAD: show(black_mask, name="black mask", display=True)
         
-        # Apply green and white normalization in combined pass
-        working_image = working_image.copy()
-        working_image[green_mask > 0] = [41, 41, 41]
+        # Remove small black contours from mask
+        contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        filtered_mask = np.zeros_like(black_mask)
+        for contour in contours:
+            contour_area = cv2.contourArea(contour)
+            if self.DEBUG_DEAD: print(f"{contour_area}", end="  |  ")
+            
+            if contour_area >= self.DEAD_MIN_BLACK_AREA:
+                cv2.fillPoly(filtered_mask, [contour], 255)
+        black_mask = filtered_mask
         
-        # Convert to grayscale once for both white and dark mask detection
+        black_mask  = cv2.dilate(black_mask, self.DEAD_BLACK_KERNAL, iterations=1)
+        
+        # Search for only black parts of the image
         grey_image = cv2.cvtColor(working_image, cv2.COLOR_BGR2GRAY)
+        grey_image = cv2.bitwise_and(grey_image, black_mask)
+
+        if self.DEBUG_DEAD: show(grey_image, "pre_processing")
+        if self.TIMING_DEAD: mask_done_time = time.perf_counter()
         
-        # Apply green normalization to grayscale as well
-        grey_image[green_mask > 0] = 41
+        # Hough Circle Transform
+        circles = cv2.HoughCircles(grey_image, cv2.HOUGH_GRADIENT, self.HOUGH_DP, self.HOUGH_MIN_DISTANCE, param1=self.HOUGH_PARAMETER_1, param2=self.HOUGH_PARAMETER_2, minRadius=self.HOUGH_MIN_RADIUS, maxRadius=self.HOUGH_MAX_RADIUS)
+        if circles is None: return None
+        if self.TIMING_DEAD: hough_done_time = time.perf_counter()
+
+        print(f"Circles before: {circles}")
+        # Process circles
+        circles = np.round(circles[0, :]).astype("int")
+        print(f"Circles after: {circles}")
         
-        # White mask detection and normalization
-        white_mask = grey_image > self.DEAD_THRESHOLD_SILVER
-        white_mask = cv2.dilate(white_mask.astype(np.uint8) * 255, self.DEAD_DILATE_WHITE_KERNAL, iterations=1)
+        # Validate circles based on size
+        valid = []
         
-        # Apply normalization to both color and grayscale images
-        working_image[white_mask > 0] = [160, 160, 160]
-        grey_image[white_mask > 0] = 160
+        for (x, y, r) in circles:
+            x = max(0, min(x, working_image.shape[1] - 1))
+            y = max(0, min(y, working_image.shape[0] - 1))
+            if y > self.DEAD_MIN_Y and y - r > 0:
+                valid.append((x, y, r))
         
-        if self.TIMING_DEAD: preprocess_time = time.perf_counter()
+        if self.DEBUG_DEAD: print(f"Valid: {valid}")
+        if len(valid) == 0: return None
         
-        # Step 1: Create initial dark mask but with color rejection
-        # Only keep pixels that are dark AND neutral (not colored shadows)
-        dark_mask = grey_image < self.DEAD_THRESHOLD_BLACK
-        
-        # Color rejection - remove non-neutral dark areas
-        b, g, r = cv2.split(working_image)
-        color_variance = np.maximum(np.maximum(np.abs(b.astype(int) - g.astype(int)), np.abs(g.astype(int) - r.astype(int))), np.abs(r.astype(int) - b.astype(int)))
-        neutral_mask = color_variance < self.DEAD_COLOUR_VARIANCE_THRESHOLD  # Threshold for neutral colors
-        
-        # Combine dark and neutral masks
-        candidate_mask = dark_mask & neutral_mask
-        candidate_mask = candidate_mask.astype(np.uint8) * 255
-        
-        if self.DEBUG_DEAD: show(candidate_mask, name="candidate_mask", display=True)
-        
-        # Step 2: Morphological opening to remove thin shadows/connections
-        opening_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.DEAD_MORPH_KERNAL)
-        opened_mask = cv2.morphologyEx(candidate_mask, cv2.MORPH_OPEN, opening_kernel)
-        
-        if self.DEBUG_DEAD: show(opened_mask, "opened_mask")
-        
-        # Step 3: Connected components analysis
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(opened_mask, connectivity=8)
-        
-        if num_labels <= 1:  # Only background
-            if self.TIMING_DEAD:
-                print(f"dead() | Preprocess: {(preprocess_time-start_time)*1000:.1f}ms | Total: {(preprocess_time-start_time)*1000:.1f}ms | Status: no_components")
-            return None
-        
-        if self.TIMING_DEAD:
-            detection_time = time.perf_counter()
-        
-        # Step 4: Process each component
-        valid_candidates = []
-        
-        for i in range(1, num_labels):  # Skip background (label 0)
-            area = stats[i, cv2.CC_STAT_AREA]
-            if self.DEBUG_DEAD: print(f"\tArea: {area}")
-            
-            # Reject based on area
-            if area < self.DEAD_MIN_AREA or area > self.DEAD_MAX_AREA: continue
-                
-            # Get component mask
-            component_mask = (labels == i).astype(np.uint8) * 255
-            
-            # For large components, try distance transform splitting
-            if area > self.DEAD_TRANSFORM_SPLITTING_THRESHOLD:
-                # Distance transform to find peaks
-                dist_transform = cv2.distanceTransform(component_mask, cv2.DIST_L2, 5)
-                
-                # Find local maxima (potential circle centers)
-                local_maxima = cv2.dilate(dist_transform, self.DEAD_DILATE_MAXIMA_KERNAL) == dist_transform
-                local_maxima = local_maxima & (dist_transform > self.DEAD_MIN_RADIUS)
-                
-                # Get peak locations
-                peak_locations = np.where(local_maxima)
-                
-                if len(peak_locations[0]) > 0:
-                    # Process each peak as a potential circle
-                    for py, px in zip(peak_locations[0], peak_locations[1]):
-                        radius = int(dist_transform[py, px])
-                        if self.DEAD_MIN_RADIUS <= radius <= self.DEAD_MAX_RADIUS:
-                            valid_candidates.append((px, py, radius, area))
-                else:
-                    # Fallback: use centroid
-                    cx, cy = int(centroids[i, 0]), int(centroids[i, 1])
-                    est_radius = int(np.sqrt(area / np.pi))
-                    if self.DEAD_MIN_RADIUS <= est_radius <= self.DEAD_MAX_RADIUS:
-                        valid_candidates.append((cx, cy, est_radius, area))
-            else:
-                # Small components: use centroid and estimate radius
-                cx, cy = int(centroids[i, 0]), int(centroids[i, 1])
-                est_radius = int(np.sqrt(area / np.pi))
-                if self.DEAD_MIN_RADIUS <= est_radius <= self.DEAD_MAX_RADIUS:
-                    valid_candidates.append((cx, cy, est_radius, area))
-        
-        if self.DEBUG_DEAD: print(f"Valid candidates: {valid_candidates}")
-        
-        if not valid_candidates:
-            if self.TIMING_DEAD:
-                print(f"dead() | Preprocess: {(preprocess_time-start_time)*1000:.1f}ms | Detection: {(detection_time-preprocess_time)*1000:.1f}ms | Total: {(detection_time-start_time)*1000:.1f}ms | Status: no_valid")
-            return None
-        
-        if self.TIMING_DEAD: validation_time = time.perf_counter()
-        
-        # Step 5: Circularity and fill-ratio validation
-        final_candidates = []
-        
-        for cx, cy, radius, area in valid_candidates:
-            # Create circular mask for this candidate
-            circle_mask = np.zeros_like(opened_mask)
-            cv2.circle(circle_mask, (cx, cy), radius, 255, -1)
-            
-            # Calculate intersection with detected dark regions
-            intersection = cv2.bitwise_and(opened_mask, circle_mask)
-            intersection_area = np.sum(intersection > 0)
-            
-            # Calculate fill ratio
-            expected_area = np.pi * radius * radius
-            fill_ratio = intersection_area / expected_area
-            
-            # Circularity test using contour
-            intersection_contours, _ = cv2.findContours(intersection, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if intersection_contours:
-                largest_contour = max(intersection_contours, key=cv2.contourArea)
-                perimeter = cv2.arcLength(largest_contour, True)
-                if perimeter > 0:
-                    circularity = 4 * np.pi * cv2.contourArea(largest_contour) / (perimeter * perimeter)
-                else:
-                    circularity = 0
-            else:
-                circularity = 0
-            
-            # Accept if circular enough and well-filled and low enough y-coordinate
-            if self.DEBUG_DEAD: print(f"\tCircularity: {circularity:.2f} | Fill Ratio: {fill_ratio:.2f}")
-            if circularity > self.CIRCULARITY_THRESHOLD and fill_ratio > self.FILL_RATIO_THRESHOLD and cy > 30:
-                final_candidates.append((cx, cy, radius, fill_ratio * circularity))
-        
-        if not final_candidates:
-            if self.TIMING_DEAD:
-                print(f"dead() | Preprocess: {(preprocess_time-start_time)*1000:.1f}ms | Detection: {(detection_time-preprocess_time)*1000:.1f}ms | Validation: {(validation_time-detection_time)*1000:.1f}ms | Total: {(validation_time-start_time)*1000:.1f}ms | Status: no_final")
-            return None
-        
-        if self.TIMING_DEAD:
-            selection_time = time.perf_counter()
-        
-        # Select best candidate
+        # Find the closest circle to the crop center, or the largest circle if last x is None
         if last_x is not None:
             crop_center = working_image.shape[1] / 2
-            best_candidate = min(final_candidates, key=lambda c: abs(c[0] - crop_center))
+            best_circle = min(valid, key=lambda circle: abs(circle[0] - crop_center))
+            centre_x = best_circle[0] + x_lower
         else:
-            best_candidate = max(final_candidates, key=lambda c: c[3])  # Best score
-        
-        x, y, r = best_candidate[:3]
-        centre_x = x + x_lower
-        
-        # Display results
-        if self.DISPLAY:
-            cv2.circle(display, (centre_x, y), r, (0, 255, 0), 2)
-            cv2.circle(display, (centre_x, y), 1, (0, 255, 0), 2)
+            best_circle = max(valid, key=lambda circle: circle[2])
+            centre_x = best_circle[0] + x_lower
+            
+        if self.TIMING_DEAD: validation_done_time = time.perf_counter()
+            
+        # Display on image
+        if evac_state.DISPLAY:
+            _, y, r = best_circle
+            cv2.circle(display_image, (centre_x, y), r, (0, 255, 0), 2)
+            cv2.circle(display_image, (centre_x, y), 1, (0, 255, 0), 2)
         
         if self.TIMING_DEAD:
-            print(f"dead() | Preprocess: {(preprocess_time-start_time)*1000:.1f}ms | Detection: {(detection_time-preprocess_time)*1000:.1f}ms | Validation: {(validation_time-detection_time)*1000:.1f}ms | Selection: {(selection_time-validation_time)*1000:.1f}ms | Total: {(selection_time-start_time)*1000:.1f}ms | Status: success")
-        
-        return centre_x
+            print(f"Green: {(green_done_time-start_time)*1000:.1f}ms | Spectral: {(white_done_time-green_done_time)*1000:.1f}ms | Mask: {(mask_done_time-white_done_time)*1000:.1f}ms | Hough: {(hough_done_time-mask_done_time)*1000:.1f}ms | Validation: {(validation_done_time-hough_done_time)*1000:.1f}ms | Total: {(validation_done_time-start_time)*1000:.1f}ms")
+
+        return int(centre_x)
 
     def triangle(self, image: np.ndarray, display_image: np.ndarray, triangle: str) -> tuple[Optional[int], Optional[int]]:
         if image is None or image.size == 0: return None, None
         if self.TIMING_TRIANGLES: start_time = time.perf_counter()
 
         # Crop the image to remove the top 30 pixels
-        image = image[30:, :]
+        image = image[self.TRIANGLE_TOP_CROP:, :]
         
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         if self.TIMING_TRIANGLES: hsv_time = time.perf_counter()
@@ -410,12 +323,15 @@ class Search():
             mask_lower = cv2.inRange(hsv_image, (  0, 120, 0), ( 20, 255, 255))
             mask_upper = cv2.inRange(hsv_image, (160, 120, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
+        
         else:
-            mask = cv2.inRange(hsv_image, (50, 120, 15), (85, 255, 255))
+            mask = cv2.inRange(hsv_image, self.TRIANGLE_GREEN_HSV[0], self.TRIANGLE_GREEN_HSV[1])
         
         if self.TIMING_TRIANGLES: mask_time = time.perf_counter()
         
+        mask =  cv2.erode(mask, self.TRIANGLE_ERODE_KERNAL,  iterations=1)
         mask = cv2.dilate(mask, self.TRIANGLE_DILATE_KERNAL, iterations=1)
+        
         if self.TIMING_TRIANGLES: dilate_time = time.perf_counter()
         
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -426,16 +342,16 @@ class Search():
             return None, None
         
         if self.TIMING_TRIANGLES: contours_time = time.perf_counter()
-        
-        if self.DEBUG_TRIANGLES: 
-            for contour in contours: print(cv2.contourArea(contour))
+        if self.DEBUG_TRIANGLES:
+            for contour in contours: print(f"{cv2.contourArea(contour)}", end="  |  ")
         
         largest_contour = max(contours, key=cv2.contourArea)
         contour_area = cv2.contourArea(largest_contour)
+        rectangularity = self._rectangularity_score(largest_contour)
         
-        if self.DEBUG_TRIANGLES: print(contour_area)
-        
-        if contour_area < self.TRIANGLE_MIN_AREA:
+        if self.DEBUG_TRIANGLES: print(f"Rectangle Score: {rectangularity}")
+                
+        if contour_area < self.TRIANGLE_MIN_AREA or rectangularity < self.TRIANGLE_MIN_TRIANGULARITY:
             if self.TIMING_TRIANGLES:
                 total_time = time.perf_counter()
                 print(f"triangle() | HSV: {(hsv_time-start_time)*1000:.1f}ms | Mask: {(mask_time-hsv_time)*1000:.1f}ms | Dilate: {(dilate_time-mask_time)*1000:.1f}ms | Contours: {(contours_time-dilate_time)*1000:.1f}ms | Total: {(total_time-start_time)*1000:.1f}ms | Status: too_small")
@@ -446,7 +362,9 @@ class Search():
         # Get the bounding rectangle of the largest contour
         x, y, w, h = cv2.boundingRect(largest_contour)
         
-        if h > w or y + h/2 > evac_camera.height / 2:
+        if self.DEBUG_TRIANGLES: print(f"h>w: {h} {w}  |  y + h/2: {y + h/2} {evac_camera.height/2}")
+        
+        if h > w or y + h/2 > self.TRIANGLE_MIN_Y:
             if self.TIMING_TRIANGLES:
                 total_time = time.perf_counter()
                 print(f"triangle() | HSV: {(hsv_time-start_time)*1000:.1f}ms | Mask: {(mask_time-hsv_time)*1000:.1f}ms | Dilate: {(dilate_time-mask_time)*1000:.1f}ms | Contours: {(contours_time-dilate_time)*1000:.1f}ms | Area: {(area_time-contours_time)*1000:.1f}ms | Total: {(total_time-start_time)*1000:.1f}ms | Status: invalid_shape")
@@ -464,6 +382,45 @@ class Search():
             print(f"triangle() | HSV: {(hsv_time-start_time)*1000:.1f}ms | Mask: {(mask_time-hsv_time)*1000:.1f}ms | Dilate: {(dilate_time-mask_time)*1000:.1f}ms | Contours: {(contours_time-dilate_time)*1000:.1f}ms | Area: {(area_time-contours_time)*1000:.1f}ms | Bounds: {(bounds_time-area_time)*1000:.1f}ms | Display: {(total_time-bounds_time)*1000:.1f}ms | Total: {(total_time-start_time)*1000:.1f}ms | Status: success")
 
         return int(x + w/2), contour_area
+    
+    def _rectangularity_score(self, contour: np.ndarray) -> float:
+        # 1) area-fit
+        rect = cv2.minAreaRect(contour)
+        box  = cv2.boxPoints(rect)
+        
+        boxArea      = cv2.contourArea(box)
+        contourArea  = cv2.contourArea(contour)
+        
+        if boxArea == 0: return 0.0
+        areaScore = contourArea / boxArea                        # ≤ 1
+
+        # 2) vertex-count fit
+        peri   = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+        vertexScore = 1 - abs(len(approx) - 4) / 4               # 1 if 4 vertices
+
+        # 3) angle fit (only if we really have 4 corners)
+        if len(approx) == 4:
+            pts = approx.reshape(-1, 2)
+            angles = []
+            for i in range(4):
+                p0, p1, p2 = pts[i], pts[(i + 1) % 4], pts[(i + 2) % 4]
+                v1, v2 = p0 - p1, p2 - p1
+                
+                cosang = np.clip(
+                    np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)),
+                    -1.0, 1.0
+                )
+                
+                angle = math.degrees(math.acos(cosang))
+                angles.append(angle)
+            angleScore = sum(1 - abs(90 - a) / 90 for a in angles) / 4  # 1 if 90°
+        else:
+            angleScore = 0.0
+
+        # combine
+        score = max(0.0, min(1.0, areaScore * vertexScore * angleScore))
+        return score
     
 class Movement():
     def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera, touch_sensors: TouchSensors, colour_sensors: ColourSensors, motors: Motors):
@@ -569,19 +526,19 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     if evac_state.DEBUG_ANALYSE: print(live_enable, dead_enable, green_enable, red_enable)
     
     if search_type in ["live", "green", "default"] and live_enable:
-        live_x = search.live(image, display_image, last_x)
+        live_x = op_search.live(image, display_image, last_x)
         if live_x is not None: return live_x, "live"
 
     if search_type in ["dead", "green", "default"] and dead_enable:
-        dead_x = search.dead(image, display_image, last_x)
+        dead_x = op_search.dead(image, display_image, last_x)
         if dead_x is not None: return dead_x, "dead"
     
     if search_type in ["green", "default"] and green_enable:
-        x, _ = search.triangle(image, display_image, "green")
+        x, _ = op_search.triangle(image, display_image, "green")
         if x is not None: return x, "green"
     
     if search_type in ["red", "default"] and red_enable:
-        x, _  = search.triangle(image, display_image, "red")
+        x, _  = op_search.triangle(image, display_image, "red")
         if x is not None: return x, "red"
     
     return None, search_type
@@ -938,7 +895,7 @@ def leave():
 ##########################################################################################################################################################
 
 evac_state = EvacuationState()
-search = Search(evac_state, evac_camera)
+op_search = Search(evac_state, evac_camera)
 movement = Movement(evac_state, evac_camera, touch_sensors, colour_sensors, motors)
 
 def main() -> None:
