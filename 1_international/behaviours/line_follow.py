@@ -67,17 +67,22 @@ class LineFollower():
         
         self.turn_color = (0, 255, 0)
         self.prev_side = None
-  
+
+        self.left_edge_points = None        
+        self.right_edge_points = None
+        self.top_edge_points = None
+        self.bottom_edge_points = None
         self.last_angle = self.angle = 90
         self.turn = 0
         self.low_turn = False
         self.last_check_front = 0
         self.raw_image = self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = None
-        self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = None
+        self.many_contours = self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = None
         self.last_seen_green = 100
         self.black_contour = self.black_mask = self.full_black = None
         self.v1, self.v2 = 0, 0
         self.stuck_count = self.last_stuck_time = 0
+        self.integral = 0
     
     def follow(self, starting=False) -> None:
         overall_start = time.perf_counter()
@@ -91,7 +96,7 @@ class LineFollower():
         if robot_state.debug: print("captured image")
 
         silver_value = silver_sensor.read()
-        find_silver(robot_state, silver_value)
+        # find_silver(robot_state, silver_value)
 
         t0 = time.perf_counter()
         self.find_black()
@@ -115,7 +120,7 @@ class LineFollower():
             if robot_state.debug: print("calculated angle")
 
             silver_value = silver_sensor.read()
-            find_silver(robot_state, silver_value)
+            # find_silver(robot_state, silver_value)
 
             if not starting:
                 t0 = time.perf_counter()
@@ -150,6 +155,11 @@ class LineFollower():
                 self.turn = 0
             else:
                 self.turn = int(self.turn_multi * (self.angle - 90))
+                self.integral += self.angle-90
+            
+            if abs(90-self.angle) < 10:
+                self.integral = 0
+
 
         if robot_state.trigger["seasaw"]:
             for i in range(5):
@@ -211,7 +221,7 @@ class LineFollower():
             if robot_state.trigger["tilt_right"] and v1 < 0: v1 = v1 // 2
 
             self.v1, self.v2 = v1, v2
-            # self.stuck_check()
+            self.stuck_check()
             motors.run(self.v1, self.v2)
     
     def run_till_camera(self, v1, v2, threshold):
@@ -260,7 +270,7 @@ class LineFollower():
             print(f"Similarity: {similarity}, Stuck Detected!")
             return True
 
-        print(f"Similarity: {similarity}")
+        # print(f"Similarity: {similarity}")
         return False
 
     # GREEN
@@ -551,6 +561,22 @@ class LineFollower():
         if contour is not None and ref_point is not None:
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 20]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 20]
+            if not validate:
+                self.left_edge_points = left_edge_points
+                self.right_edge_points = right_edge_points
+                self.top_edge_points = [
+                    (pt[0][0], pt[0][1])
+                    for contour in self.many_contours      # outer loop: each contour
+                    for pt in contour                      # inner loop: each point in that contour
+                    if pt[0][1] <= 20                      # filter by y <= 20
+                ]
+
+                self.bottom_edge_points = [
+                    (pt[0][0], pt[0][1])
+                    for contour in self.many_contours
+                    for pt in contour
+                    if pt[0][1] >= camera.LINE_HEIGHT - 20
+                ]
 
             if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 30) + 20 * (robot_state.last_downhill < 100)):
                 # if robot_state.last_downhill > 100: self.prev_side = None
@@ -745,10 +771,10 @@ class LineFollower():
         self.full_black = black_mask.copy()
 
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self.many_contours = contours
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
         contours = [cnt for cnt in contours if any(p[0][1] > 50 for p in cnt)]
         # contours = [cnt for cnt in contours if (cv2.contourArea(cnt) > self.min_black_area and any(p[0][1] > 50 for p in cnt) and any(p[0][1] < 50 for p in cnt))]
-
         if len(contours) > 1:
             filtered_contours = []
             for contour in contours:
@@ -821,8 +847,8 @@ class LineFollower():
             elif -200 < sum(self.blue_pixels)/len(self.blue_pixels) - cv2.countNonZero(blue_mask) < 100: self.blue_pixels[self.blue_index] = cv2.countNonZero(blue_mask)
             self.blue_index = (self.blue_index + 1) % len(self.blue_pixels)
 
-            print(f"blue: {cv2.countNonZero(blue_mask)}")
-            show(np.uint8(top_check), display=camera.X11, name="blue")
+            # print(f"blue: {cv2.countNonZero(blue_mask)}")
+            # show(np.uint8(top_check), display=camera.X11, name="blue")
             blue_sum = 0
             
             for i in range(len(self.blue_pixels)):
@@ -831,7 +857,7 @@ class LineFollower():
                 
             for i in range(blue_average_size): blue_sum += self.blue_pixels[i]
 
-            print(f"blue average: {blue_sum/(blue_average_size+1)}")
+            # print(f"blue average: {blue_sum/(blue_average_size+1)}")
 
             if cv2.countNonZero(blue_mask) < blue_sum/(blue_average_size+1) - 20: 
                 self.prev_speedbump = True
@@ -888,7 +914,7 @@ def main(start_time) -> None:
     line_follow.find_red()
     if robot_state.debug: print("found silver and red")
 
-    if robot_state.found_silver is None:
+    if robot_state.found_silver is True:
         print("Silver Found!")
         robot_state.count["silver"] = 0
 
@@ -920,13 +946,13 @@ def main(start_time) -> None:
         
     else:
         silver_value = silver_sensor.read()
-        find_silver(robot_state, silver_value)
+        # find_silver(robot_state, silver_value)
         
         if robot_state.debug: print("beginning line follow")
         fps, error, green_signal = line_follow.follow()
         
         silver_value = silver_sensor.read()
-        find_silver(robot_state, silver_value)
+        # find_silver(robot_state, silver_value)
 
         active_triggers = ["LINE"]
         for key in robot_state.trigger:
@@ -943,25 +969,37 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     global line_follow
-    robot_state.silver_value = silver_value
 
-    if robot_state.count["silver"] == 0:
-        robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > robot_state.silver_min else 0
-        # if silver_value > 130: motors.pause()
-    elif robot_state.validate_silver is False and not line_follow.speedbump():
-        robot_state.validate_silver = True
-        robot_state.silver_timer = time.perf_counter()
+    # print(f"top: {line_follow.top_edge_points}, left: {line_follow.left_edge_points}, right: {line_follow.right_edge_points}, bottom: {line_follow.bottom_edge_points}")
+    if line_follow.black_contour is not None and abs(line_follow.integral) < 20000:
+        # If black contour touches left and right and bottom of the screen, but not the top of the screen
+        if line_follow.top_edge_points == [] and line_follow.left_edge_points and line_follow.right_edge_points and line_follow.bottom_edge_points:
+            # If there is no green (green signal is None) and laser sees max distance
+            print(f"Laser: {laser_sensors.read()[1]}, Green: {line_follow.green_signal}")
+            if line_follow.green_signal == None and laser_sensors.read()[1] > 10:
+                robot_state.found_silver = True
+        
+    print(f"integral: {line_follow.integral}")
+    # global line_follow
+    # robot_state.silver_value = silver_value
 
-    if robot_state.validate_silver is True and (time.perf_counter() - robot_state.silver_timer > 0.7 or line_follow.speedbump()):
-        robot_state.validate_silver = False
-        robot_state.silver_timer = 0  
-        robot_state.count["silver"] = 0
-    elif robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.4:
-        robot_state.found_silver = True if not line_follow.black_infront() and not line_follow.speedbump() else False
-    else:
-        robot_state.found_silver = False
+    # if robot_state.count["silver"] == 0:
+    #     robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > robot_state.silver_min else 0
+    #     # if silver_value > 130: motors.pause()
+    # elif robot_state.validate_silver is False and not line_follow.speedbump():
+    #     robot_state.validate_silver = True
+    #     robot_state.silver_timer = time.perf_counter()
 
-    # print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
+    # if robot_state.validate_silver is True and (time.perf_counter() - robot_state.silver_timer > 0.7 or line_follow.speedbump()):
+    #     robot_state.validate_silver = False
+    #     robot_state.silver_timer = 0  
+    #     robot_state.count["silver"] = 0
+    # elif robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.4:
+    #     robot_state.found_silver = True if not line_follow.black_infront() and not line_follow.speedbump() else False
+    # else:
+    #     robot_state.found_silver = False
+
+    # # print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:

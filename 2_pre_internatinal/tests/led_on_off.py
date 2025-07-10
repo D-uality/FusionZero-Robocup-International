@@ -7,7 +7,7 @@ while True:
     led.on()
     print("LED is ON")
     sleep(2)
-    # led.off()
+    led.off()
     print("LED is OFF")
     sleep(2)
 

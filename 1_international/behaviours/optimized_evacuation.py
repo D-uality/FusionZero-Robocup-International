@@ -973,6 +973,7 @@ def main() -> None:
 if __name__ == "__main__":
     # evac_state.victim_count = 3
     
+    listener.mode.value = 2
     main()
     
     # leave()
