@@ -13,28 +13,28 @@ from hardware.oled_display import OLED_Display
 oled_display = OLED_Display()
 
 camera = Camera()
-oled_display.text("Cam ✓", 0, 0, size=5)
+oled_display.text("Cam ✓", 0, 0)
 
 motors = Motors(camera)
-oled_display.text("Motors ✓", 0, 6, size=5)
+oled_display.text("Motor ✓", 0, 15)
 
 laser_sensors = LaserSensors(motors)
-oled_display.text("ToF ✓", 0, 12, size=5)
+oled_display.text("ToF ✓", 0, 30)
 
 touch_sensors = TouchSensors()
 
 colour_sensors = ColourSensors()
-oled_display.text("CS ✓", 0, 18, size=5)
+oled_display.text("CS ✓", 0, 45)
 
 gyroscope = Gyroscope()
-oled_display.text("IMU ✓", 0, 24, size=5)
+oled_display.text("IMU ✓", 70, 0)
 
 led = LED()
 
 evac_camera = EvacuationCamera()
-oled_display.text("ECam ✓", 0, 30, size=5)
+oled_display.text("ECam ✓", 70, 15)
 
 claw = Claw()
-oled_display.text("Claw ✓", 0, 36, size=5)
+oled_display.text("Claw ✓", 70, 30)
 
 silver_sensor = SilverSensor()

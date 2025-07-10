@@ -1,4 +1,4 @@
-from core.shared_imports import board, Image, ImageDraw, ImageFont, adafruit_ssd1306
+from core.shared_imports import board, Image, ImageDraw, ImageFont, adafruit_ssd1306, getpass, socket
 from core.utilities import debug
 
 
@@ -21,18 +21,37 @@ class OLED_Display:
         self.oled.fill(0)
         self.oled.show()
         self.image = Image.new("1", (self.WIDTH, self.HEIGHT))
+        self.draw = ImageDraw.Draw(self.image)
+
 
     def _font(self, size: int) -> ImageFont.ImageFont:
         if size not in self.font_cache:
-            self.font_cache[size] = ImageFont.truetype(
-                "/home/frederick/FusionZero-Robocup-International/1_international/hardware/fonts/JetBrainsMono-Regular.ttf",
-                size=size,
-            )
+            username = getpass.getuser()
+            hostname = socket.gethostname()
+            self.user_at_host = f"{username}@{hostname}"
+            
+            if self.user_at_host == "frederick@raspberrypi":
+                self.font_cache[size] = ImageFont.truetype(
+                    "/home/frederick/FusionZero-Robocup-International/1_international/hardware/fonts/JetBrainsMono-Regular.ttf",
+                    size=size,
+                )
+            else:
+                self.font_cache[size] = ImageFont.truetype(
+                    "/home/aidan/FusionZero-Robocup-International/1_international/hardware/fonts/JetBrainsMono-Regular.ttf",
+                    size=size,
+                )
+
         return self.font_cache[size]
 
-    def text(self, text: str, x: int, y: int, size: int = 10) -> None:
-        image = Image.new("1", (self.WIDTH, self.HEIGHT))
-        draw = ImageDraw.Draw(image)
-        draw.text((x, y), str(text), fill=255, font=self._font(size))
-        self.oled.image(image)
+    def text(self, text: str, x: int, y: int, size: int = 15) -> None:
+        self.draw.text((x, y), str(text), fill=255, font=self._font(size))
+        self.oled.image(self.image)
         self.oled.show()
+    
+    def clear(self) -> None:
+        self.image = Image.new("1", (self.WIDTH, self.HEIGHT))
+        self.draw = ImageDraw.Draw(self.image)
+        self.oled.fill(0)
+        self.oled.show()
+
+

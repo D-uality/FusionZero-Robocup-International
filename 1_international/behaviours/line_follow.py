@@ -3,9 +3,15 @@ from core.utilities import *
 from core.listener import listener
 from hardware.robot import *
 import behaviours.optimized_evacuation as evacuation_zone
+from behaviours.silver_detection import (YoloWorker, image_queue, yolo_result_queue)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
+
+yolo_worker = YoloWorker
+
+yolo_thread = yolo_worker("/home/aidan/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_classification.pt")
+yolo_thread.start()
 
 if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
 
@@ -969,37 +975,19 @@ def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
      
 def find_silver(robot_state: RobotState, silver_value: int) -> None:
     global line_follow
+    # if silver_value > robot_state.silver_min:
+    if not image_queue.full():
+        print("Queue is ready")
+        if line_follow.image is not None:
+            print("Saving image")
+            image_queue.put_nowait(line_follow.image.copy())
 
-    # print(f"top: {line_follow.top_edge_points}, left: {line_follow.left_edge_points}, right: {line_follow.right_edge_points}, bottom: {line_follow.bottom_edge_points}")
-    if line_follow.black_contour is not None and abs(line_follow.integral) < 20000:
-        # If black contour touches left and right and bottom of the screen, but not the top of the screen
-        if line_follow.top_edge_points == [] and line_follow.left_edge_points and line_follow.right_edge_points and line_follow.bottom_edge_points:
-            # If there is no green (green signal is None) and laser sees max distance
-            print(f"Laser: {laser_sensors.read()[1]}, Green: {line_follow.green_signal}")
-            if line_follow.green_signal == None and laser_sensors.read()[1] > 10:
-                robot_state.found_silver = True
-        
-    print(f"integral: {line_follow.integral}")
-    # global line_follow
-    # robot_state.silver_value = silver_value
-
-    # if robot_state.count["silver"] == 0:
-    #     robot_state.count["silver"] = robot_state.count["silver"] + 1 if silver_value > robot_state.silver_min else 0
-    #     # if silver_value > 130: motors.pause()
-    # elif robot_state.validate_silver is False and not line_follow.speedbump():
-    #     robot_state.validate_silver = True
-    #     robot_state.silver_timer = time.perf_counter()
-
-    # if robot_state.validate_silver is True and (time.perf_counter() - robot_state.silver_timer > 0.7 or line_follow.speedbump()):
-    #     robot_state.validate_silver = False
-    #     robot_state.silver_timer = 0  
-    #     robot_state.count["silver"] = 0
-    # elif robot_state.validate_silver is True and time.perf_counter() - robot_state.silver_timer > 0.4:
-    #     robot_state.found_silver = True if not line_follow.black_infront() and not line_follow.speedbump() else False
-    # else:
-    #     robot_state.found_silver = False
-
-    # # print(f"silver count: {robot_state.count['silver']}, silver_value: {silver_value}, silver timer: {time.perf_counter() - robot_state.silver_timer}, silver found: {robot_state.found_silver}")
+    if not yolo_result_queue.empty():
+        label, confidence = yolo_result_queue.get_nowait()
+        print(f"YOLO detected: {label} ({confidence:.1%})")
+        if confidence > 0.80 and label == "silver_line":
+            robot_state.found_silver = True
+            # motors.pause()
 
 def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
     if gyro_values is not None:

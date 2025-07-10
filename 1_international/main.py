@@ -20,7 +20,8 @@ def main() -> None:
     
     try:
         listener.start()
-        
+        oled_display.text("READY", 70, 45)
+
         while not listener.exit_event.is_set():
             if listener.mode.value != 1:
                 start_time = time.perf_counter()

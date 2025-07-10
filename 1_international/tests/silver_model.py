@@ -10,13 +10,15 @@ from ultralytics import YOLO
 
 start_display()
 
-yolo = YOLO('/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_classify_s.pt')
-led.off()
+yolo = YOLO('/home/aidan/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_classification.pt')
+led.on()
 
 print("program start")
 
 while True:
-    image = evac_camera.capture()
+    image = camera.capture_array()
+    image = camera.perspective_transform(image)
+    show(image, name="Display", display=True)
     results = yolo(image)
 
     result = results[0]            # the Results object for this frame
