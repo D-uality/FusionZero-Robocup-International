@@ -3,7 +3,7 @@ from core.shared_imports import GPIO, time, random
 from core.listener import listener
 from core.utilities import *
 
-import behaviours.line_follow as line_follow
+import behaviours.line as line
 import behaviours.evacuation_zone as evacuation_zone
 import behaviours.optimized_evacuation as optimized_evacuation_zone
 from hardware.robot import *
@@ -31,7 +31,7 @@ def main() -> None:
                 led.off()
                 
             elif listener.mode.value == 1:
-                line_follow.main(start_time)
+                line.main(start_time)
                 
             elif listener.mode.value == 2:
                 optimized_evacuation_zone.main()
