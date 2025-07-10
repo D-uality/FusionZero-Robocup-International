@@ -102,8 +102,8 @@ class Camera:
         self.X11 = True
         self.FLIP = False
         self.debug = False
-        self.LINE_WIDTH = 320
-        self.LINE_HEIGHT = 200
+        self.LINE_WIDTH = 160
+        self.LINE_HEIGHT = 100
         self.color_format = "RGB888"
 
         username = getpass.getuser()
@@ -111,10 +111,10 @@ class Camera:
         self.user_at_host = f"{username}@{hostname}"
 
         # Default perspective transform points
-        self.top_left     = (int(self.LINE_WIDTH / 4),     20)
-        self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 20)
-        self.bottom_left  = (0,                            self.LINE_HEIGHT - 70)
-        self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 70)
+        self.top_left     = (int(self.LINE_WIDTH / 4),     10)
+        self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 10)
+        self.bottom_left  = (0,                            self.LINE_HEIGHT - 30)
+        self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 30)
 
         # Adjust for specific host if needed
         if self.user_at_host == "frederick@raspberrypi":
