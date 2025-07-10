@@ -1,6 +1,5 @@
-from numpy import empty
-from core.shared_imports import time, ServoKit, ADC, board, AnalogIn, socket, getpass
-from core.utilities import debug
+from core.shared_imports import time, ServoKit, ADC, board, AnalogIn
+from core.utilities import debug, user_at_host
 
 class Claw():
     def __init__(self):
@@ -14,11 +13,7 @@ class Claw():
         self.closer_pin = 8
         self.pca = ServoKit(channels=16)
         
-        username = getpass.getuser()
-        hostname = socket.gethostname()
-        self.user_at_host = f"{username}@{hostname}"
-        
-        if self.user_at_host == "frederick@raspberrypi":
+        if user_at_host == "frederick@raspberrypi":
             self.EMPTY_TOLERANCE = 20
             self.OPPOSITE_LIVE_TOLERANCE = 20
             self.LIVE_TOLERANCE = 250

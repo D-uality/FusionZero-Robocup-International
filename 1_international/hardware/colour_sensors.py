@@ -1,17 +1,14 @@
-from core.shared_imports import os, time, board, ADC, AnalogIn, getpass, socket
-from core.utilities import debug
+from core.shared_imports import os, time, board, ADC, AnalogIn
+from core.utilities import debug, user_at_host
 from core.listener import listener
 
 class ColourSensors():
     def __init__(self):
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
+
         
-        username = getpass.getuser()
-        hostname = socket.gethostname()
-        self.user_at_host = f"{username}@{hostname}"
-        
-        if self.user_at_host == "frederick@raspberrypi":
+        if user_at_host == "frederick@raspberrypi":
             self.__CHANNELS = [7, 6, 5, 4, 2]
             self.__CALIBRATION_FILE = r"/home/frederick/FusionZero-Robocup-International/1_international/hardware/calibration_values/frederick_calibration_values.txt"
         else:
