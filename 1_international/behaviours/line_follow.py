@@ -46,14 +46,15 @@ class RobotState():
         
         self.last_uphill = 0
         self.last_downhill = 1000
+        robot_state.main_loop_count = 0
         
 class LineFollower():
     def __init__(self):
         # Constants
         self.speed = 30
         self.turn_multi = 1.5
-        self.min_black_area = 1000
-        self.min_green_area = 3000
+        self.min_black_area = 500
+        self.min_green_area = 1000
         self.base_black = 50
         self.light_black = 90
         self.lightest_black = 100
@@ -62,11 +63,9 @@ class LineFollower():
         # Variables
         self.prev_side = None
         self.last_angle = self.angle = 90
-        self.turn = self.last_check_front = 0
+        self.turn = self.v1 = self.v2 = self.integral = 0
         self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = self.black_contour = self.black_mask = None 
         self.last_seen_green = 100
-        self.v1, self.v2 = 0, 0
-        self.integral = 0
     
     def follow(self, starting=False) -> None:
         self.image = camera.perspective_transform(camera.capture_array())
@@ -342,7 +341,7 @@ class LineFollower():
             self.find_black()
 
             if self.black_contour is not None:
-                if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 5000:
+                if any(p[0][1] >= camera.LINE_HEIGHT - 5 for p in self.black_contour) and cv2.contourArea(self.black_contour) > 2000:
                     print("Black contour found.")
                     break
 
@@ -421,7 +420,7 @@ class LineFollower():
                 # --- DEBUG DRAW ---
                 if self.display_image is not None and camera.X11:
                     # Draw poly approximation
-                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=5)
+                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=2)
 
                     # Draw angle line
                     cv2.line(self.display_image, bottom_point, top_point, (0, 255, 0), 2)
@@ -457,10 +456,10 @@ class LineFollower():
             return self._finalize_angle(ref_point, validate)
 
         if contour is not None and ref_point is not None:
-            left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 20]
-            right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 20]
+            left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 5]
+            right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 5]
 
-            if ref_point[1] < (50 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 30) + 20 * (robot_state.last_downhill < 100)):
+            if ref_point[1] < (25 + robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 15) + 10 * (robot_state.last_downhill < 100)):
                 return self._finalize_angle(ref_point, validate)
 
             if self.green_signal != "Approach" and (left_edge_points or right_edge_points):
@@ -570,30 +569,31 @@ class LineFollower():
 
         # --- Blue detection in top area ---
         hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
-        top_hsv = hsv_image[0:50, :]  # Only look at the top 50 rows
+        top_hsv = hsv_image[0:30, :]  # Only look at the top 30 rows
 
         blue_mask_top = cv2.inRange(top_hsv, self.lower_blue, self.upper_blue)
 
         # Expand blue_mask_top to full image size (pad zeros below)
         full_blue_mask = np.zeros_like(black_mask)
-        full_blue_mask[0:50, :] = blue_mask_top
+        full_blue_mask[0:30, :] = blue_mask_top
 
         # Subtract blue from black mask
         black_mask = cv2.bitwise_and(black_mask, cv2.bitwise_not(full_blue_mask))
         # --- End blue detection section ---
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
-        black_mask = cv2.erode(black_mask, kernel, iterations=2)
-        black_mask = cv2.dilate(black_mask, kernel, iterations=10)
+        black_mask = cv2.erode(black_mask, kernel, iterations=1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) 
+        black_mask = cv2.dilate(black_mask, kernel, iterations=3)
 
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
-        contours = [cnt for cnt in contours if any(p[0][1] > 50 for p in cnt)]
+        contours = [cnt for cnt in contours if any(p[0][1] > 25 for p in cnt)]
         
         if len(contours) > 1:
             filtered_contours = []
             for contour in contours:
-                if any(p[0][1] > camera.LINE_HEIGHT - 10 and 30 < p[0][0] < camera.LINE_WIDTH - 30 for p in contour):
+                if any(p[0][1] > camera.LINE_HEIGHT - 5 and 15 < p[0][0] < camera.LINE_WIDTH - 15 for p in contour):
                     filtered_contours.append(contour)
 
             target_contours = filtered_contours if filtered_contours else contours
@@ -644,7 +644,7 @@ class LineFollower():
             mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
 
-            if cv2.countNonZero(mask) > 300:
+            if cv2.countNonZero(mask) > 100:
                 robot_state.count["red"] += 1
                 return
         
@@ -699,6 +699,7 @@ def main(start_time) -> None:
     
     robot_state.debug_text.insert(0, f"{active_triggers}")
     if robot_state.debug: debug_lines(robot_state.debug_text)
+    robot_state.main_loop_count += 1
 
 def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
