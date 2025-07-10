@@ -1,12 +1,8 @@
-from core.shared_imports import cv2, np, time, socket, getpass, subprocess
+from core.shared_imports import cv2, np, time, subprocess
 from core.utilities import debug
 
 class EvacuationCamera():
-    def __init__(self):
-        username = getpass.getuser()
-        hostname = socket.gethostname()
-        self.user_at_host = f"{username}@{hostname}"
-        
+    def __init__(self):        
         self.width  = 320
         self.height = 240
         

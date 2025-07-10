@@ -1,5 +1,5 @@
-from core.shared_imports import time, ServoKit, socket, getpass, math, mp, operator, np
-from core.utilities import debug, show
+from core.shared_imports import time, ServoKit, math, mp, operator, np
+from core.utilities import debug, show, user_at_host
 from core.listener import listener
 
 class Motors():
@@ -8,12 +8,8 @@ class Motors():
         self.servo_pins = [14, 13, 12, 10]
 
         self.camera = camera
-
-        username = getpass.getuser()
-        hostname = socket.gethostname()
-        self.user_at_host = f"{username}@{hostname}"
         
-        if self.user_at_host == "frederick@raspberrypi":
+        if user_at_host == "frederick@raspberrypi":
             self.servo_pins = [14, 13, 12, 10]
             self.stop_angles = [97, 96, 96, 97]
             
@@ -21,8 +17,7 @@ class Motors():
             self.negative_intercepts = [5.54149, 5.49693, 5.25736, 5.51568]
             self.positive_gradients  = [-1.00445, -0.93679, -0.72308, -0.78219]
             self.positive_intercepts = [-5.55059, -5.25260, -5.53597, -5.43908]
-
-        elif self.user_at_host == "aidan@fusionzero":
+        else:
             self.servo_pins = [14, 13, 12, 10]
             self.stop_angles = [88, 89, 88, 89]
             
@@ -30,10 +25,6 @@ class Motors():
             self.negative_intercepts = [-6.8834, -4.9707, -5.0095, -4.9465]
             self.positive_gradients = [0.70924, 0.63035, 0.67858, 0.69916]
             self.positive_intercepts = [4.1509, 6.5548, 3.5948, 4.2287]
-            
-        else:
-            print(self.user_at_host)
-            raise ValueError(f"Unknown hostname: {hostname}")
        
         for i in range(0, 4):
             self.pca.servo[self.servo_pins[i]].angle = self.stop_angles[i]
@@ -98,8 +89,7 @@ class Motors():
             self.run(v1, v2)
             
             if value is not None: 
-                # debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
-                # print()
+                debug([f"{text}", f"{value:.2f}", f"{target_value:.2f}"], [24, 10, 10])
                 if comparison_function(value, target_value): break
 
         self.run(0, 0)

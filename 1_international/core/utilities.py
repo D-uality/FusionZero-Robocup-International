@@ -1,11 +1,19 @@
-from core.shared_imports import mp, cv2, np, time, os
+from core.shared_imports import mp, cv2, np, time, os, socket, getpass
 import shutil
 import subprocess
+
+username = getpass.getuser()
+hostname = socket.gethostname()
+user_at_host = f"{username}@{hostname}"
 
 # Print Function
 def debug(data: list[str], coloumn_widths: list[int], separator: str = "|") -> None:
     formatted_cells = [f"{cell:^{width}}" for cell, width in zip(data, coloumn_widths)]
     print(f" {separator} ".join(formatted_cells))
+
+def debug_lines(entries: list[str], padding: int = 2, separator: str = "|") -> None:
+    col_widths = [len(entry) + padding for entry in entries]
+    debug(entries, col_widths, separator=separator)
 
 # Global variables for display and frame storage
 _display_process = None
@@ -45,8 +53,33 @@ def start_display():
         _display_process = mp.Process(target=_display_worker, args=(_display_queue,), daemon=True)
         _display_process.start()
 
-def show(frame: np.ndarray, name: str = "Display", display: bool = True):
+def put_text_on_image(image, debug_lines: list[str]):
+    origin=(10, 25),
+    line_height=20,
+    font_scale=0.5,
+    color=(0, 0, 0),
+    thickness=1
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    for i, line in enumerate(debug_lines):
+        y = origin[1] + i * line_height
+        cv2.putText(
+            image,
+            line,
+            (origin[0], y),
+            font,
+            font_scale,
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+
+def show(frame: np.ndarray, name: str = "Display", display: bool = True, debug_lines: list[str] = None):
     global _display_queue
+
+    put_text_on_image(frame, debug_lines)
+    frame = np.uint8(frame)
+
     if _display_queue is not None and display:
         # Clear queue to prioritize the latest frame
         while not _display_queue.empty():
@@ -81,7 +114,9 @@ def save_vfr_video(frames_with_timestamps: list[tuple[np.ndarray, float]], filen
     os.makedirs(temp_dir, exist_ok=True)
     
     for i, (frame, _) in enumerate(frames_with_timestamps):
-        cv2.imwrite(f"{temp_dir}/frame_{i:04d}.png", frame)
+        height, width = frame.shape[:2]
+        upscaled_frame = cv2.resize(frame, (width * 4, height * 4), interpolation=cv2.INTER_LINEAR)
+        cv2.imwrite(f"{temp_dir}/frame_{i:04d}.png", upscaled_frame)
 
     # Step 2: Generate timestamps.txt for FFmpeg
     with open("timestamps.txt", "w") as f:

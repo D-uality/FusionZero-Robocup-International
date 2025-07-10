@@ -1,5 +1,5 @@
-from core.shared_imports import board, Image, ImageDraw, ImageFont, adafruit_ssd1306, getpass, socket
-from core.utilities import debug
+from core.shared_imports import board, Image, ImageDraw, ImageFont, adafruit_ssd1306
+from core.utilities import debug, user_at_host
 
 
 class OLED_Display:
@@ -26,11 +26,7 @@ class OLED_Display:
 
     def _font(self, size: int) -> ImageFont.ImageFont:
         if size not in self.font_cache:
-            username = getpass.getuser()
-            hostname = socket.gethostname()
-            self.user_at_host = f"{username}@{hostname}"
-            
-            if self.user_at_host == "frederick@raspberrypi":
+            if user_at_host == "frederick@raspberrypi":
                 self.font_cache[size] = ImageFont.truetype(
                     "/home/frederick/FusionZero-Robocup-International/1_international/hardware/fonts/JetBrainsMono-Regular.ttf",
                     size=size,

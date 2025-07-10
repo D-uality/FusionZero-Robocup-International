@@ -1,4 +1,4 @@
-from core.shared_imports import GPIO, board, time, adafruit_vl53l1x, Optional
+from core.shared_imports import GPIO, board, time, adafruit_vl53l1x
 from core.utilities import debug
 from hardware.motors import Motors
 

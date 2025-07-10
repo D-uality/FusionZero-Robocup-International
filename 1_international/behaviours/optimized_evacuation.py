@@ -21,12 +21,8 @@ class EvacuationState:
         
         self.victim_count = 0
         
-        # Speeds
-        username = getpass.getuser()
-        hostname = socket.gethostname()
-        self.user_at_host = f"{username}@{hostname}"
-        
-        if self.user_at_host == "frederick@raspberrypi":
+        # Speeds        
+        if user_at_host == "frederick@raspberrypi":
             self.SPEED_BASE  = 35
             self.SPEED_FAST  = 45
             self.SPEED_ROUTE = 25
