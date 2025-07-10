@@ -3,7 +3,7 @@ if __name__ == "__main__":
     root = pathlib.Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(root))
 
-from core.shared_imports import time, np, cv2, Optional, randint, socket, getpass, math
+from core.shared_imports import time, np, cv2, Optional, randint, math
 from hardware.robot import *
 from core.utilities import *
 from core.listener import listener
@@ -75,8 +75,8 @@ class Search():
         self.LIVE_DILATE_KERNAL = np.ones((15, 15), np.uint8)
         
         # Dead settings
-        self.DEAD_GREEN_KERNAL = np.ones(( 7,  7), np.uint8)
-        self.DEAD_WHITE_KERNAL = np.ones(( 7,  7), np.uint8)
+        self.DEAD_GREEN_KERNAL = np.ones((7,  7), np.uint8)
+        self.DEAD_WHITE_KERNAL = np.ones((7,  7), np.uint8)
         self.DEAD_BLACK_KERNAL = np.ones((31, 31), np.uint8)
         
         self.DEAD_WHITE_THRESHOLD = (160, 160, 160)

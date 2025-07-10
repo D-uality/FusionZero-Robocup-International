@@ -22,7 +22,6 @@ _manager = mp.Manager()
 _saved_frames = _manager.list()  # Stores (frame, timestamp) tuples
 
 def _display_worker(queue: mp.Queue):
-    window_last_frame_time = {}
     frame_count = 0
     last_time = time.time()
     

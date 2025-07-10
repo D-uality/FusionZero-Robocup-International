@@ -1,13 +1,12 @@
-from core.shared_imports import os, sys, time, randint, Optional, operator, cv2, np
-from core.utilities import *
+from core.shared_imports import Path, sys, time, randint, Optional, operator, cv2, np
+from core.utilities import user_at_host, debug, debug_lines, start_display, show
 from core.listener import listener
 from hardware.robot import *
 import behaviours.optimized_evacuation as evacuation_zone
 from behaviours.silver_detection import SilverLineDetector
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-modules_dir = os.path.abspath(os.path.join(current_dir, 'modules'))
-if modules_dir not in sys.path: sys.path.insert(0, modules_dir)
+current_dir = Path(__file__).resolve().parent
+modules_dir = current_dir / 'modules'
 
 
 if user_at_host == "frederick@raspberrypi":
@@ -77,9 +76,10 @@ class LineFollower():
             self.green_check()
             self.calculate_angle(self.black_contour)
             if not starting: self.__turn()
-        elif not starting and robot_state.trigger["uphill"] is False and robot_state.trigger["downhill"] is False: self.gap_handling()
 
-        if self.display_image is not None and camera.X11: show(self.display_image, display=camera.X11, name="line")
+        elif not starting: self.gap_handling()
+
+        if self.display_image is not None and camera.X11: show(self.display_image, display=camera.X11, name="line", debug_lines=robot_state.debug_text)
 
     def __turn(self):
         # Determining Angle and Integral
@@ -281,12 +281,12 @@ class LineFollower():
         return False
 
     def green_hold(self):
-        if self.green_signal != None and self.green_signal != "Double"  and self.green_signal != "Approach" and self.prev_green_signal != self.green_signal:
+        if self.green_signal not in [None, "Double", "Approach"] and self.prev_green_signal != self.green_signal:
             self.last_seen_green = time.perf_counter()
         elif self.green_signal == "Double":
             self.last_seen_green = 0
 
-        if time.perf_counter() - self.last_seen_green < 0.5 and self.prev_green_signal != "Double" and self.prev_green_signal != "Approach" and self.prev_green_signal is not None:
+        if time.perf_counter() - self.last_seen_green < 0.5 and self.prev_green_signal not in [None, "Double", "Approach"]:
             self.green_signal = self.prev_green_signal
 
     def find_green(self):
@@ -501,7 +501,7 @@ class LineFollower():
 
         return angle if validate else 90
     
-    def calculate_top_contour(self, contour, validate):
+    def calculate_top_contour(self, contour):
         if contour is None:
             return camera.LINE_WIDTH // 2, 0
 
@@ -653,8 +653,7 @@ class LineFollower():
 robot_state = RobotState()
 line_follow = LineFollower()
 
-def main(start_time) -> None:
-    global robot_state, line_follow
+def main(start_time, robot_state) -> None:
     robot_state.debug_text.clear()
     overall_start = time.perf_counter()
     led.on()
@@ -704,9 +703,7 @@ def main(start_time) -> None:
 def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
      
-def find_silver() -> None:
-    global line_follow, silver_detector
-
+def find_silver(line_follow, silver_detector) -> bool:
     if line_follow.image is not None:
         result = silver_detector.predict(line_follow.image)
         robot_state.debug_text.append(f"SILVER: {result['class_name']}, {result['confidence']:.3f})")
@@ -902,7 +899,6 @@ def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
             line_follow.run_till_camera(-v1-5, -v2, 20, ["OBSTACLE"])
     
 def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = False, direction: str = "") -> bool:
-    global camera
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
 
