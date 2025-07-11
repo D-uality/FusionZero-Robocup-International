@@ -11,11 +11,16 @@ import numpy as np
 import cv2
 import time
 
-# Your custom model architecture (must match training exactly)
 class CustomSilverDetector(nn.Module):
     def __init__(self, input_size=64, class_count=2):
         super(CustomSilverDetector, self).__init__()
 
+        """
+        - 64 -> 32 -> 16 ->  8 ->  4 spatial resolution: forces features to group into heirarchial structure
+        -  3 -> 16 -> 32 -> 48 -> 64 feature maps: increases detail and quality for better strucutre identification
+        - All use ReLU activation function to break linearity
+        -
+        """
         self.features = nn.Sequential(
             # Block 1: 64x64 -> 32x32
             nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=False),
@@ -41,16 +46,17 @@ class CustomSilverDetector(nn.Module):
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Identity(),  # Dropout removed for inference
+            nn.Dropout(0.3),
             nn.Linear(64, 32),
             nn.ReLU(inplace=True),
-            nn.Identity(),  # Dropout removed for inference
+            nn.Dropout(0.2),
             nn.Linear(32, class_count)
         )
 
     def forward(self, x):
         x = self.features(x)
         x = self.classifier(x)
+
         return x
 
 class SilverLineDetector:

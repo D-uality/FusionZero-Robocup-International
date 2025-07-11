@@ -61,6 +61,7 @@ def main() -> None:
 
             fps = 1.0 / (time.perf_counter() - t0)
             print(f"{fps:.1f} FPS   |   total images: {file_count}")
+            time.sleep(0.01)
     finally:
         led.off()
         GPIO.cleanup()
