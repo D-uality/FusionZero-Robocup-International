@@ -1,5 +1,5 @@
 from core.shared_imports import cv2, np, time, subprocess
-from core.utilities import debug
+from core.utilities import debug, user_at_host
 
 class EvacuationCamera():
     def __init__(self):        
@@ -41,7 +41,7 @@ class EvacuationCamera():
                 
                 print("CAMERA NOT READY!")
 
-            if self.user_at_host == "frederick@raspberrypi":
+            if user_at_host == "frederick@raspberrypi":
                 image = image[:int((1 - CROP_PRECENTAGE) * image.shape[0]), :]
                 image = cv2.flip(image, 0)
                 image = cv2.flip(image, 1)
