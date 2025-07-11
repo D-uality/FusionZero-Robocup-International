@@ -67,12 +67,16 @@ def main() -> None:
     finally:
         motors.run(0, 0)
         print("Motors Stopped")
+        led.off()
         GPIO.cleanup()
         print("LED's Off")
         stop_display()
         print("Display Stopped")
+        camera.close()
+        print("Camera Stopped")
         evac_camera.release()
         print("Evac Camera Stopped")
+
         
         claw.lift(claw.pca.servo[claw.lifter_pin].angle)
         claw.close(claw.pca.servo[claw.closer_pin].angle)

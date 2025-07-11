@@ -201,7 +201,7 @@ def main() -> None:
                 print(f"Captured {path}  |  total images: {file_count}")
 
             fps = 1.0 / (time.perf_counter() - t0)
-            print(f"{fps:.2f} FPS")
+            print(f"{fps:.1f} FPS   |   total images: {file_count}")
     finally:
         cam.close()
 
