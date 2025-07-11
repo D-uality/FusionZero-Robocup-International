@@ -7,7 +7,6 @@ class OLED_Display:
     def __init__(self):
         self.HEIGHT = 64
         self.WIDTH = 128
-        self.LOGO_PATH = r"/home/frederick/FusionZero-Robocup-International/4_documents/Fusion Zero Logo.png"
         
         # Font paths - more maintainable approach
         self.FONT_PATHS = {
@@ -15,7 +14,10 @@ class OLED_Display:
                 "frederick": "/home/frederick/FusionZero-Robocup-International/1_international/hardware/fonts/JetBrainsMono-Regular.ttf",
                 "aidan": "/home/aidan/FusionZero-Robocup-International/1_international/hardware/fonts/JetBrainsMono-Regular.ttf"
             },
-            "cambria": "/home/frederick/FusionZero-Robocup-International/1_international/hardware/fonts/Cambria.ttf"
+            "cambria": {
+                "frederick": "/home/frederick/FusionZero-Robocup-International/1_international/hardware/fonts/Cambria.ttf",
+                "aidan": "/home/aidan/FusionZero-Robocup-International/1_international/hardware/fonts/Cambria.ttf"
+            }
         }
         
         self.font_cache: dict[str, ImageFont.ImageFont] = {}
@@ -33,7 +35,8 @@ class OLED_Display:
             return self.FONT_PATHS["jetbrains"][user]
         
         elif font_family == "cambria":
-            return self.FONT_PATHS["cambria"]
+            user = "frederick" if user_at_host == "frederick@raspberrypi" else "aidan"
+            return self.FONT_PATHS["cambria"][user]
         
         else:
             raise ValueError(f"Unknown font family: {font_family}")
