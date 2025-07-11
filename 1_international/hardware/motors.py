@@ -66,7 +66,7 @@ class Motors():
                 capture_start = time.perf_counter()
                 
                 while listener.mode.value != 0:
-                    if delay > 0.2: show(np.uint8(self.camera.capture_array()), display=self.camera.X11, name="line")
+                    if delay > 0.2: show(self.camera.perspective_transform(self.camera.capture_array()), display=self.camera.X11, name="line")
                     if delay - (time.perf_counter() - capture_start) < 0: break
                         
         except Exception as e:  

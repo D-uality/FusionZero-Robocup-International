@@ -9,33 +9,33 @@ class Camera():
         self.X11 = True
         self.FLIP = False
         self.debug = False
-        self.LINE_WIDTH = 160
-        self.LINE_HEIGHT = 100
+        self.LINE_WIDTH = 320
+        self.LINE_HEIGHT = 200
 
         self.color_format = "RGB888"
 
         # Transformation points
         if user_at_host == "frederick@raspberrypi":
-            self.top_left     = (int(self.LINE_WIDTH / 4),     20)
-            self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 20)
-            self.bottom_left  = (0,                            self.LINE_HEIGHT - 15)
-            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 15)
+            self.top_left     = (int(self.LINE_WIDTH / 4),     int(self.LINE_HEIGHT / 10))
+            self.top_right    = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 10))
+            self.bottom_left  = (0,                            self.LINE_HEIGHT - int(self.LINE_HEIGHT / 4))
+            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - int(self.LINE_HEIGHT / 4))
         else:
-            self.top_left     = (int(self.LINE_WIDTH / 4),     10)
-            self.top_right    = (int(self.LINE_WIDTH * 3 / 4), 10)
-            self.bottom_left  = (0,                            self.LINE_HEIGHT - 30)
-            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 30)
+            self.top_left     = (int(self.LINE_WIDTH / 4),     int(self.LINE_HEIGHT / 5))
+            self.top_right    = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 5))
+            self.bottom_left  = (0,                            self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10))
+            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10))
             
-        top_left =     (30,                    0)
-        top_right =    (self.LINE_WIDTH - 30,  0)
-        bottom_left =  (30,                    int(self.LINE_HEIGHT / 2.8) - 1)
-        bottom_right = (self.LINE_WIDTH - 30,  int(self.LINE_HEIGHT / 2.8) - 1)
+        top_left =     (int(3 * self.LINE_WIDTH / 10),                    0)
+        top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  0)
+        bottom_left =  (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8) - 1)
+        bottom_right = (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8) - 1)
         self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
-        top_left =     (30,                    int(self.LINE_HEIGHT / 2.8))
-        top_right =    (self.LINE_WIDTH - 30,  int(self.LINE_HEIGHT / 2.8))
-        bottom_left =  (20,                    self.LINE_HEIGHT - 10)
-        bottom_right = (self.LINE_WIDTH - 20,    self.LINE_HEIGHT - 10)
+        top_left =     (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8))
+        top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8))
+        bottom_left =  (int(self.LINE_WIDTH / 8),                    self.LINE_HEIGHT - int(self.LINE_HEIGHT / 10))
+        bottom_right = (self.LINE_WIDTH - int(self.LINE_WIDTH / 8),    self.LINE_HEIGHT - int(self.LINE_HEIGHT / 10))
         self.lightest_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
         self.camera = Picamera2()
 
@@ -61,8 +61,8 @@ class Camera():
         transformed_image = cv2.warpPerspective(image, matrix, (self.LINE_WIDTH, self.LINE_HEIGHT))
 
         if self.X11 and self.debug:
-            cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=1)
-            cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=1)
+            cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=2)
 
         return transformed_image
     
