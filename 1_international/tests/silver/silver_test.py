@@ -9,7 +9,7 @@ from core.shared_imports import time
 from silver_inference import SilverLineDetector
 start_display()
 
-detector = SilverLineDetector('/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_line/silver_detector_pi4_quantized.pt')
+detector = SilverLineDetector('/home/aidan/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_line/silver_detector_pi4_quantized_2.pt')
 
 led.on()
 print("program start")
