@@ -9,8 +9,8 @@ class LineFollower():
         self.robot_state = robot_state
         self.speed = 30
         self.turn_multi = 1.5
-        self.min_black_area = 500
-        self.min_green_area = 1000
+        self.min_black_area = 1000
+        self.min_green_area = 3000
         self.base_black = 50
         self.light_black = 90
         self.lightest_black = 100
@@ -56,6 +56,7 @@ class LineFollower():
                 self.integral = 0
 
             self.robot_state.debug_text.append(f"TURN: {self.turn}")
+            self.robot_state.debug_text.append(f"INT: {self.integral}")
 
         # Seesaw
         if self.robot_state.trigger["seasaw"]:
@@ -136,7 +137,7 @@ class LineFollower():
         motors.run(0, 0)
 
     def stuck_check(self):
-        if abs(self.integral) > 10000: 
+        if abs(self.integral) > 3000: 
             self.v1 += 15
             self.v2 += 15
             self.robot_state.debug_text.append(f"STUCK")
@@ -164,7 +165,7 @@ class LineFollower():
                 left_y = int(sum(p[1] for p in left_points) / len(left_points))
 
                 # Check black on left
-                check_point = (left_x - 20, left_y)
+                check_point = (left_x - int(camera.LINE_WIDTH / 16), left_y)
                 if self.black_check(check_point):
                     self.green_signal = "Right"
                 else:
@@ -175,7 +176,7 @@ class LineFollower():
                     right_y = int(sum(p[1] for p in right_points) / len(right_points))
 
                     # Check black on right
-                    check_point = (right_x + 20, right_y)
+                    check_point = (right_x + int(camera.LINE_WIDTH / 16), right_y)
                     if self.black_check(check_point):
                         self.green_signal = "Left"
 
@@ -204,14 +205,14 @@ class LineFollower():
             return None
 
         # Check if point is within image bounds
-        if 0 <= x_avg < camera.LINE_WIDTH and 0 <= y_avg - 5 < camera.LINE_HEIGHT and self.black_mask is not None:
-            if self.black_check((x_avg, y_avg - 5)):
+        if 0 <= x_avg < camera.LINE_WIDTH and 0 <= y_avg - int(camera.LINE_HEIGHT / 20) < camera.LINE_HEIGHT and self.black_mask is not None:
+            if self.black_check((x_avg, y_avg - int(camera.LINE_HEIGHT / 20))):
                 return box
 
         return None
 
     def black_check(self, check_point):
-        check_size = 5
+        check_size = int(camera.LINE_WIDTH / 32)
 
         if 0 <= check_point[0] < camera.LINE_WIDTH and 0 <= check_point[1] < camera.LINE_HEIGHT and self.black_mask is not None:
             # Create a region around the point
@@ -223,7 +224,7 @@ class LineFollower():
 
             # If display image, draw the check point
             if self.display_image is not None and camera.X11:
-                cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), 1)
+                cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), 2)
 
             # Check if any pixel in the region is black
             if not np.any(region == 255) or self.green_contours is None:
@@ -252,17 +253,17 @@ class LineFollower():
         self.green_contours = []
         self.hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
         green_mask = cv2.inRange(self.hsv_image, (40, 50, 50), (90, 255, 255))
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        green_mask = cv2.erode(green_mask, kernel, iterations=1)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        green_mask = cv2.dilate(green_mask, kernel, iterations=3)
+        green_mask = cv2.erode(green_mask, kernel, iterations=1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10))
+        green_mask = cv2.dilate(green_mask, kernel, iterations=2)
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
         self.green_contours = green_contours
                 
         if self.green_contours and self.display_image is not None and camera.X11:
-            cv2.drawContours(self.display_image, self.green_contours, -1, (255, 0, 255), 1)
+            cv2.drawContours(self.display_image, self.green_contours, -1, (255, 0, 255), int(camera.LINE_HEIGHT/100))
 
     # ------------------------------------------------- GAP ------------------------------------------------- #
     def gap_handling(self):
@@ -316,9 +317,9 @@ class LineFollower():
             if self.black_contour is not None and self.black_mask is not None:
                 mask = self.black_mask.copy()
 
-                # remove everything above LINE_HEIGHT - 60 if last uphill was recent
+                # remove everything above the bottom half of the screen if last uphill was recent
                 if self.robot_state.last_uphill < 100:
-                    mask[0:camera.LINE_HEIGHT - 60, :] = 0
+                    mask[0:int(camera.LINE_HEIGHT/2), :] = 0
 
                 # Re-find contour on the modified mask
                 contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -379,12 +380,12 @@ class LineFollower():
                 # --- DEBUG DRAW ---
                 if self.display_image is not None and camera.X11:
                     # Draw poly approximation
-                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=1)
+                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=int(camera.LINE_HEIGHT/100))
 
                     # Draw angle line
-                    cv2.line(self.display_image, bottom_point, top_point, (0, 255, 0), 1)
-                    cv2.circle(self.display_image, top_point, 5, (0, 255, 255), 2)
-                    cv2.circle(self.display_image, bottom_point, 5, (255, 255, 0), 2)
+                    cv2.line(self.display_image, bottom_point, top_point, (0, 255, 0), int(camera.LINE_HEIGHT/100))
+                    cv2.circle(self.display_image, top_point, 5, (0, 255, 255), int(camera.LINE_HEIGHT/100))
+                    cv2.circle(self.display_image, bottom_point, 5, (255, 255, 0), int(camera.LINE_HEIGHT/100))
 
                     show(self.display_image, display=camera.X11, name="line", debug_lines=["GAP"])
 
@@ -415,10 +416,10 @@ class LineFollower():
             return self._finalize_angle(ref_point, validate)
 
         if contour is not None and ref_point is not None:
-            left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= 5]
-            right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - 5]
+            left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= int(camera.LINE_WIDTH/16)]
+            right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - int(camera.LINE_WIDTH/16)]
 
-            if ref_point[1] < (25 + self.robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - 15) + 10 * (self.robot_state.last_downhill < 100)):
+            if ref_point[1] < (int(camera.LINE_HEIGHT/4) + self.robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - int(3*camera.LINE_HEIGHT/20)) + int(camera.LINE_HEIGHT/10) * (self.robot_state.last_downhill < 100)):
                 return self._finalize_angle(ref_point, validate)
 
             if self.green_signal != "Approach" and (left_edge_points or right_edge_points):
@@ -454,7 +455,7 @@ class LineFollower():
         if not validate:
             self.angle = angle
             self.last_angle = angle
-            if ref_point is not None: cv2.circle(self.display_image, ref_point, 3, self.turn_color, 2)
+            if ref_point is not None: cv2.circle(self.display_image, ref_point, int(camera.LINE_HEIGHT / 15), self.turn_color, 2)
         else:
             return angle
 
@@ -469,12 +470,12 @@ class LineFollower():
         cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
 
         # Define scan band
-        min_y = 40 if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
+        min_y = int(camera.LINE_HEIGHT/5) if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
         if self.robot_state.trigger["uphill"]:
             min_y = camera.LINE_HEIGHT // 2
         elif self.robot_state.trigger["downhill"]:
-            min_y = 50  
-        max_y = min(camera.LINE_HEIGHT, min_y + 10)
+            min_y = int(camera.LINE_HEIGHT/4)
+        max_y = min(camera.LINE_HEIGHT, min_y + int(camera.LINE_HEIGHT/20))
 
         roi_mask = np.zeros_like(self.gray_image, dtype=np.uint8)
         roi_mask[min_y:max_y, :] = 255
@@ -528,31 +529,31 @@ class LineFollower():
 
         # --- Blue detection in top area ---
         hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
-        top_hsv = hsv_image[0:30, :]  # Only look at the top 30 rows
+        top_hsv = hsv_image[0:int(camera.LINE_HEIGHT/4), :]  # Only look at the top rows
 
         blue_mask_top = cv2.inRange(top_hsv, self.lower_blue, self.upper_blue)
 
         # Expand blue_mask_top to full image size (pad zeros below)
         full_blue_mask = np.zeros_like(black_mask)
-        full_blue_mask[0:30, :] = blue_mask_top
+        full_blue_mask[0:int(camera.LINE_HEIGHT/4), :] = blue_mask_top
 
         # Subtract blue from black mask
         black_mask = cv2.bitwise_and(black_mask, cv2.bitwise_not(full_blue_mask))
         # --- End blue detection section ---
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
-        black_mask = cv2.erode(black_mask, kernel, iterations=1)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) 
+        black_mask = cv2.erode(black_mask, kernel, iterations=2)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10)) 
         black_mask = cv2.dilate(black_mask, kernel, iterations=3)
 
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
-        contours = [cnt for cnt in contours if any(p[0][1] > 25 for p in cnt)]
+        contours = [cnt for cnt in contours if any(p[0][1] > int(camera.LINE_HEIGHT/4) for p in cnt)]
         
         if len(contours) > 1:
             filtered_contours = []
             for contour in contours:
-                if any(p[0][1] > camera.LINE_HEIGHT - 5 and 15 < p[0][0] < camera.LINE_WIDTH - 15 for p in contour):
+                if any(p[0][1] > camera.LINE_HEIGHT - int(camera.LINE_HEIGHT/20) and int(3*camera.LINE_HEIGHT/20) < p[0][0] < camera.LINE_WIDTH - int(3*camera.LINE_HEIGHT/20) for p in contour):
                     filtered_contours.append(contour)
 
             target_contours = filtered_contours if filtered_contours else contours
@@ -592,9 +593,9 @@ class LineFollower():
             if camera.X11:
                 for c in contours:
                     if c is not self.black_contour:
-                        cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), 1)
+                        cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), int(camera.LINE_HEIGHT/100))
                     else:
-                        cv2.drawContours(self.display_image, [c], -1, self.turn_color, 1)
+                        cv2.drawContours(self.display_image, [c], -1, self.turn_color, int(camera.LINE_HEIGHT/100))
 
     # RED
     def find_red(self):
@@ -603,7 +604,7 @@ class LineFollower():
             mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
 
-            if cv2.countNonZero(mask) > 100:
+            if cv2.countNonZero(mask) > int(0.005 * camera.LINE_WIDTH * camera.LINE_HEIGHT):
                 self.robot_state.count["red"] += 1
                 return
         

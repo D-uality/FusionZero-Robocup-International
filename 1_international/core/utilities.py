@@ -53,9 +53,9 @@ def start_display():
         _display_process.start()
 
 def put_text_on_image(image, debug_lines: list[str]):
-    origin=[10, 10]
-    line_height=8
-    font_scale=0.3
+    origin=[10, 20]
+    line_height=20
+    font_scale=0.6
     color=(0, 0, 255)
     thickness=1
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -116,7 +116,7 @@ def save_vfr_video(frames_with_timestamps: list[tuple[np.ndarray, float]], filen
     
     for i, (frame, _) in enumerate(frames_with_timestamps):
         height, width = frame.shape[:2]
-        upscaled_frame = cv2.resize(frame, (width * 4, height * 4), interpolation=cv2.INTER_LINEAR)
+        upscaled_frame = cv2.resize(frame, (width * 2, height * 2), interpolation=cv2.INTER_LINEAR)
         cv2.imwrite(f"{temp_dir}/frame_{i:04d}.png", upscaled_frame)
 
     # Step 2: Generate timestamps.txt for FFmpeg

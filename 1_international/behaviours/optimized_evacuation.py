@@ -57,9 +57,9 @@ class Search():
         # Debug
         self.DISPLAY: bool = evac_state.DISPLAY
         
-        self.DEBUG_LIVE: bool       = False
+        self.DEBUG_LIVE: bool       = True
         self.DEBUG_DEAD: bool       = False
-        self.DEBUG_TRIANGLES: bool  = True
+        self.DEBUG_TRIANGLES: bool  = False
         
         self.TIMING_LIVE: bool      = False
         self.TIMING_DEAD: bool      = False
@@ -70,9 +70,14 @@ class Search():
         self.IMG_CENTRE_X = evac_camera.width / 2
         
         # Live settings
-        self.LIVE_THRESHOLD = 245
-        self.LIVE_ERODE_KERNAL = np.ones((2, 2), np.uint8)
-        self.LIVE_DILATE_KERNAL = np.ones((15, 15), np.uint8)
+        self.LIVE_THRESHOLD = 243
+        self.LIVE_DILATE_KERNAL = np.ones((31, 31), np.uint8)
+        
+        self.LIVE_MIN_AREA = 600
+        self.LIVE_MAX_AREA = 2200
+        
+        self.LIVE_MIN_Y = 30
+        self.LIVE_MAX_Y = 50
         
         # Dead settings
         self.DEAD_GREEN_KERNAL = np.ones((7,  7), np.uint8)
@@ -123,9 +128,10 @@ class Search():
         if self.TIMING_LIVE: preprocess_time = time.perf_counter()
         
         # Filter for spectral highlights
-        working_image = cv2.erode(working_image, self.LIVE_ERODE_KERNAL, iterations=1)
         working_image = cv2.dilate(working_image, self.LIVE_DILATE_KERNAL, iterations=1)
         spectral_highlights = cv2.inRange(working_image, (self.LIVE_THRESHOLD, self.LIVE_THRESHOLD, self.LIVE_THRESHOLD), (255, 255, 255))
+        
+        if self.DEBUG_LIVE: show(spectral_highlights, name="spectral highlights", display=True)
         if self.TIMING_LIVE: threshold_time = time.perf_counter()
         
         # Connected components analysis
@@ -145,12 +151,16 @@ class Search():
         centroid_y = centroids[1:, 1]
         centroid_x = centroids[1:, 0]
         
+        if self.DEBUG_LIVE: print(f"x: {centroid_x}")
+        if self.DEBUG_LIVE: print(f"y: {centroid_y}")
+        if self.DEBUG_LIVE: print(f"area: {areas}")
+        
         # Filter valid components
         valid_mask = (
-            (areas > 200) & 
-            (areas < 3000) & 
-            (centroid_y > 5) & 
-            (centroid_y < 80)
+            (areas > self.LIVE_MIN_AREA) & 
+            (areas < self.LIVE_MAX_AREA) & 
+            (centroid_y > self.LIVE_MIN_Y) & 
+            (centroid_y < self.LIVE_MAX_Y)
         )
         
         if not np.any(valid_mask):
@@ -208,10 +218,7 @@ class Search():
             drawing_time = time.perf_counter()
             end_time = time.perf_counter()
             print(f"live() | Total: {(end_time - start_time)*1000:.2f}ms | Crop: {(crop_time - start_time)*1000:.2f}ms | Preprocess: {(preprocess_time - crop_time)*1000:.2f}ms | Threshold: {(threshold_time - preprocess_time)*1000:.2f}ms | Components: {(components_time - threshold_time)*1000:.2f}ms | Validation: {(validation_time - components_time)*1000:.2f}ms | Selection: {(selection_time - validation_time)*1000:.2f}ms | Drawing: {(drawing_time - selection_time)*1000:.2f}ms | Final: {(end_time - drawing_time)*1000:.2f}ms | Status: success")
-        
-        if self.DEBUG_LIVE:
-            print(f"Selected component - Area: {valid_areas[selected_idx]}, Center: {final_centre_x}")
-        
+                
         return final_centre_x
     
     def dead(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
