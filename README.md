@@ -9,6 +9,7 @@ This repository tracks progress through:
 - Robocup Japan Open 2025
 - Robocup Singapore Open 2025
 - Robocup International, Salvador, Brazil 2025
+
 We currently participating in Robocup International 2025, Salvador Brazil (July 17).
 
 # Bill of Parts
