@@ -1,5 +1,5 @@
 # FusionZero REPO for ROBOCUP INTERNATIONAL
-![Logo](<4_documents/Poster/Robocup International Poster.pdf>)
+![Poster](<./4_documents/Poster/Robocup International Poster.pdf>)
 
 This is a continuation of our progress, following:
 - Robocup Singapore Open 2024
