@@ -23,7 +23,7 @@ def main() -> None:
     
     try:
         listener.start()
-        oled_display.text("READY", 70, 45)
+        oled_display.display_logo()
 
         while not listener.exit_event.is_set():
             if listener.mode.value != 1:
@@ -65,12 +65,18 @@ def main() -> None:
         print("Exiting gracefully!")
     
     finally:
+        oled_display.clear()
+        oled_display.text("EXITING", 0, 0)
+        
         motors.run(0, 0)
         print("Motors Stopped")
+        
         GPIO.cleanup()
         print("LED's Off")
+        
         stop_display()
         print("Display Stopped")
+        
         evac_camera.release()
         print("Evac Camera Stopped")
         
