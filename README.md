@@ -1,5 +1,5 @@
 # FusionZero: ROBOCUP INTERNATIONAL
-<img src="4_documents/Photos/robot_photo.jpg" alt="Bot Photo" width="300"/>
+<img src="4_documents/Photos/robot_photo.jpg" alt="Bot Photo" width="800"/>
 
 This is a continuation of our progress, following:
 - Robocup Singapore Open 2024
