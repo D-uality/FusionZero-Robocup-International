@@ -37,7 +37,7 @@ class Motors():
         self.last_run[0] = v1
         self.last_run[1] = v2
         
-        if self.user_at_host == "frederick@raspberrypi": v1, v2 = v2, v1
+        if user_at_host == "frederick@raspberrypi": v1, v2 = v2, v1
         calculated_angles = [0, 0, 0, 0]
         
         for i in range(0, 2):

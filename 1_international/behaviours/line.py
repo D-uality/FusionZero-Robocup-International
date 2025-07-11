@@ -4,7 +4,6 @@ from core.listener import listener
 from hardware.robot import *
 import behaviours.optimized_evacuation as evacuation_zone
 from behaviours.silver_detection import SilverLineDetector
-from behaviours.line_follower import LineFollower
 
 current_dir = Path(__file__).resolve().parent
 modules_dir = current_dir / 'modules'
@@ -17,41 +16,7 @@ else:
 
 start_display()
 
-class RobotState():
-    def __init__(self):
-        # Constants
-        self.debug = True
-        self.timings = False
-
-        # Variables
-        robot_state.debug_text = []
-        self.count = {
-            "uphill": 0,
-            "downhill": 0,
-            "tilt_left": 0,
-            "tilt_right": 0,
-            "red": 0,
-            "silver": 0,
-            "touch": 0
-        }
-         
-        self.trigger = {
-            "uphill": False,
-            "downhill": False,
-            "tilt_left": False,
-            "tilt_right": False,
-            "seasaw": False,
-            "evacuation_zone": False
-        }
-        
-        self.last_uphill = 0
-        self.last_downhill = 1000
-        robot_state.main_loop_count = 0
-
-robot_state = RobotState()
-line_follow = LineFollower(robot_state)
-
-def main(start_time, robot_state) -> None:
+def main(start_time, robot_state, line_follow) -> None:
     robot_state.debug_text.clear()
     overall_start = time.perf_counter()
     led.on()
@@ -61,13 +26,14 @@ def main(start_time, robot_state) -> None:
     touch_check(robot_state, touch_values)
     ramp_check(robot_state, gyro_values)
     update_triggers(robot_state)
+    find_silver(robot_state, line_follow, silver_detector)
     line_follow.find_red()
 
     if time.perf_counter() - start_time < 3:
         while (time.perf_counter() - start_time < 3) and listener.mode.value != 0:
             motors.run(0, 0)
             line_follow.follow(starting=True)
-    elif find_silver():
+    elif robot_state.count["silver"] >= 5:
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.run(0, 0)
@@ -92,22 +58,22 @@ def main(start_time, robot_state) -> None:
 
     total_elapsed = time.perf_counter() - overall_start
     fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
-    robot_state.debug_text.append(f"{fps}")
+    robot_state.debug_text.append(f"FPS: {fps}")
     
     robot_state.debug_text.insert(0, f"{active_triggers}")
     if robot_state.debug: debug_lines(robot_state.debug_text)
     robot_state.main_loop_count += 1
 
-def touch_check(robot_state: RobotState, touch_values: list[int]) -> None:
+def touch_check(robot_state, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
      
-def find_silver(line_follow, silver_detector) -> bool:
+def find_silver(robot_state, line_follow, silver_detector) -> None:
     if line_follow.image is not None:
         result = silver_detector.predict(line_follow.image)
-        robot_state.debug_text.append(f"SILVER: {result['class_name']}, {result['confidence']:.3f})")
-        return result['prediction'] == 1 and result['confidence'] > 0.99
+        robot_state.debug_text.append(f"SILVER: {result['class_name']}, {result['confidence']:.3f}")
+        robot_state.count["silver"] = robot_state.count["silver"] + 1 if result['prediction'] == 1 and result['confidence'] > 0.99 else 0
         
-def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
+def ramp_check(robot_state, gyro_values: list[int]) -> None:
     if gyro_values is not None:
         pitch = gyro_values[0]
         roll  = gyro_values[1]
@@ -121,7 +87,7 @@ def ramp_check(robot_state: RobotState, gyro_values: list[int]) -> None:
         robot_state.last_uphill = 0 if robot_state.trigger["uphill"] else robot_state.last_uphill + 1
         robot_state.last_downhill = 0 if robot_state.count["downhill"] > 0 else robot_state.last_downhill + 1
  
-def update_triggers(robot_state: RobotState) -> list[str]:
+def update_triggers(robot_state) -> list[str]:
     prev_triggers = robot_state.trigger
 
     if robot_state.count["uphill"] > 5:
@@ -155,7 +121,7 @@ def update_triggers(robot_state: RobotState) -> list[str]:
         if robot_state.main_loop_count <= 10:
             robot_state.triggers = prev_triggers
 
-def avoid_obstacle(line_follow: LineFollower, robot_state: RobotState) -> None:
+def avoid_obstacle(line_follow, robot_state) -> None:
     if robot_state.trigger["downhill"] or robot_state.trigger["uphill"] or robot_state.trigger["tilt_left"] or robot_state.trigger["tilt_right"]:
         touch_count = 0
         

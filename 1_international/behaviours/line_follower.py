@@ -15,6 +15,8 @@ class LineFollower():
         self.light_black = 90
         self.lightest_black = 100
         self.turn_color = (255, 255, 0)
+        self.lower_blue = np.array([100, 100, 100])
+        self.upper_blue = np.array([130, 255, 255])
 
         # Variables
         self.prev_side = None
@@ -221,7 +223,7 @@ class LineFollower():
 
             # If display image, draw the check point
             if self.display_image is not None and camera.X11:
-                cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), 2)
+                cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), 1)
 
             # Check if any pixel in the region is black
             if not np.any(region == 255) or self.green_contours is None:
@@ -377,10 +379,10 @@ class LineFollower():
                 # --- DEBUG DRAW ---
                 if self.display_image is not None and camera.X11:
                     # Draw poly approximation
-                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=2)
+                    cv2.polylines(self.display_image, [approx], isClosed=True, color=(255, 0, 255), thickness=1)
 
                     # Draw angle line
-                    cv2.line(self.display_image, bottom_point, top_point, (0, 255, 0), 2)
+                    cv2.line(self.display_image, bottom_point, top_point, (0, 255, 0), 1)
                     cv2.circle(self.display_image, top_point, 5, (0, 255, 255), 2)
                     cv2.circle(self.display_image, bottom_point, 5, (255, 255, 0), 2)
 
@@ -404,7 +406,7 @@ class LineFollower():
             self.angle = 90
             if contour is None: return 90
 
-        ref_point = self.calculate_top_contour(contour, validate) if contour is not None else None
+        ref_point = self.calculate_top_contour(contour) if contour is not None else None
 
         if contour is not None and self.green_signal in ["Left", "Right"]:
             self.prev_side = self.green_signal
@@ -452,7 +454,7 @@ class LineFollower():
         if not validate:
             self.angle = angle
             self.last_angle = angle
-            if ref_point is not None: cv2.circle(self.display_image, ref_point, 10, self.turn_color, 2)
+            if ref_point is not None: cv2.circle(self.display_image, ref_point, 3, self.turn_color, 2)
         else:
             return angle
 
@@ -590,9 +592,9 @@ class LineFollower():
             if camera.X11:
                 for c in contours:
                     if c is not self.black_contour:
-                        cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), 2)
+                        cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), 1)
                     else:
-                        cv2.drawContours(self.display_image, [c], -1, self.turn_color, 2)
+                        cv2.drawContours(self.display_image, [c], -1, self.turn_color, 1)
 
     # RED
     def find_red(self):

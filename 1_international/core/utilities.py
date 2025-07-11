@@ -53,13 +53,13 @@ def start_display():
         _display_process.start()
 
 def put_text_on_image(image, debug_lines: list[str]):
-    origin=(10, 25),
-    line_height=20,
-    font_scale=0.5,
-    color=(0, 0, 0),
+    origin=[10, 10]
+    line_height=8
+    font_scale=0.3
+    color=(0, 0, 255)
     thickness=1
     font = cv2.FONT_HERSHEY_SIMPLEX
-
+        
     for i, line in enumerate(debug_lines):
         y = origin[1] + i * line_height
         cv2.putText(
@@ -76,7 +76,9 @@ def put_text_on_image(image, debug_lines: list[str]):
 def show(frame: np.ndarray, name: str = "Display", display: bool = True, debug_lines: list[str] = None):
     global _display_queue
 
-    put_text_on_image(frame, debug_lines)
+    if debug_lines is not None:
+        put_text_on_image(frame, debug_lines)
+
     frame = np.uint8(frame)
 
     if _display_queue is not None and display:

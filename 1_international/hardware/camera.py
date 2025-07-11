@@ -8,7 +8,7 @@ class Camera():
         # Camera settings   
         self.X11 = True
         self.FLIP = False
-        self.debug = True
+        self.debug = False
         self.LINE_WIDTH = 160
         self.LINE_HEIGHT = 100
 
@@ -61,8 +61,8 @@ class Camera():
         transformed_image = cv2.warpPerspective(image, matrix, (self.LINE_WIDTH, self.LINE_HEIGHT))
 
         if self.X11 and self.debug:
-            cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=2)
-            cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=1)
+            cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=1)
 
         return transformed_image
     

@@ -4,11 +4,14 @@ from core.listener import listener
 from core.utilities import *
 
 import behaviours.line as line
-import behaviours.evacuation_zone as evacuation_zone
 import behaviours.optimized_evacuation as optimized_evacuation_zone
 from hardware.robot import *
+from behaviours.robot_state import RobotState
+from behaviours.line_follower import LineFollower
 
 record = True
+robot_state = RobotState()
+line_follow = LineFollower(robot_state)
 
 start_display()
 
@@ -31,11 +34,10 @@ def main() -> None:
                 led.off()
                 
             elif listener.mode.value == 1:
-                line.main(start_time)
+                line.main(start_time, robot_state, line_follow)
                 
             elif listener.mode.value == 2:
                 optimized_evacuation_zone.main()
-                # evacuation_zone.main()
             
             elif listener.mode.value == 3:
                 led.on()
