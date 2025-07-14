@@ -10,9 +10,9 @@ modules_dir = current_dir / 'modules'
 
 
 if user_at_host == "frederick@raspberrypi":
-    silver_detector = SilverLineDetector("/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_line/silver_detector_pi4_quantized_2.pt")
+    silver_detector = SilverLineDetector("/home/frederick/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_line/silver_detector_pi4_quantized.pt")
 else:
-    silver_detector = SilverLineDetector("/home/aidan/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_line/silver_detector_pi4_quantized_2.pt")
+    silver_detector = SilverLineDetector("/home/aidan/FusionZero-Robocup-International/5_ai_training_data/0_models/silver_line/silver_detector_pi4_quantized.pt")
 
 start_display()
 

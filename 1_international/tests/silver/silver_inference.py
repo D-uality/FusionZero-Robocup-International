@@ -146,7 +146,7 @@ class SilverLineDetector:
         
         # Apply transforms
         image_tensor = self.transform(image).unsqueeze(0).to(self.device)
-        return image_tensor
+        return image_tensor, image
     
     def predict(self, image, return_probabilities=False):
         """
@@ -162,7 +162,7 @@ class SilverLineDetector:
         start_time = time.time()
         
         # Preprocess
-        image_tensor = self.preprocess_image(image)
+        image_tensor, image = self.preprocess_image(image)
         
         # Inference
         with torch.no_grad():
@@ -186,7 +186,7 @@ class SilverLineDetector:
                 'silver': probabilities[0][1].item()
             }
         
-        return result
+        return result, image
     
     def predict_batch(self, images):
         """
