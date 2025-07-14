@@ -6,6 +6,8 @@ class RobotState():
 
         # Variables
         self.debug_text = []
+        self.oled_put_text = None
+        
         self.count = {
             "uphill": 0,
             "downhill": 0,
@@ -25,7 +27,5 @@ class RobotState():
             "evacuation_zone": False
         }
         
-        self.last_uphill = 0
-        self.last_downhill = 1000
-        self.silver_count = 0
-        self.main_loop_count = 0
+        self.last_downhill = self.last_uphill = 1000
+        self.last_seen_silver = self.silver_count = self.main_loop_count = 0

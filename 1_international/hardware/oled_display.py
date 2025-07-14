@@ -25,6 +25,7 @@ class OLED_Display:
         i2c = board.I2C()
         self.oled = adafruit_ssd1306.SSD1306_I2C(self.WIDTH, self.HEIGHT, i2c, addr=0x3C)
         self.clear()
+        self.put_text = None
         
         debug(["INITIALISATION", "OLED", "✓"], [25, 25, 50])
         
@@ -116,13 +117,16 @@ class OLED_Display:
             self.oled.image(self.image)
             self.oled.show()
 
-    def text(self, text: str, x: int, y: int, size: int = 15, font_family: str = "jetbrains", update_display: bool = True) -> None:
-        chosen_font = self._font(size, font_family)
-        self.draw.text((x, y), str(text), fill=255, font=chosen_font)
-        
-        if update_display:
-            self.oled.image(self.image)
-            self.oled.show()
+    def text(self, text: str, x: int, y: int, size: int = 15, font_family: str = "jetbrains", update_display: bool = True, clear: bool = False) -> None:
+        if self.put_text != text:
+            self.put_text = text
+            chosen_font = self._font(size, font_family)
+            if clear: self.clear()
+            self.draw.text((x, y), str(text), fill=255, font=chosen_font)
+            
+            if update_display:
+                self.oled.image(self.image)
+                self.oled.show()
             
     def display_logo(self):
         self.clear()
