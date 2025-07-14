@@ -25,6 +25,10 @@ class LineFollower():
         self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = self.black_contour = self.black_mask = None 
         self.last_seen_green = 100
     
+    # ========================================================================
+    # MAIN LOOP
+    # ========================================================================
+
     def follow(self, starting=False) -> None:
         self.image = camera.perspective_transform(camera.capture_array())
         self.display_image = self.image.copy()
@@ -36,13 +40,20 @@ class LineFollower():
             self.calculate_angle(self.black_contour)
             if not starting: self.__turn()
 
-        elif not starting: self.gap_handling()
+        elif not starting: 
+            self.gap_handling()
+            oled_display.text("GAP", 30, 64/2+40/2, size=40, clear=True)
 
-        if self.display_image is not None and camera.X11: show(self.display_image, display=camera.X11, name="line", debug_lines=self.robot_state.debug_text)
+        if self.display_image is not None and camera.X11: 
+            show(self.display_image, display=camera.X11, name="line", debug_lines=self.robot_state.debug_text)
+
+    # ========================================================================
+    # CALCULATE TURN
+    # ========================================================================
 
     def __turn(self):
         # Determining Angle and Integral
-        if self.green_signal == "Double":
+        if self.green_signal == "DOUBLE":
             self.angle = 90
             self.turn = 0
         else:
@@ -60,13 +71,14 @@ class LineFollower():
 
         # Seesaw
         if self.robot_state.trigger["seasaw"]:
-            for i in range(5):
-                motors.run(-30+i*6, -30+i*6, 0.20)
+            oled_display.text("SEESAW", 20, 64/2+20/2, size=20, clear=True)
             
+            for i in range(5): motors.run(-30+i*6, -30+i*6, 0.20)
+
             self.robot_state.debug_text.append(f"SEESAW")
         
-        # Double Green
-        elif self.green_signal == "Double":
+        # DOUBLE Green
+        elif self.green_signal == "DOUBLE":
             v1, v2, t = 35, -35, 3.8
             f = b = 0
 
@@ -115,8 +127,17 @@ class LineFollower():
             if self.robot_state.trigger["tilt_right"] and v1 < 0: v1 = v1 // 2
 
             self.v1, self.v2 = v1, v2
-            self.stuck_check()
+
+            if self.stuck_check():                  oled_display.text("STUCK", 20, 64/2+25/2, size=25, clear=True)
+            elif self.green_signal == "APPROACH":   oled_display.text("GREEN", 20, 30, size=20, clear=True)
+            elif self.green_signal:                 oled_display.text(f"GREEN {self.green_signal}", 20, 30, size=20, clear=True)
+            else:                                   oled_display.text("LINE", 30, 64/2+30/2, size=30, clear=True)
+                    
             motors.run(self.v1, self.v2)
+    
+    # ========================================================================
+    # HELPERS
+    # ========================================================================
     
     def run_till_camera(self, v1, v2, threshold, text: list[str]):
         motors.run(v1, v2)
@@ -136,13 +157,18 @@ class LineFollower():
             
         motors.run(0, 0)
 
-    def stuck_check(self):
+    def stuck_check(self) -> bool:
         if abs(self.integral) > 3000: 
             self.v1 += 15
             self.v2 += 15
             self.robot_state.debug_text.append(f"STUCK")
+            return True
+        return False
+        
 
-    # ------------------------------------------------- GREEN ------------------------------------------------- #
+    # ========================================================================
+    # GREEN
+    # ========================================================================
     def green_check(self):
         self.green_signal = None
 
@@ -154,7 +180,7 @@ class LineFollower():
                     valid_rects.append(valid_rect)
             
             if len(valid_rects) > 1:
-                self.green_signal = "Double"
+                self.green_signal = "DOUBLE"
             elif len(valid_rects) == 1:
                 valid_rect = valid_rects[0]
                 
@@ -167,7 +193,7 @@ class LineFollower():
                 # Check black on left
                 check_point = (left_x - int(camera.LINE_WIDTH / 16), left_y)
                 if self.black_check(check_point):
-                    self.green_signal = "Right"
+                    self.green_signal = "RIGHT"
                 else:
                     # Take 2 Rightmost points
                     right_points = sorted(valid_rect, key=lambda p: p[0])[-2:]
@@ -178,7 +204,7 @@ class LineFollower():
                     # Check black on right
                     check_point = (right_x + int(camera.LINE_WIDTH / 16), right_y)
                     if self.black_check(check_point):
-                        self.green_signal = "Left"
+                        self.green_signal = "LEFT"
 
         self.green_hold()
         self.prev_green_signal = self.green_signal
@@ -198,10 +224,10 @@ class LineFollower():
         y_avg = int((top_left[1] + top_right[1]) / 2)
         # if y_avg < int(camera.LINE_HEIGHT / 3) and self.robot_state.trigger["downhill"] is False:
         if y_avg < int(camera.LINE_HEIGHT / 3):
-            self.green_signal = "Approach"
+            self.green_signal = "APPROACH"
             return None
         elif y_avg < int(camera.LINE_HEIGHT / 2) and self.robot_state.trigger["uphill"] is True:
-            self.green_signal = "Approach"
+            self.green_signal = "APPROACH"
             return None
 
         # Check if point is within image bounds
@@ -241,12 +267,12 @@ class LineFollower():
         return False
 
     def green_hold(self):
-        if self.green_signal not in [None, "Double", "Approach"] and self.prev_green_signal != self.green_signal:
+        if self.green_signal not in [None, "DOUBLE", "APPROACH"] and self.prev_green_signal != self.green_signal:
             self.last_seen_green = time.perf_counter()
-        elif self.green_signal == "Double":
+        elif self.green_signal == "DOUBLE":
             self.last_seen_green = 0
 
-        if time.perf_counter() - self.last_seen_green < 0.5 and self.prev_green_signal not in [None, "Double", "Approach"]:
+        if time.perf_counter() - self.last_seen_green < 0.5 and self.prev_green_signal not in [None, "DOUBLE", "APPROACH"]:
             self.green_signal = self.prev_green_signal
 
     def find_green(self):
@@ -265,7 +291,10 @@ class LineFollower():
         if self.green_contours and self.display_image is not None and camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (255, 0, 255), int(camera.LINE_HEIGHT/100))
 
-    # ------------------------------------------------- GAP ------------------------------------------------- #
+    # ========================================================================
+    # GAP
+    # ========================================================================
+
     def gap_handling(self):
         print("Gap Detected!")
         motors.run(0, 0, 1)
@@ -401,7 +430,10 @@ class LineFollower():
             return True
         return False
 
-    # ------------------------------------------------- BLACK ------------------------------------------------- #
+    # ========================================================================
+    # BLACK
+    # ========================================================================
+
     def calculate_angle(self, contour=None, validate=False):
         if not validate:
             self.angle = 90
@@ -409,9 +441,9 @@ class LineFollower():
 
         ref_point = self.calculate_top_contour(contour) if contour is not None else None
 
-        if contour is not None and self.green_signal in ["Left", "Right"]:
+        if contour is not None and self.green_signal in ["LEFT", "RIGHT"]:
             self.prev_side = self.green_signal
-            point = min(contour, key=lambda p: p[0][0]) if self.green_signal == "Left" else max(contour, key=lambda p: p[0][0])
+            point = min(contour, key=lambda p: p[0][0]) if self.green_signal == "LEFT" else max(contour, key=lambda p: p[0][0])
             ref_point = tuple(point[0])
             return self._finalize_angle(ref_point, validate)
 
@@ -422,7 +454,7 @@ class LineFollower():
             if ref_point[1] < (int(camera.LINE_HEIGHT/4) + self.robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - int(3*camera.LINE_HEIGHT/20)) + int(camera.LINE_HEIGHT/10) * (self.robot_state.last_downhill < 100)):
                 return self._finalize_angle(ref_point, validate)
 
-            if self.green_signal != "Approach" and (left_edge_points or right_edge_points):
+            if self.green_signal != "APPROACH" and (left_edge_points or right_edge_points):
                 y_avg_left = int(np.mean([p[1] for p in left_edge_points])) if left_edge_points else None
                 y_avg_right = int(np.mean([p[1] for p in right_edge_points])) if right_edge_points else None
 
@@ -470,7 +502,7 @@ class LineFollower():
         cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
 
         # Define scan band
-        min_y = int(camera.LINE_HEIGHT/5) if self.green_signal == "Approach" else min(pt[0][1] for pt in contour)
+        min_y = int(camera.LINE_HEIGHT/5) if self.green_signal == "APPROACH" else min(pt[0][1] for pt in contour)
         if self.robot_state.trigger["uphill"]:
             min_y = camera.LINE_HEIGHT // 2
         elif self.robot_state.trigger["downhill"]:
@@ -597,7 +629,10 @@ class LineFollower():
                     else:
                         cv2.drawContours(self.display_image, [c], -1, self.turn_color, int(camera.LINE_HEIGHT/100))
 
+    # ========================================================================
     # RED
+    # ========================================================================
+
     def find_red(self):
         if self.hsv_image is not None:
             mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
