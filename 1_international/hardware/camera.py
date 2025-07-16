@@ -26,11 +26,23 @@ class Camera():
             self.bottom_left  = (0,                            self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10))
             self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10))
             
-        top_left =     (int(3 * self.LINE_WIDTH / 10),                    0)
-        top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  0)
-        bottom_left =  (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8) - 1)
-        bottom_right = (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8) - 1)
-        self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+        top_left =     (50,                    50)
+        top_right =    (140,  50)
+        bottom_left =  (50,                    90)
+        bottom_right = (140,  90)
+        self.light_point_left = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32) # 50, 50, 150, 100
+        
+        top_left =     (200,                    50)
+        top_right =    (290,  50)
+        bottom_left =  (200,                    70)
+        bottom_right = (290,  70)
+        self.light_point_right = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32) # 50 200 70 290
+         
+        # top_left =     (int(3 * self.LINE_WIDTH / 10),                    0)
+        # top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  0)
+        # bottom_left =  (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8) - 1)
+        # bottom_right = (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8) - 1)
+        # self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
         top_left =     (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8))
         top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8))
@@ -62,7 +74,8 @@ class Camera():
 
         if self.X11 and self.debug:
             cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=2)
-            cv2.polylines(transformed_image, [np.int32(self.light_points)], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_left)], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_right)], isClosed=True, color=(0, 255, 0), thickness=2)
 
         return transformed_image
     

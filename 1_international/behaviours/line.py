@@ -36,7 +36,7 @@ def main(start_time, robot_state, line_follow) -> None:
             line_follow.follow(starting=True)
 
     elif robot_state.count["silver"] >= 3:
-        oled_display.text("SILVER", 10, 64/2+20/2, size=20, clear=True)
+        oled_display.text("SILVER", 8, 12, size=30, clear=True)
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.run(0, 0)
@@ -46,13 +46,13 @@ def main(start_time, robot_state, line_follow) -> None:
         led.on()
         
     elif robot_state.count["red"] >= 5:
-        oled_display.text("RED", 30, 64/2+40/2, size=40, clear=True)
+        oled_display.text("RED", 35, 12, size=30, clear=True)
         print("Red Found!")
         motors.run(0, 0, 10)
         robot_state.count["red"] = 0
 
     elif robot_state.count["touch"] > 3:
-        oled_display.text("OBSTACLE", 10, 64/2+20/2, size=20, clear=True)
+        oled_display.text("OBSTACLE", 15, 18, size=20, clear=True)
         print("Obstacle Detected")
         robot_state.count["touch"] = 0
         avoid_obstacle(line_follow, robot_state)
@@ -77,16 +77,16 @@ def main(start_time, robot_state, line_follow) -> None:
 # ========================================================================
 
 def find_silver(robot_state, line_follow, silver_detector, silver_value) -> None:
-    if silver_value > robot_state.silver_min:
+    if silver_value > 120:
         robot_state.last_seen_silver = time.perf_counter()
 
-    if line_follow.black_mask:
+    if line_follow.black_mask is not None:
         top_mask = line_follow.black_mask[:int(camera.LINE_HEIGHT / 8), :]
         top_line = np.any(top_mask)
     else:
         top_line = True
 
-    if line_follow.image is not None and not top_line and time.perf_count() - robot_state.last_seen_silver < 2 and not line_follow.green_signal:
+    if line_follow.image is not None and not top_line and time.perf_counter() - robot_state.last_seen_silver < 2 and not line_follow.green_signal:
         result = silver_detector.predict(line_follow.image)
         robot_state.debug_text.append(f"SILVER: {result['class_name']}, {result['confidence']:.3f}")
         robot_state.count["silver"] = robot_state.count["silver"] + 1 if result['prediction'] == 1 and result['confidence'] > 0.99 else 0
@@ -177,12 +177,12 @@ def avoid_obstacle(line_follow, robot_state) -> None:
 
     motors.run(0, 0)
 
-    for _ in range(100): 
-        right_value = laser_sensors.read([2])[0]
-        left_value = laser_sensors.read([0])[0]
-        time.sleep(0.001)
+    right_value = laser_sensors.read([2])[0]
+    left_value = laser_sensors.read([0])[0]
 
     # Clockwise if left > right
+    left_value = 255 if left_value is None else left_value
+    right_value= 255 if right_value is None else right_value
     side_values = [left_value, right_value]
     
     # Immediately update OLED for obstacle detection
@@ -212,7 +212,7 @@ def avoid_obstacle(line_follow, robot_state) -> None:
 
     # SETUP
     # Over turn passed obstacle
-    # oled_display.text("Turning till obstacle", 0, 10, size=10
+    # oled_display.text("Turning till obstacle", 0, 10, size=10)
 
     if robot_state.count["downhill"] > 0:
         motors.run(-30-10, -30-10, 1)

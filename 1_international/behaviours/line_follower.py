@@ -8,12 +8,12 @@ class LineFollower():
         # Constants
         self.robot_state = robot_state
         self.speed = 30
-        self.turn_multi = 1.5
-        self.min_black_area = 1000
+        self.turn_multi = 2
+        self.min_black_area = 5000
         self.min_green_area = 3000
-        self.base_black = 50
-        self.light_black = 90
-        self.lightest_black = 100
+        self.base_black = 60
+        self.light_black = 130
+        self.lightest_black = 120
         self.turn_color = (255, 255, 0)
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
@@ -42,7 +42,7 @@ class LineFollower():
 
         elif not starting: 
             self.gap_handling()
-            oled_display.text("GAP", 30, 64/2+40/2, size=40, clear=True)
+            oled_display.text("GAP", 38, 12, size=30, clear=True)
 
         if self.display_image is not None and camera.X11: 
             show(self.display_image, display=camera.X11, name="line", debug_lines=self.robot_state.debug_text)
@@ -71,10 +71,8 @@ class LineFollower():
 
         # Seesaw
         if self.robot_state.trigger["seasaw"]:
-            oled_display.text("SEESAW", 20, 64/2+20/2, size=20, clear=True)
-            
+            oled_display.text("SEESAW", 8, 12, size=30, clear=True)
             for i in range(5): motors.run(-30+i*6, -30+i*6, 0.20)
-
             self.robot_state.debug_text.append(f"SEESAW")
         
         # DOUBLE Green
@@ -128,10 +126,12 @@ class LineFollower():
 
             self.v1, self.v2 = v1, v2
 
-            if self.stuck_check():                  oled_display.text("STUCK", 20, 64/2+25/2, size=25, clear=True)
-            elif self.green_signal == "APPROACH":   oled_display.text("GREEN", 20, 30, size=20, clear=True)
-            elif self.green_signal:                 oled_display.text(f"GREEN {self.green_signal}", 20, 30, size=20, clear=True)
-            else:                                   oled_display.text("LINE", 30, 64/2+30/2, size=30, clear=True)
+            if self.stuck_check():                  oled_display.text("STUCK", 20, 12, size=30, clear=True),
+            elif self.green_signal == "APPROACH":   oled_display.text("GREEN", 0, 30, size=30, clear=True)
+            elif self.green_signal == "LEFT":       oled_display.text(self.green_signal, 25 ,30, size=30, clear=False)
+            elif self.green_signal == "RIGHT":      oled_display.text(self.green_signal, 15, 30, size=30, clear=False)
+            elif self.green_signal == "DOUBLE":     oled_display.text(self.green_signal, 8, 30, size=30, clear=False)
+            else:                                   oled_display.text("LINE", 25, 12, size=30, clear=True)
                     
             motors.run(self.v1, self.v2)
     
@@ -543,20 +543,25 @@ class LineFollower():
 
         # Create region masks
         region_mask_lightest = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_light    = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light_left = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light_right = np.zeros_like(self.gray_image, dtype=np.uint8)
         region_mask_base     = np.ones_like(self.gray_image, dtype=np.uint8) * 255
 
         cv2.fillPoly(region_mask_lightest, [np.int32(camera.lightest_points)], 255)
-        cv2.fillPoly(region_mask_light, [np.int32(camera.light_points)], 255)
+        cv2.fillPoly(region_mask_light_left, [np.int32(camera.light_point_left)], 255)
+        cv2.fillPoly(region_mask_light_right, [np.int32(camera.light_point_right)], 255)
 
         region_mask_base = cv2.subtract(region_mask_base, region_mask_lightest)
-        region_mask_base = cv2.subtract(region_mask_base, region_mask_light)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_light_left)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_light_right)
 
         masked_lightest = cv2.bitwise_and(lightest_mask, region_mask_lightest)
-        masked_light = cv2.bitwise_and(light_mask, region_mask_light)
+        masked_light_left = cv2.bitwise_and(light_mask, region_mask_light_left)
+        masked_light_right = cv2.bitwise_and(light_mask, region_mask_light_right)
         masked_base = cv2.bitwise_and(base_mask, region_mask_base)
 
-        black_mask = cv2.bitwise_or(masked_lightest, masked_light)
+        black_mask = cv2.bitwise_or(masked_lightest, masked_light_left)
+        black_mask = cv2.bitwise_or(black_mask, masked_light_right)
         black_mask = cv2.bitwise_or(black_mask, masked_base)
 
         # --- Blue detection in top area ---
@@ -575,47 +580,54 @@ class LineFollower():
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
         black_mask = cv2.erode(black_mask, kernel, iterations=2)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10)) 
-        black_mask = cv2.dilate(black_mask, kernel, iterations=3)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) 
+        black_mask = cv2.dilate(black_mask, kernel, iterations=1)
 
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
-        contours = [cnt for cnt in contours if any(p[0][1] > int(camera.LINE_HEIGHT/4) for p in cnt)]
         
-        if len(contours) > 1:
-            filtered_contours = []
-            for contour in contours:
-                if any(p[0][1] > camera.LINE_HEIGHT - int(camera.LINE_HEIGHT/20) and int(3*camera.LINE_HEIGHT/20) < p[0][0] < camera.LINE_WIDTH - int(3*camera.LINE_HEIGHT/20) for p in contour):
-                    filtered_contours.append(contour)
+        all_points = np.concatenate(contours) if contours != [] else []
+        # print(all_points.shape)
+        # all_points = all_points.reshape(-1, 1, 2)
+        # print(all_points.shape)
+        
+        self.black_contour = cv2.convexHull(all_points) if len(all_points) > 0 else None
+        # contours = [cnt for cnt in contours if any(p[0][1] > int(camera.LINE_HEIGHT/4) for p in cnt)]
+        
+        # if len(contours) > 1:
+        #     filtered_contours = []
+        #     for contour in contours:
+        #         if any(p[0][1] > camera.LINE_HEIGHT - int(camera.LINE_HEIGHT/20) and int(3*camera.LINE_HEIGHT/20) < p[0][0] < camera.LINE_WIDTH - int(3*camera.LINE_HEIGHT/20) for p in contour):
+        #             filtered_contours.append(contour)
 
-            target_contours = filtered_contours if filtered_contours else contours
+        #     target_contours = filtered_contours if filtered_contours else contours
 
-            close_contours = []
-            for contour in target_contours:
-                angle = self.calculate_angle(contour, validate=True)
-                if abs(angle - self.last_angle) < 90:
-                    close_contours.append(contour)
+        #     close_contours = []
+        #     for contour in target_contours:
+        #         angle = self.calculate_angle(contour, validate=True)
+        #         if abs(angle - self.last_angle) < 90:
+        #             close_contours.append(contour)
 
-            if len(close_contours) == 0:
-                closest_contour = min(contours, key=lambda c: abs(self.calculate_angle(c, validate=True) - self.last_angle))
-                self.black_contour = closest_contour
+        #     if len(close_contours) == 0:
+        #         closest_contour = min(contours, key=lambda c: abs(self.calculate_angle(c, validate=True) - self.last_angle))
+        #         self.black_contour = closest_contour
 
-            tallest_contours = []
-            if len(close_contours) > 1:
-                for contour in close_contours:
-                    highest_point = max(contour, key=lambda p: p[0][1])
-                    if highest_point[0][1] > camera.LINE_HEIGHT / 2:
-                        tallest_contours.append(contour)
-            elif len(close_contours) == 1:
-                self.black_contour = close_contours[0]
+        #     tallest_contours = []
+        #     if len(close_contours) > 1:
+        #         for contour in close_contours:
+        #             highest_point = max(contour, key=lambda p: p[0][1])
+        #             if highest_point[0][1] > camera.LINE_HEIGHT / 2:
+        #                 tallest_contours.append(contour)
+        #     elif len(close_contours) == 1:
+        #         self.black_contour = close_contours[0]
 
-            if len(tallest_contours) > 1:
-                self.black_contour = max(tallest_contours, key=lambda c: cv2.contourArea(c))
-            elif len(tallest_contours) == 1:
-                self.black_contour = tallest_contours[0]
+        #     if len(tallest_contours) > 1:
+        #         self.black_contour = max(tallest_contours, key=lambda c: cv2.contourArea(c))
+        #     elif len(tallest_contours) == 1:
+        #         self.black_contour = tallest_contours[0]
 
-        elif len(contours) == 1:
-            self.black_contour = contours[0]
+        # elif len(contours) == 1:
+        #     self.black_contour = contours[0]
 
         if self.black_contour is not None:
             contour_mask = np.zeros(self.gray_image.shape[:2], dtype=np.uint8)
