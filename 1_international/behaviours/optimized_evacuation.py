@@ -47,18 +47,18 @@ class EvacuationState:
         self.MIN_VICTIM_TRIANGLE_SWITCH_TIME = 1
         
         # Gap handling
-        self.SILVER_MIN       = 120
+        self.SILVER_MIN       = 130
         self.BLACK_MAX        = 40
-        self.GAP_BLACK_COUNT  = 1
-        self.GAP_SILVER_COUNT = 1
+        self.GAP_BLACK_COUNT  = 5
+        self.GAP_SILVER_COUNT = 5
 
 class Search():
     def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera):
         # Debug
         self.DISPLAY: bool = evac_state.DISPLAY
         
-        self.DEBUG_LIVE: bool       = False
-        self.DEBUG_DEAD: bool       = True
+        self.DEBUG_LIVE: bool       = True
+        self.DEBUG_DEAD: bool       = False
         self.DEBUG_TRIANGLES: bool  = False
         
         self.TIMING_LIVE: bool      = False
@@ -72,7 +72,7 @@ class Search():
         # Live settings
         self.LIVE_THRESHOLD = 250
         self.LIVE_ERODE_KERNAL = np.ones((1, 1), np.uint8)
-        self.LIVE_DILATE_KERNAL = np.ones((11, 11), np.uint8)
+        self.LIVE_DILATE_KERNAL = np.ones((17, 17), np.uint8)
         
         self.LIVE_MIN_AREA = 300
         self.LIVE_MAX_AREA = 2000
@@ -86,10 +86,11 @@ class Search():
         self.DEAD_BLACK_KERNAL = np.ones((31, 31), np.uint8)
         
         self.DEAD_WHITE_THRESHOLD = (160, 160, 160)
-        self.DEAD_BLACK_THRESHOLD = (50, 50, 50)
+        self.DEAD_BLACK_THRESHOLD = (60, 60, 60)
         
         self.DEAD_MIN_BLACK_AREA = 300
-        self.DEAD_MIN_Y = 30
+        self.DEAD_MIN_Y = 40
+        self.DEAD_RADIUS_Y_MIN = -18
         
         self.HOUGH_DP =           1                               # "Resolution" of the accumulator
         self.HOUGH_MIN_DISTANCE = 200
@@ -277,10 +278,9 @@ class Search():
         if circles is None: return None
         if self.TIMING_DEAD: hough_done_time = time.perf_counter()
 
-        print(f"Circles before: {circles}")
+        if self.DEBUG_DEAD: print(f"Circles before: {circles}")
         # Process circles
         circles = np.round(circles[0, :]).astype("int")
-        print(f"Circles after: {circles}")
         
         # Validate circles based on size
         valid = []
@@ -288,7 +288,10 @@ class Search():
         for (x, y, r) in circles:
             x = max(0, min(x, working_image.shape[1] - 1))
             y = max(0, min(y, working_image.shape[0] - 1))
-            if y > self.DEAD_MIN_Y and y - r > 0:
+            
+            if self.DEBUG_DEAD: print(f"{y} {self.DEAD_MIN_Y}    |    {y-r} 0")
+            
+            if y > self.DEAD_MIN_Y and y - r > self.DEAD_RADIUS_Y_MIN:
                 valid.append((x, y, r))
         
         if self.DEBUG_DEAD: print(f"Valid: {valid}")

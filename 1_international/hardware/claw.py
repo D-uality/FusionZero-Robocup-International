@@ -4,7 +4,7 @@ from core.utilities import debug, user_at_host
 class Claw():
     def __init__(self):
         TRIALS = 50
-        self.debug = False
+        self.debug = True
         
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
@@ -16,7 +16,7 @@ class Claw():
         if user_at_host == "frederick@raspberrypi":
             self.EMPTY_TOLERANCE = 20
             self.OPPOSITE_LIVE_TOLERANCE = 20
-            self.LIVE_TOLERANCE = 250
+            self.LIVE_TOLERANCE = 254
             
             self.left_cup = AnalogIn(self.__ADC, 0)
             self.right_cup = AnalogIn(self.__ADC, 1)
@@ -24,14 +24,34 @@ class Claw():
             self.lifter_angle = [20, 160]
             self.pca.servo[self.lifter_pin].angle = 160
             self.pca.servo[self.closer_pin].angle = 90
-            
+        
+        # Empty
+        """
+        
+        EMPTY:
+        110 42
+        
+        DEAD:
+        159 42
+        110 55
+        
+        115 237
+        237 110
+        
+        255 80
+        150 230
+        
+        """
+        
         else:
-            self.EMPTY_TOLERANCE = 4
-            self.OPPOSITE_LIVE_TOLERANCE = 25
-            self.LIVE_TOLERANCE = 230
+            self.EMPTY_TOLERANCE = 12
+            self.OPPOSITE_LIVE_TOLERANCE = 38
+            self.LIVE_TOLERANCE = 245
             
-            self.left_cup = AnalogIn(self.__ADC, 6)
-            self.right_cup = AnalogIn(self.__ADC, 7)
+            
+            
+            self.left_cup = AnalogIn(self.__ADC, 0)
+            self.right_cup = AnalogIn(self.__ADC, 1)
             
             self.lifter_angle = [30, 160]
             self.pca.servo[self.lifter_pin].angle = 160

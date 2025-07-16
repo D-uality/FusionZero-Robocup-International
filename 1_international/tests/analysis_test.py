@@ -8,7 +8,7 @@ from core.shared_imports import time
 
 # from behaviours.evacuation_zone import Search, dump
 from behaviours.optimized_evacuation import op_search
-from behaviours.evacuation_zone import search
+# from behaviours.evacuation_zone import search
 start_display()
 
 last_live_x, last_dead_x = None, None
@@ -40,3 +40,4 @@ def evac_image():
 
 while True:        
     evac_image()
+    print()
