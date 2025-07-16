@@ -19,7 +19,7 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        self._set_manual_exposure(120)
+        self._set_manual_exposure(100)
         
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
     

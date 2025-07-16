@@ -51,7 +51,7 @@ def main(start_time, robot_state, line_follow) -> None:
         motors.run(0, 0, 10)
         robot_state.count["red"] = 0
 
-    elif robot_state.count["touch"] > 3:
+    elif robot_state.count["touch"] > 10:
         oled_display.text("OBSTACLE", 15, 18, size=20, clear=True)
         print("Obstacle Detected")
         robot_state.count["touch"] = 0
@@ -151,29 +151,29 @@ def touch_check(robot_state, touch_values: list[int]) -> None:
     robot_state.count["touch"] = robot_state.count["touch"] + 1 if sum(touch_values) != 2 else 0
 
 def avoid_obstacle(line_follow, robot_state) -> None:
-    if robot_state.trigger["downhill"] or robot_state.trigger["uphill"] or robot_state.trigger["tilt_left"] or robot_state.trigger["tilt_right"]:
-        touch_count = 0
+    # if robot_state.trigger["downhill"] or robot_state.trigger["uphill"] or robot_state.trigger["tilt_left"] or robot_state.trigger["tilt_right"]:
+    touch_count = 0
+    
+    while listener.mode.value != 0:
+        touch_values = touch_sensors.read()
         
-        while listener.mode.value != 0:
-            touch_values = touch_sensors.read()
+        if sum(touch_values) == 0:
+            touch_count += 1
             
-            if sum(touch_values) == 0:
-                touch_count += 1
-                
-            elif sum(touch_values) == 2:
-                touch_count = 0
-                motors.run(25, 25)
-                
-            elif touch_values[0] == 0:
-                motors.run(-15, 25)
-                touch_count = 0
-                
-            elif touch_values[1] == 0:
-                motors.run(25, -15)
-                touch_count = 0
-                
-            if touch_count > 5:
-                break
+        elif sum(touch_values) == 2:
+            touch_count = 0
+            motors.run(25, 25)
+            
+        elif touch_values[0] == 0:
+            motors.run(-15, 25)
+            touch_count = 0
+            
+        elif touch_values[1] == 0:
+            motors.run(25, -15)
+            touch_count = 0
+            
+        if touch_count > 5:
+            break
 
     motors.run(0, 0)
 

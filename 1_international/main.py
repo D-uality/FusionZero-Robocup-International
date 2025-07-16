@@ -32,6 +32,7 @@ def main() -> None:
             if listener.mode.value == 0:
                 motors.run(0, 0)
                 led.off()
+                robot_state.reset()
                 
             elif listener.mode.value == 1:
                 line.main(start_time, robot_state, line_follow)

@@ -8,13 +8,14 @@ class LineFollower():
         # Constants
         self.robot_state = robot_state
         self.speed = 30
-        self.turn_multi = 2
+        self.turn_multi = 1.8
+        self.integral_multi = 0.008
         self.min_black_area = 5000
         self.min_green_area = 3000
-        self.base_black = 60
+        self.base_black = 80
         self.light_black = 130
-        self.lightest_black = 120
-        self.turn_color = (255, 255, 0)
+        self.lightest_black = 140
+        self.turn_color = (255,255, 0)
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
 
@@ -41,8 +42,8 @@ class LineFollower():
             if not starting: self.__turn()
 
         elif not starting: 
-            self.gap_handling()
             oled_display.text("GAP", 38, 12, size=30, clear=True)
+            self.gap_handling()
 
         if self.display_image is not None and camera.X11: 
             show(self.display_image, display=camera.X11, name="line", debug_lines=self.robot_state.debug_text)
@@ -62,6 +63,7 @@ class LineFollower():
             else:
                 self.turn = int(self.turn_multi * (self.angle - 90))
                 self.integral += self.angle-90
+                self.turn = self.turn + int(self.integral * self.integral_multi) if self.robot_state.last_downhill < 200 or self.robot_state.last_uphill < 200 else self.turn
             
             if abs(90-self.angle) < 10:
                 self.integral = 0
@@ -127,7 +129,7 @@ class LineFollower():
             self.v1, self.v2 = v1, v2
 
             if self.stuck_check():                  oled_display.text("STUCK", 20, 12, size=30, clear=True),
-            elif self.green_signal == "APPROACH":   oled_display.text("GREEN", 0, 30, size=30, clear=True)
+            elif self.green_signal == "APPROACH":   oled_display.text("GREEN", 15, 0, size=30, clear=True)
             elif self.green_signal == "LEFT":       oled_display.text(self.green_signal, 25 ,30, size=30, clear=False)
             elif self.green_signal == "RIGHT":      oled_display.text(self.green_signal, 15, 30, size=30, clear=False)
             elif self.green_signal == "DOUBLE":     oled_display.text(self.green_signal, 8, 30, size=30, clear=False)
@@ -139,7 +141,7 @@ class LineFollower():
     # HELPERS
     # ========================================================================
     
-    def run_till_camera(self, v1, v2, threshold, text: list[str]):
+    def run_till_camera(self, v1, v2, threshold, text: list[str], obstacle: bool = False):
         motors.run(v1, v2)
         self.angle = 90
         
@@ -147,7 +149,7 @@ class LineFollower():
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
 
-            self.find_black()
+            self.find_black(obstacle)
             self.calculate_angle(self.black_contour)
 
             if self.display_image is not None and camera.X11:
@@ -531,7 +533,7 @@ class LineFollower():
         y_avg = int(np.mean([pt[1] for pt in points]))
         return x_avg, y_avg
 
-    def find_black(self): 
+    def find_black(self, extra_erode: bool = False): 
         self.black_contour = None
         self.black_mask = None
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
@@ -578,56 +580,58 @@ class LineFollower():
         black_mask = cv2.bitwise_and(black_mask, cv2.bitwise_not(full_blue_mask))
         # --- End blue detection section ---
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
+        
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) if not extra_erode else cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
         black_mask = cv2.erode(black_mask, kernel, iterations=2)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) 
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))  if not extra_erode else cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
         black_mask = cv2.dilate(black_mask, kernel, iterations=1)
 
         contours, _ = cv2.findContours(black_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_black_area]
         
-        all_points = np.concatenate(contours) if contours != [] else []
-        # print(all_points.shape)
-        # all_points = all_points.reshape(-1, 1, 2)
-        # print(all_points.shape)
+        # TODO: black contour
+        # all_points = np.concatenate(contours) if contours != [] else []
+        # # print(all_points.shape)
+        # # all_points = all_points.reshape(-1, 1, 2)
+        # # print(all_points.shape)
         
-        self.black_contour = cv2.convexHull(all_points) if len(all_points) > 0 else None
-        # contours = [cnt for cnt in contours if any(p[0][1] > int(camera.LINE_HEIGHT/4) for p in cnt)]
+        # self.black_contour = cv2.convexHull(all_points) if len(all_points) > 0 else None
+        contours = [cnt for cnt in contours if any(p[0][1] > int(camera.LINE_HEIGHT/4) for p in cnt)]
         
-        # if len(contours) > 1:
-        #     filtered_contours = []
-        #     for contour in contours:
-        #         if any(p[0][1] > camera.LINE_HEIGHT - int(camera.LINE_HEIGHT/20) and int(3*camera.LINE_HEIGHT/20) < p[0][0] < camera.LINE_WIDTH - int(3*camera.LINE_HEIGHT/20) for p in contour):
-        #             filtered_contours.append(contour)
+        if len(contours) > 1:
+            filtered_contours = []
+            for contour in contours:
+                if any(p[0][1] > camera.LINE_HEIGHT - int(camera.LINE_HEIGHT/20) and int(3*camera.LINE_HEIGHT/20) < p[0][0] < camera.LINE_WIDTH - int(3*camera.LINE_HEIGHT/20) for p in contour):
+                    filtered_contours.append(contour)
 
-        #     target_contours = filtered_contours if filtered_contours else contours
+            target_contours = filtered_contours if filtered_contours else contours
 
-        #     close_contours = []
-        #     for contour in target_contours:
-        #         angle = self.calculate_angle(contour, validate=True)
-        #         if abs(angle - self.last_angle) < 90:
-        #             close_contours.append(contour)
+            close_contours = []
+            for contour in target_contours:
+                angle = self.calculate_angle(contour, validate=True)
+                if abs(angle - self.last_angle) < 90:
+                    close_contours.append(contour)
 
-        #     if len(close_contours) == 0:
-        #         closest_contour = min(contours, key=lambda c: abs(self.calculate_angle(c, validate=True) - self.last_angle))
-        #         self.black_contour = closest_contour
+            if len(close_contours) == 0:
+                closest_contour = min(contours, key=lambda c: abs(self.calculate_angle(c, validate=True) - self.last_angle))
+                self.black_contour = closest_contour
 
-        #     tallest_contours = []
-        #     if len(close_contours) > 1:
-        #         for contour in close_contours:
-        #             highest_point = max(contour, key=lambda p: p[0][1])
-        #             if highest_point[0][1] > camera.LINE_HEIGHT / 2:
-        #                 tallest_contours.append(contour)
-        #     elif len(close_contours) == 1:
-        #         self.black_contour = close_contours[0]
+            tallest_contours = []
+            if len(close_contours) > 1:
+                for contour in close_contours:
+                    highest_point = max(contour, key=lambda p: p[0][1])
+                    if highest_point[0][1] > camera.LINE_HEIGHT / 2:
+                        tallest_contours.append(contour)
+            elif len(close_contours) == 1:
+                self.black_contour = close_contours[0]
 
-        #     if len(tallest_contours) > 1:
-        #         self.black_contour = max(tallest_contours, key=lambda c: cv2.contourArea(c))
-        #     elif len(tallest_contours) == 1:
-        #         self.black_contour = tallest_contours[0]
+            if len(tallest_contours) > 1:
+                self.black_contour = max(tallest_contours, key=lambda c: cv2.contourArea(c))
+            elif len(tallest_contours) == 1:
+                self.black_contour = tallest_contours[0]
 
-        # elif len(contours) == 1:
-        #     self.black_contour = contours[0]
+        elif len(contours) == 1:
+            self.black_contour = contours[0]
 
         if self.black_contour is not None:
             contour_mask = np.zeros(self.gray_image.shape[:2], dtype=np.uint8)

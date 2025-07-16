@@ -57,9 +57,9 @@ class Search():
         # Debug
         self.DISPLAY: bool = evac_state.DISPLAY
         
-        self.DEBUG_LIVE: bool       = True
+        self.DEBUG_LIVE: bool       = False
         self.DEBUG_DEAD: bool       = False
-        self.DEBUG_TRIANGLES: bool  = False
+        self.DEBUG_TRIANGLES: bool  = True
         
         self.TIMING_LIVE: bool      = False
         self.TIMING_DEAD: bool      = False
@@ -70,13 +70,14 @@ class Search():
         self.IMG_CENTRE_X = evac_camera.width / 2
         
         # Live settings
-        self.LIVE_THRESHOLD = 243
-        self.LIVE_DILATE_KERNAL = np.ones((31, 31), np.uint8)
+        self.LIVE_THRESHOLD = 250
+        self.LIVE_ERODE_KERNAL = np.ones((1, 1), np.uint8)
+        self.LIVE_DILATE_KERNAL = np.ones((11, 11), np.uint8)
         
-        self.LIVE_MIN_AREA = 600
-        self.LIVE_MAX_AREA = 2200
+        self.LIVE_MIN_AREA = 300
+        self.LIVE_MAX_AREA = 2000
         
-        self.LIVE_MIN_Y = 30
+        self.LIVE_MIN_Y = 35
         self.LIVE_MAX_Y = 50
         
         # Dead settings
@@ -128,8 +129,11 @@ class Search():
         if self.TIMING_LIVE: preprocess_time = time.perf_counter()
         
         # Filter for spectral highlights
+        working_image = cv2.erode(working_image, self.LIVE_ERODE_KERNAL, iterations=1)
         working_image = cv2.dilate(working_image, self.LIVE_DILATE_KERNAL, iterations=1)
         spectral_highlights = cv2.inRange(working_image, (self.LIVE_THRESHOLD, self.LIVE_THRESHOLD, self.LIVE_THRESHOLD), (255, 255, 255))
+        
+        spectral_highlights = spectral_highlights[self.LIVE_MIN_Y:self.LIVE_MAX_Y, :]
         
         if self.DEBUG_LIVE: show(spectral_highlights, name="spectral highlights", display=True)
         if self.TIMING_LIVE: threshold_time = time.perf_counter()
@@ -158,9 +162,9 @@ class Search():
         # Filter valid components
         valid_mask = (
             (areas > self.LIVE_MIN_AREA) & 
-            (areas < self.LIVE_MAX_AREA) & 
-            (centroid_y > self.LIVE_MIN_Y) & 
-            (centroid_y < self.LIVE_MAX_Y)
+            (areas < self.LIVE_MAX_AREA) 
+            # (centroid_y > self.LIVE_MIN_Y) & 
+            # (centroid_y < self.LIVE_MAX_Y)
         )
         
         if not np.any(valid_mask):
@@ -200,7 +204,7 @@ class Search():
             if x_lower > 0:
                 # Create full-size mask for display
                 full_mask = np.zeros((display.shape[0], display.shape[1]), dtype=np.uint8)
-                full_mask[:, x_lower:x_lower + component_mask.shape[1]] = component_mask
+                full_mask[self.LIVE_MIN_Y:self.LIVE_MAX_Y, x_lower:x_lower + component_mask.shape[1]] = component_mask
                 contours, _ = cv2.findContours(full_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             else:
@@ -239,6 +243,7 @@ class Search():
                 
         # Normalise white
         white = cv2.inRange(working_image, self.DEAD_WHITE_THRESHOLD, (255, 255, 255))
+        white = cv2.erode(white, self.DEAD_WHITE_KERNAL, iterations=1)
         white = cv2.dilate(white, self.DEAD_WHITE_KERNAL, iterations=1)
         working_image[white > 0] = [160, 160, 160]
         if self.TIMING_DEAD: white_done_time = time.perf_counter()
@@ -565,7 +570,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         
-        # Reset conditions
+        # clear conditions
         touch_activated = sum(touch_values) != 2
         forwards_expire = time.perf_counter() - forwards_start_time > forwards_time
         gap_found       = black_count > evac_state.GAP_BLACK_COUNT or silver_count > evac_state.GAP_SILVER_COUNT
@@ -908,7 +913,7 @@ def main() -> None:
 
     led.off()
     
-    oled_display.reset()
+    oled_display.clear()
     oled_display.text("Evac start", 0, 0)
     for _ in range(0, 2): evac_camera.capture()
 
@@ -916,7 +921,7 @@ def main() -> None:
     motors.run(0, 0, 1) 
 
     while evac_state.victim_count != 3 and listener.mode.value != 0:
-        oled_display.reset()
+        oled_display.clear()
         oled_display.text(f"locate: {evac_state.victim_count}", 0, 0)
         
         black_count, silver_count, x, search_type = locate(black_count, silver_count)
