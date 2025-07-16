@@ -230,9 +230,9 @@ def avoid_obstacle(line_follow, robot_state) -> None:
         motors.run(v1, v2, 0.01)
 
     if robot_state.count["uphill"] > 5:
-        motors.run(v1, v2, 0.2)
+        motors.run(v1, v2, 0.5)
     else:
-        motors.run(v1, v2, 0.7)
+        motors.run(v1, v2, 1)
 
     # Circle obstacle
     v1 =  30 if direction == "cw" else -30

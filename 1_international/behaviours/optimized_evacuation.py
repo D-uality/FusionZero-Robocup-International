@@ -58,8 +58,8 @@ class Search():
         self.DISPLAY: bool = evac_state.DISPLAY
         
         self.DEBUG_LIVE: bool       = False
-        self.DEBUG_DEAD: bool       = False
-        self.DEBUG_TRIANGLES: bool  = True
+        self.DEBUG_DEAD: bool       = True
+        self.DEBUG_TRIANGLES: bool  = False
         
         self.TIMING_LIVE: bool      = False
         self.TIMING_DEAD: bool      = False
@@ -77,12 +77,12 @@ class Search():
         self.LIVE_MIN_AREA = 300
         self.LIVE_MAX_AREA = 2000
         
-        self.LIVE_MIN_Y = 35
-        self.LIVE_MAX_Y = 50
+        self.LIVE_MIN_Y = 38
+        self.LIVE_MAX_Y = 53
         
         # Dead settings
         self.DEAD_GREEN_KERNAL = np.ones((7,  7), np.uint8)
-        self.DEAD_WHITE_KERNAL = np.ones((7,  7), np.uint8)
+        self.DEAD_WHITE_KERNAL = np.ones((9,  9), np.uint8)
         self.DEAD_BLACK_KERNAL = np.ones((31, 31), np.uint8)
         
         self.DEAD_WHITE_THRESHOLD = (160, 160, 160)
@@ -105,7 +105,7 @@ class Search():
         self.TRIANGLE_ERODE_KERNAL = np.ones((5, 5), np.uint8)
         self.TRIANGLE_DILATE_KERNAL = np.ones((5, 5), np.uint8)
         
-        self.TRIANGLE_MIN_Y = 50 - self.TRIANGLE_TOP_CROP
+        self.TRIANGLE_MIN_Y = 100 - self.TRIANGLE_TOP_CROP
         self.TRIANGLE_MIN_AREA = 600
         self.TRIANGLE_MIN_TRIANGULARITY = 0.7
         
@@ -331,9 +331,13 @@ class Search():
             mask_lower = cv2.inRange(hsv_image, (  0, 120, 0), ( 20, 255, 255))
             mask_upper = cv2.inRange(hsv_image, (160, 120, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
+            
+            if self.DISPLAY and self.DEBUG_TRIANGLES: show(mask, name="red mask", display=True)
         
         else:
             mask = cv2.inRange(hsv_image, self.TRIANGLE_GREEN_HSV[0], self.TRIANGLE_GREEN_HSV[1])
+            
+            if self.DISPLAY and self.DEBUG_TRIANGLES: show(mask, name="greens mask", display=True)
         
         if self.TIMING_TRIANGLES: mask_time = time.perf_counter()
         
