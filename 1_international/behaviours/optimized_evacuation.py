@@ -181,9 +181,6 @@ class Search():
         centre_x = x + w // 2
         
         return centre_x + x_lower
-        
-        # final_centre_x = int(valid_centroid_x[selected_idx] + x_lower)     
-        # return final_centre_x
     
     def dead(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         if image is None or image.size == 0: return None

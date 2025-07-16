@@ -88,7 +88,10 @@ def main() -> None:
         print("Claw Stopped")
         
         time.sleep(0.1)
-        print("Creating Video...")
-        if record: save_vfr_video(get_saved_frames())
+        
+        if record: 
+            print("Creating Video...")
+            oled_display.text("VIDEO", 0, 15)
+            save_vfr_video(get_saved_frames())
 
 if __name__ == "__main__": main()
