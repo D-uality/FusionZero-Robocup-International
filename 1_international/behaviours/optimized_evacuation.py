@@ -61,7 +61,7 @@ class Search():
         self.DEBUG_DEAD: bool       = False
         self.DEBUG_TRIANGLES: bool  = False
         
-        self.TIMING_LIVE: bool      = False
+        self.TIMING_LIVE: bool      = True
         self.TIMING_DEAD: bool      = False
         self.TIMING_TRIANGLES: bool = False
         
@@ -70,20 +70,24 @@ class Search():
         self.IMG_CENTRE_X = evac_camera.width / 2
         
         # Live settings
-        self.LIVE_THRESHOLD = 250
+        self.LIVE_THRESHOLD = 245
         self.LIVE_ERODE_KERNAL = np.ones((1, 1), np.uint8)
-        self.LIVE_DILATE_KERNAL = np.ones((17, 17), np.uint8)
+        self.LIVE_DILATE_KERNAL = np.ones((25, 25), np.uint8)
         
-        self.LIVE_MIN_AREA = 300
-        self.LIVE_MAX_AREA = 2000
+        self.LIVE_UNDILATE_MIN_AREA = 100
+        self.LIVE_UNDILATE_MIN_COUNT = 4
+        self.LIVE_UNDILATE_MIN_COUNT_MIN_AREA = 10
         
-        self.LIVE_MIN_Y = 38
-        self.LIVE_MAX_Y = 53
+        self.LIVE_MIN_AREA = 150
+        self.LIVE_MAX_AREA = 1000000
+        
+        self.LIVE_MIN_Y = 30
+        self.LIVE_MAX_Y = 100
         
         # Dead settings
         self.DEAD_GREEN_KERNAL = np.ones((7,  7), np.uint8)
         self.DEAD_WHITE_KERNAL = np.ones((9,  9), np.uint8)
-        self.DEAD_BLACK_KERNAL = np.ones((31, 31), np.uint8)
+        self.DEAD_BLACK_KERNAL = np.ones((25, 25), np.uint8)
         
         self.DEAD_WHITE_THRESHOLD = (160, 160, 160)
         self.DEAD_BLACK_THRESHOLD = (60, 60, 60)
@@ -111,10 +115,9 @@ class Search():
         self.TRIANGLE_MIN_TRIANGULARITY = 0.7
         
         
-    def live(self, image: np.ndarray, display: np.ndarray, last_x: Optional[int]) -> Optional[int]:
+    def live(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         if image is None or image.size == 0: return None
-        if self.TIMING_LIVE: start_time = time.perf_counter()
-            
+        
         # Crop according to last x
         if last_x is not None:
             x_lower = max(0, last_x - self.CROP_SIZE)
@@ -124,107 +127,63 @@ class Search():
         else:
             working_image = image.copy()
             x_lower = 0
+        
+        cropped_image = working_image[self.LIVE_MIN_Y:self.LIVE_MAX_Y, :]
+        spectral_highlights = cv2.inRange(cropped_image, (self.LIVE_THRESHOLD, self.LIVE_THRESHOLD, self.LIVE_THRESHOLD), (255, 255, 255))
+        original_highlights = spectral_highlights.copy()
+        
+        if self.DEBUG_LIVE and self.DISPLAY:
+            cv2.line(display_image, (0, self.LIVE_MIN_Y), (100, self.LIVE_MIN_Y), (255, 0, 0), 1)
+            cv2.line(display_image, (0, self.LIVE_MAX_Y), (100, self.LIVE_MAX_Y), (255, 0, 0), 1)
+                    
+        spectral_highlights = cv2.dilate(spectral_highlights, self.LIVE_DILATE_KERNAL, iterations=1)        
+        
+        # Find all contours within the dilated spectral_highlights mask
+        dilated_contours, _ = cv2.findContours(spectral_highlights, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Begin dilated_contours validation
+        valid_contours = []
+        
+        for contour in dilated_contours:
+            # Create a mask based on this contour
+            connectivity_mask = np.zeros_like(spectral_highlights)
+            cv2.drawContours(connectivity_mask, [contour], -1, 255, thickness=cv2.FILLED)
+        
+            # Mask the original mask with the dilated mask
+            feature_mask = cv2.bitwise_and(original_highlights, original_highlights, mask=connectivity_mask)
+                        
+            # Find the sub_contours within this region
+            sub_contours, _ = cv2.findContours(feature_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-        if self.TIMING_LIVE: crop_time = time.perf_counter()
-        
-        if self.TIMING_LIVE: preprocess_time = time.perf_counter()
-        
-        # Filter for spectral highlights
-        working_image = cv2.erode(working_image, self.LIVE_ERODE_KERNAL, iterations=1)
-        working_image = cv2.dilate(working_image, self.LIVE_DILATE_KERNAL, iterations=1)
-        spectral_highlights = cv2.inRange(working_image, (self.LIVE_THRESHOLD, self.LIVE_THRESHOLD, self.LIVE_THRESHOLD), (255, 255, 255))
-        
-        spectral_highlights = spectral_highlights[self.LIVE_MIN_Y:self.LIVE_MAX_Y, :]
-        
-        if self.DEBUG_LIVE: show(spectral_highlights, name="spectral highlights", display=True)
-        if self.TIMING_LIVE: threshold_time = time.perf_counter()
-        
-        # Connected components analysis
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(spectral_highlights, connectivity=8)
-        
-        if num_labels <= 1:  # Only background found
-            if self.TIMING_LIVE:
-                total_time = time.perf_counter()
-                print(f"live() | Total: {(total_time - start_time)*1000:.2f}ms | Crop: {(crop_time - start_time)*1000:.2f}ms | Preprocess: {(preprocess_time - crop_time)*1000:.2f}ms | Threshold: {(threshold_time - preprocess_time)*1000:.2f}ms | Status: no_components")
             
-            return None
-        
-        if self.TIMING_LIVE: components_time = time.perf_counter()
-        
-        # Extract component data (skip background at index 0)
-        areas = stats[1:, cv2.CC_STAT_AREA]
-        centroid_y = centroids[1:, 1]
-        centroid_x = centroids[1:, 0]
-        
-        if self.DEBUG_LIVE: print(f"x: {centroid_x}")
-        if self.DEBUG_LIVE: print(f"y: {centroid_y}")
-        if self.DEBUG_LIVE: print(f"area: {areas}")
-        
-        # Filter valid components
-        valid_mask = (
-            (areas > self.LIVE_MIN_AREA) & 
-            (areas < self.LIVE_MAX_AREA) 
-            # (centroid_y > self.LIVE_MIN_Y) & 
-            # (centroid_y < self.LIVE_MAX_Y)
-        )
-        
-        if not np.any(valid_mask):
-            if self.TIMING_LIVE:
-                total_time = time.perf_counter()
-                print(f"live() | Total: {(total_time - start_time)*1000:.2f}ms | Crop: {(crop_time - start_time)*1000:.2f}ms | Preprocess: {(preprocess_time - crop_time)*1000:.2f}ms | Threshold: {(threshold_time - preprocess_time)*1000:.2f}ms | Components: {(components_time - threshold_time)*1000:.2f}ms | Validation: {(total_time - components_time)*1000:.2f}ms | Status: no_valid")
+            # Perform validation
+            total_area = sum(cv2.contourArea(c) for c in sub_contours)
             
-            return None
-        
-        if self.TIMING_LIVE: validation_time = time.perf_counter()
-        
-        # Select best component
-        valid_areas = areas[valid_mask]
-        valid_centroid_x = centroid_x[valid_mask]
-        
-        if last_x is None:
-            # Select largest area
-            selected_idx = np.argmax(valid_areas)
+            if self.DEBUG_LIVE: print(f"\tArea check: {total_area} > {self.LIVE_UNDILATE_MIN_AREA}    |    {len(sub_contours)} > {self.LIVE_UNDILATE_MIN_COUNT}")
             
-        else:  
-            # Select closest to image center (in global coordinates)
-            global_centroid_x = valid_centroid_x + x_lower
-            distances = np.abs(global_centroid_x - self.IMG_CENTRE_X)
-            selected_idx = np.argmin(distances)
-        
-        if self.TIMING_LIVE: selection_time = time.perf_counter()
-        
-        # Get final center position
-        final_centre_x = int(valid_centroid_x[selected_idx] + x_lower)
-        
-        # Display if enabled
-        if self.DISPLAY:
-            # Create mask for selected component
-            selected_label = np.where(valid_mask)[0][selected_idx] + 1  # +1 because we skipped background
-            component_mask = (labels == selected_label).astype(np.uint8) * 255
-            
-            if x_lower > 0:
-                # Create full-size mask for display
-                full_mask = np.zeros((display.shape[0], display.shape[1]), dtype=np.uint8)
-                full_mask[self.LIVE_MIN_Y:self.LIVE_MAX_Y, x_lower:x_lower + component_mask.shape[1]] = component_mask
-                contours, _ = cv2.findContours(full_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            else:
-                contours, _ = cv2.findContours(component_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            if contours:
-                cv2.drawContours(display, contours, -1, (0, 255, 0), 2)
+            if total_area > self.LIVE_UNDILATE_MIN_AREA or (len(sub_contours) > self.LIVE_UNDILATE_MIN_COUNT and total_area > self.LIVE_UNDILATE_MIN_COUNT_MIN_AREA):
+                valid_contours.append(contour)
                 
-            if self.DEBUG_LIVE:
-                component_mask_colored = cv2.cvtColor(component_mask, cv2.COLOR_GRAY2BGR)
-                cv2.drawContours(component_mask_colored, [contours[0]] if contours else [], -1, (0, 255, 0), 2)
-                show(component_mask_colored, "live_working_image")
+            if self.DEBUG_LIVE and self.DISPLAY:
+                for contour in sub_contours: contour[:, 0, 1] += self.LIVE_MIN_Y
+                cv2.drawContours(display_image, sub_contours, -1, (0, 255, 255), 2)
         
-        if self.TIMING_LIVE: 
-            drawing_time = time.perf_counter()
-            end_time = time.perf_counter()
-            print(f"live() | Total: {(end_time - start_time)*1000:.2f}ms | Crop: {(crop_time - start_time)*1000:.2f}ms | Preprocess: {(preprocess_time - crop_time)*1000:.2f}ms | Threshold: {(threshold_time - preprocess_time)*1000:.2f}ms | Components: {(components_time - threshold_time)*1000:.2f}ms | Validation: {(validation_time - components_time)*1000:.2f}ms | Selection: {(selection_time - validation_time)*1000:.2f}ms | Drawing: {(drawing_time - selection_time)*1000:.2f}ms | Final: {(end_time - drawing_time)*1000:.2f}ms | Status: success")
-                
-        return final_centre_x
+        if len(valid_contours) == 0: return None
+        
+        if self.DEBUG_LIVE and self.DISPLAY:
+            for contour in valid_contours: contour[:, 0, 1] += self.LIVE_MIN_Y
+            cv2.drawContours(display_image, valid_contours, -1, (0, 255, 0), 2)
+        
+        valid_contours.sort(key=cv2.contourArea, reverse=True)
+        largest_contour = valid_contours[0]
+        
+        x, _, w, _ = cv2.boundingRect(largest_contour)
+        centre_x = x + w // 2
+        
+        return centre_x + x_lower
+        
+        # final_centre_x = int(valid_centroid_x[selected_idx] + x_lower)     
+        # return final_centre_x
     
     def dead(self, image: np.ndarray, display_image: np.ndarray, last_x: Optional[int]) -> Optional[int]:
         if image is None or image.size == 0: return None

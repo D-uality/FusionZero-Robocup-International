@@ -19,3 +19,5 @@ cython_debug/
 temp_frames/
 
 1_international/timestamps.txt
+
+1_international/tests/victims/frames

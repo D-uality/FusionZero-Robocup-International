@@ -19,16 +19,27 @@ class EvacuationCamera():
         self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        self._set_manual_exposure(100)
+        self._set_camera_controls(exposure_value=100)
         
         debug(["INITIALISATION", "E_CAMERA", "✓"], [25, 25, 50])
     
-    def _set_manual_exposure(self, value):
+    def _set_camera_controls(self, exposure_value: int, contrast_value: int = 32, sharpness_value: int = 6):
         subprocess.run([
             "v4l2-ctl", "-d", self.device,
             "-c", "auto_exposure=1",
-            "-c", f"exposure_time_absolute={value}"
+            "-c", f"exposure_time_absolute={exposure_value}"
         ], check=True)
+        
+        subprocess.run([
+            "v4l2-ctl", "-d", self.device,
+            f"--set-ctrl=contrast={contrast_value}"
+        ], check=True)
+        
+        subprocess.run([
+            "v4l2-ctl", "-d", self.device,
+            f"--set-ctrl=sharpness={sharpness_value}"
+        ], check=True)
+
 
     def capture(self) -> np.ndarray:
         CROP_PRECENTAGE = 0.43

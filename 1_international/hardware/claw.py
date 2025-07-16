@@ -25,23 +25,21 @@ class Claw():
             self.pca.servo[self.lifter_pin].angle = 160
             self.pca.servo[self.closer_pin].angle = 90
         
-        # Empty
-        """
-        
-        EMPTY:
-        110 42
-        
-        DEAD:
-        159 42
-        110 55
-        
-        115 237
-        237 110
-        
-        255 80
-        150 230
-        
-        """
+            """
+            EMPTY:
+            110 42
+            
+            DEAD:
+            159 42
+            110 55
+            
+            115 237
+            237 110
+            
+            255 80
+            150 230
+            
+            """
         
         else:
             self.EMPTY_TOLERANCE = 12
