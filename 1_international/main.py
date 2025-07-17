@@ -20,7 +20,7 @@ def main() -> None:
     led.off()
     start_time = time.perf_counter()
     random.seed(time.time())
-    
+        
     try:
         listener.start()
         oled_display.display_logo()
