@@ -8,6 +8,7 @@ from hardware.robot import *
 from core.utilities import *
 from core.listener import listener
 
+
 start_display()
 
 ##########################################################################################################################################################
@@ -70,19 +71,19 @@ class Search():
         self.IMG_CENTRE_X = evac_camera.width / 2
         
         # Live settings
-        self.LIVE_THRESHOLD = 245
+        self.LIVE_THRESHOLD = 240
         self.LIVE_ERODE_KERNAL = np.ones((1, 1), np.uint8)
         self.LIVE_DILATE_KERNAL = np.ones((25, 25), np.uint8)
         
         self.LIVE_UNDILATE_MIN_AREA = 100
         self.LIVE_UNDILATE_MIN_COUNT = 4
-        self.LIVE_UNDILATE_MIN_COUNT_MIN_AREA = 10
+        self.LIVE_UNDILATE_MIN_COUNT_MIN_AREA = 3
         
         self.LIVE_MIN_AREA = 150
         self.LIVE_MAX_AREA = 1000000
         
-        self.LIVE_MIN_Y = 30
-        self.LIVE_MAX_Y = 100
+        self.LIVE_MIN_Y = 25
+        self.LIVE_MAX_Y = 80
         
         # Dead settings
         self.DEAD_GREEN_KERNAL = np.ones((7,  7), np.uint8)
@@ -154,7 +155,6 @@ class Search():
                         
             # Find the sub_contours within this region
             sub_contours, _ = cv2.findContours(feature_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
             
             # Perform validation
             total_area = sum(cv2.contourArea(c) for c in sub_contours)
@@ -428,7 +428,7 @@ class Movement():
         error = evac_camera.width / 2 - x
 
         turn = kP * error
-        scalar = 0.8 if abs(error) < 10 else 1
+        scalar = 0.7 if abs(error) < 10 else 1
         
         v1 = ((self.SPEED_ROUTE - turn) * scalar if search_type in ["live", "dead"] else self.SPEED_FAST - turn)
         v2 = ((self.SPEED_ROUTE + turn) * scalar if search_type in ["live", "dead"] else self.SPEED_FAST + turn)
@@ -440,7 +440,7 @@ class Movement():
         
     def wall_follow(self) -> None:
         KP = 1.2
-        GAP_DISTANCE = 15                               # Threshold to classify for gap
+        GAP_DISTANCE = 13.5                               # Threshold to classify for gap
         OFFSET = 3                                      # Wall following distance
         MAX_TURN = evac_state.SPEED_BASE * 0.5          # Max turning speed
         
@@ -462,8 +462,8 @@ class Movement():
 
         # Turn into gaps if leaving, uncap max_turn and increase the raw_turn
         if distance > GAP_DISTANCE:
-            raw_turn = raw_turn * 30
-            MAX_TURN = evac_state.SPEED_BASE * 5
+            raw_turn = raw_turn * 50
+            MAX_TURN = evac_state.SPEED_BASE * 10
         
         # Project an artificial pivot point
         effective_turn = raw_turn * (1 + 2 / max(distance, OFFSET))
@@ -484,34 +484,51 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     green_enable = False
     red_enable   = False
     
-    claw.read()
-    live_count  = claw.spaces.count("live")
-    dead_count  = claw.spaces.count("dead")
-    empty_count = 2 - live_count - dead_count
+    # TODO FIX CLAW SENSORS
+    # claw.read()
+    # live_count  = claw.spaces.count("live")
+    # dead_count  = claw.spaces.count("dead")
+    # empty_count = 2 - live_count - dead_count
         
-    if evac_state.victim_count + live_count < 2 and empty_count != 0: live_enable  = True
-    if dead_count < 1 and empty_count != 0:                           dead_enable  = True
-    if live_count > 0:                                                green_enable = True
-    if dead_count == 1 and evac_state.victim_count == 2:              red_enable   = True
+    # if evac_state.victim_count + live_count < 2 and empty_count != 0: live_enable  = True
+    # if dead_count < 1 and empty_count != 0:                           dead_enable  = True
+    # if live_count > 0:                                                green_enable = True
+    # if dead_count == 1 and evac_state.victim_count == 2:              red_enable   = True
     
-    if evac_state.DEBUG_ANALYSE: print(live_enable, dead_enable, green_enable, red_enable)
+    # if evac_state.DEBUG_ANALYSE: print(live_enable, dead_enable, green_enable, red_enable)
     
-    if search_type in ["live", "green", "default"] and live_enable:
+    # if search_type in ["live", "green", "default"] and live_enable:
+    #     live_x = op_search.live(image, display_image, last_x)
+    #     if live_x is not None: return live_x, "live"
+
+    # if search_type in ["dead", "green", "default"] and dead_enable:
+    #     dead_x = op_search.dead(image, display_image, last_x)
+    #     if dead_x is not None: return dead_x, "dead"
+    
+    # if search_type in ["green", "default"] and green_enable:
+    #     x, _ = op_search.triangle(image, display_image, "green")
+    #     if x is not None: return x, "green"
+    
+    # if search_type in ["red", "default"] and red_enable:
+    #     x, _  = op_search.triangle(image, display_image, "red")
+    #     if x is not None: return x, "red"
+    
+    if search_type in ["live", "green", "default"]:
         live_x = op_search.live(image, display_image, last_x)
         if live_x is not None: return live_x, "live"
 
-    if search_type in ["dead", "green", "default"] and dead_enable:
+    if search_type in ["dead", "green", "default"] and evac_state.victim_count == 2:
         dead_x = op_search.dead(image, display_image, last_x)
         if dead_x is not None: return dead_x, "dead"
     
-    if search_type in ["green", "default"] and green_enable:
+    if search_type in ["green", "default"]:
         x, _ = op_search.triangle(image, display_image, "green")
         if x is not None: return x, "green"
     
-    if search_type in ["red", "default"] and red_enable:
+    if search_type in ["red", "default"] and evac_state.victim_count == 2:
         x, _  = op_search.triangle(image, display_image, "red")
         if x is not None: return x, "red"
-    
+        
     return None, search_type
 
 def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
@@ -529,7 +546,11 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         silver_value = silver_sensor.read()
         touch_values = touch_sensors.read()
-        _, pitch, _ = gyroscope.read()
+        gyro_value = gyroscope.read()
+        
+        if gyro_value is not None:
+            _, pitch, _ = gyro_value
+        
         
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         
@@ -598,7 +619,10 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
         
         silver_value = silver_sensor.read()
         touch_values = touch_sensors.read()
-        _, pitch, _ = gyroscope.read()
+        gyro_value = gyroscope.read()
+        
+        if gyro_value is not None:
+            _, pitch, _ = gyro_value
         
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         
@@ -690,8 +714,10 @@ def grab(prev_insert: Optional[int]) -> tuple[bool, int]:
     claw.read()
     debug( ["GRAB", f"{claw.spaces}"], [30, 20] )
     
-    if claw.spaces[0 if insert == -1 else 1] != "": return True, None
-    else:                                           return False, insert
+    evac_state.victim_count += 1
+    return True, None
+    # if claw.spaces[0 if insert == -1 else 1] != "": return True, None
+    # else:                                           return False, insert
 
 def dump(search_type: str) -> None:
     TIME_STEP = 0.2
@@ -700,15 +726,17 @@ def dump(search_type: str) -> None:
     motors.run(0, 0, 0.5)
     claw.read()
     
-    # Determine angles to visit
-    dump_type: str    
-    if   search_type == "green": dump_type = "live"
-    else:                        dump_type = "dead"
+    # # Determine angles to visit
+    # dump_type: str    
+    # if   search_type == "green": dump_type = "live"
+    # else:                        dump_type = "dead"
         
-    angles = []
-    if claw.spaces[0] == dump_type: angles.append(180)
-    if claw.spaces[1] == dump_type: angles.append(0)
+    # angles = []
+    # if claw.spaces[0] == dump_type: angles.append(180)
+    # if claw.spaces[1] == dump_type: angles.append(0)
 
+    angles = [0, 180]
+    
     # Dump
     claw.lift(90)
     
@@ -723,7 +751,7 @@ def dump(search_type: str) -> None:
 
         time.sleep(0.3)
         
-        evac_state.victim_count += 1
+        # evac_state.victim_count += 1
         
     claw.close(90)
     claw.lift(180)
@@ -816,7 +844,33 @@ def align_line(align_type: str, align_count: int) -> None:
 
 def leave():
     silver_count = black_count = 0
+    led.on()
     
+    touch_count = 0
+    
+    while listener.mode.value != 0:
+        touch_values = touch_sensors.read()
+        
+        if sum(touch_values) == 0:
+            touch_count += 1
+            
+        elif sum(touch_values) == 2:
+            touch_count = 0
+            motors.run(35, 35)
+            
+        elif touch_values[0] == 0:
+            motors.run(-12, 35)
+            touch_count = 0
+            
+        elif touch_values[1] == 0:
+            motors.run(35, -12)
+            touch_count = 0
+            
+        if touch_count > 5:
+            break
+
+    motors.run(0, 0)
+
     motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
     motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
     motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
@@ -827,10 +881,29 @@ def leave():
         silver_value = silver_sensor.read()
         black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
 
-        if black_count >= 5:
+        if black_count >= 2:
             debug(["EXITING", "FOUND EXIT!"], [24, 30])
-            align_line("black", 2)
+            motors.run(evac_state.SPEED_BASE, evac_state.SPEED_BASE, 0.5)
+        
+            # motors.run(20, 20)
+            # left_black = right_black = False
+            # while True:
+            #     colour_values = colour_sensors.read()
+            #     if any(colour_values[0, 1]) < 40:
+            #         motors.run(0, 20)
+            #         left_black = True
+            #     elif any(colour_values[3, 4]) < 40:
+            #         motors.run(20, 0)
+            #         right_black = True
+                
+            #     if left_black and right_black:
+            #         break
+                    
+                    
+            # align_line("black", 2)
+            
             break
+        
         
         elif silver_count >= 5:
             debug(["EXITING", "FOUND SILVER"], [24, 30])
@@ -872,6 +945,7 @@ movement = Movement(evac_state, evac_camera, touch_sensors, colour_sensors, moto
 def main() -> None:
     black_count = silver_count = 0
     evac_state.victim_count = 0
+    
     prev_insert = None
 
     led.off()
@@ -899,18 +973,19 @@ def main() -> None:
             motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
             motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
             
-            motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 2)
-            motors.run(0, 0)
-            
-            # black_count, silver_count, x, search_type = locate(black_count, silver_count)
-            for _ in range(0, 5): evac_camera.capture()
             motors.run(0, 0, 0.1)
-
-            route_success = route(black_count, silver_count, None, search_type, retry=True)
-            if not route_success: continue
             
-            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
-            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
+            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST * 0.8, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
+            motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST * 0.8, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
+            # # black_count, silver_count, x, search_type = locate(black_count, silver_count)
+            # for _ in range(0, 5): evac_camera.capture()
+            # motors.run(0, 0, 0.1)
+
+            # route_success = route(black_count, silver_count, None, search_type, retry=True)
+            # if not route_success: continue
+            
+            # motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
+            # motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
     
             oled_display.text(f"dump", 0, 20)
             dump(search_type)
@@ -942,9 +1017,9 @@ def main() -> None:
 ##########################################################################################################################################################
 
 if __name__ == "__main__":
+    listener.mode.value = 2
     # evac_state.victim_count = 3
     
-    listener.mode.value = 2
-    main()
+    # main()
     
-    # leave()
+    leave()

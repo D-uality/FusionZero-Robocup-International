@@ -42,8 +42,13 @@ def main(start_time, robot_state, line_follow) -> None:
         motors.run(0, 0)
         evacuation_zone.main()
         robot_state.trigger["evacuation_zone"] = True
+        line_follow.align_to_contour_angle()
+        print("finished align")
+        motors.run(0, 0, 1)
+        
         start_time = time.perf_counter()
         led.on()
+        
         
     elif robot_state.count["red"] >= 5:
         oled_display.text("RED", 35, 12, size=30, clear=True)
@@ -77,11 +82,11 @@ def main(start_time, robot_state, line_follow) -> None:
 # ========================================================================
 
 def find_silver(robot_state, line_follow, silver_detector, silver_value) -> None:
-    if silver_value > 120:
-        robot_state.last_seen_silver = time.perf_counter()
+    # if silver_value > 120:
+    robot_state.last_seen_silver = time.perf_counter()
 
     if line_follow.black_mask is not None:
-        top_mask = line_follow.black_mask[:int(camera.LINE_HEIGHT / 8), :]
+        top_mask = line_follow.black_mask[:int(camera.LINE_HEIGHT / 10), :]
         top_line = np.any(top_mask)
     else:
         top_line = True

@@ -43,10 +43,8 @@ class Claw():
         
         else:
             self.EMPTY_TOLERANCE = 12
-            self.OPPOSITE_LIVE_TOLERANCE = 38
+            self.OPPOSITE_LIVE_TOLERANCE = 20
             self.LIVE_TOLERANCE = 245
-            
-            
             
             self.left_cup = AnalogIn(self.__ADC, 0)
             self.right_cup = AnalogIn(self.__ADC, 1)

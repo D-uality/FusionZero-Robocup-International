@@ -300,28 +300,28 @@ class LineFollower():
     def gap_handling(self):
         print("Gap Detected!")
         motors.run(0, 0, 1)
-        motors.run(-20, -20)
+        motors.run(-25, -25)
 
         for i in range(3): self.__wait_for_black_contour()
-        motors.run(-20, -20, 0.5)
+        motors.run(-25, -25, 0.1)
         motors.run(0, 0, 0.3)
 
-        self.__align_to_contour_angle()
+        self.align_to_contour_angle()
         motors.run(0, 0, 0.2)
 
-        f = 3 + 0.5 * (self.robot_state.last_uphill < 100)
+        f = 1.1 + 0.5 * (self.robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
-            motors.run(-25, -25, f+0.5)
+            motors.run(-35, -35, f-0.1)
             motors.run(0, 0, 0.2)
 
-            self.__align_to_contour_angle()
+            self.align_to_contour_angle()
             motors.run(0, 0, 0.2)
 
-            if not self.__move_and_check_black(f+0.8):
+            if not self.__move_and_check_black(f+1.1):
                 print("Still no black. Exiting gap handler.")
-                motors.run(-25, -25, f+1)
+                motors.run(-35, -35, f+1)
 
         print("Gap handling complete.")
     
@@ -339,7 +339,7 @@ class LineFollower():
             if self.display_image is not None and camera.X11:
                 show(self.display_image, display=camera.X11, name="line", debug_lines=["GAP"])
 
-    def __align_to_contour_angle(self):
+    def align_to_contour_angle(self):
         while listener.mode.value != 0:
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
@@ -401,12 +401,12 @@ class LineFollower():
                 print(f"[Gap Align] Angle (Poly): {angle:.2f}")
 
                 # --- Alignment logic ---
-                if abs(angle - 90) < 3:
+                if abs(angle - 90) < 4:
                     break
                 elif angle > 90:
-                    motors.run(15, -15)
+                    motors.run(14, -18)
                 else:
-                    motors.run(-15, 15)
+                    motors.run(-18, 14)
 
                 # --- DEBUG DRAW ---
                 if self.display_image is not None and camera.X11:
@@ -421,8 +421,8 @@ class LineFollower():
                     show(self.display_image, display=camera.X11, name="line", debug_lines=["GAP"])
 
     def __move_and_check_black(self, duration: float) -> bool:
-        motors.run(25, 25, duration)
-        motors.run(0, 0, 0.3)
+        motors.run(35, 35, duration)
+        motors.run(0, 0, 0.1)
 
         self.image = camera.perspective_transform(camera.capture_array())
         self.display_image = self.image.copy()
