@@ -76,7 +76,7 @@ class LaserSensors():
                 values.append(None)
 
         
-        self.__fails = self.__fails + 1 if None in values and None in self.__last_values else 0
+        # self.__fails = self.__fails + 1 if None in values and None in self.__last_values else 0
         self.__last_values = values
         
         return values

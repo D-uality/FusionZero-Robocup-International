@@ -37,7 +37,8 @@ class ColourSensors():
         raw_values = self.read_raw()
         
         for i in range(5):
-            mapped_value = (raw_values[i] - self.__min_values[i]) * 100 / (self.__max_values[i] - self.__min_values[i])
+            division_ratio = (self.__max_values[i] - self.__min_values[i]) if (self.__max_values[i] - self.__min_values[i]) != 0 else 1
+            mapped_value = (raw_values[i] - self.__min_values[i]) * 100 / division_ratio
             mapped_values.append(int(mapped_value))
             
         return mapped_values

@@ -36,11 +36,13 @@ def main(start_time, robot_state, line_follow) -> None:
             line_follow.follow(starting=True)
 
     elif robot_state.count["silver"] >= 3:
+        motors.run(25, -25, 0.3)
         oled_display.text("SILVER", 8, 12, size=30, clear=True)
         print("Silver Found!")
         robot_state.count["silver"] = 0
         motors.run(0, 0)
         evacuation_zone.main()
+        motors.run(30, 30, 0.3)
         robot_state.trigger["evacuation_zone"] = True
         line_follow.align_to_contour_angle()
         print("finished align")
@@ -307,6 +309,8 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         touch_values = touch_sensors.read()
 
         debug(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
+
+        if laser_value is None: laser_value = 255
 
         motors.run(v1, v2)
         if laser_value is not None:

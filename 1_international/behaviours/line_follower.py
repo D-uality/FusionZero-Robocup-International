@@ -9,7 +9,7 @@ class LineFollower():
         self.robot_state = robot_state
         self.speed = 30
         self.turn_multi = 1.8
-        self.integral_multi = 0.008
+        self.integral_multi = 0.001
         self.min_black_area = 5000
         self.min_green_area = 3000
         self.base_black = 80
@@ -63,7 +63,7 @@ class LineFollower():
             else:
                 self.turn = int(self.turn_multi * (self.angle - 90))
                 self.integral += self.angle-90
-                self.turn = self.turn + int(self.integral * self.integral_multi) if self.robot_state.last_downhill < 200 or self.robot_state.last_uphill < 200 else self.turn
+                self.turn = self.turn + int(self.integral * self.integral_multi) if self.robot_state.last_downhill > 200 or self.robot_state.last_uphill > 200 else self.turn
             
             if abs(90-self.angle) < 10:
                 self.integral = 0
@@ -160,7 +160,7 @@ class LineFollower():
         motors.run(0, 0)
 
     def stuck_check(self) -> bool:
-        if abs(self.integral) > 3000: 
+        if abs(self.integral) > 5000: 
             self.v1 += 15
             self.v2 += 15
             self.robot_state.debug_text.append(f"STUCK")
