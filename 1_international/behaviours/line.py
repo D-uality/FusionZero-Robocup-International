@@ -43,9 +43,9 @@ def main(start_time, robot_state, line_follow) -> None:
         motors.run(0, 0)
         evacuation_zone.main()
         motors.run(-30, -30, 0.3)
-        robot_state.trigger["evacuation_zone"] = True
         line_follow.align_to_contour_angle()
         print("finished align")
+        # robot_state.trigger["evacuation_zone"] = True
         motors.run(0, 0, 1)
         
         start_time = time.perf_counter()

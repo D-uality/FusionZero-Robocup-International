@@ -11,7 +11,7 @@ class LineFollower():
         self.turn_multi = 1.8
         self.integral_multi = 0.001
         self.min_black_area = 5000
-        self.min_green_area = 3000
+        self.min_green_area = 8000
         self.base_black = 80
         self.light_black = 130
         self.lightest_black = 140
@@ -89,7 +89,7 @@ class LineFollower():
                 v1, v2, t = -15, 40, 3
                 f = 0.5 if self.robot_state.trigger["uphill"] else 0
             elif self.robot_state.trigger["uphill"]:
-                f, t = 1.3, 3
+                f, t = 1, 2.3
                 v1 = v1
                 v2 = v2 * 1.5
             if self.robot_state.trigger["downhill"]:
@@ -298,6 +298,9 @@ class LineFollower():
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
+        for cnt in contours:
+            print(cv2.contourArea(cnt))
+            
         self.green_contours = green_contours
                 
         if self.green_contours and self.display_image is not None and camera.X11:
@@ -351,6 +354,7 @@ class LineFollower():
 
     def align_to_contour_angle(self):
         while listener.mode.value != 0:
+            angle = None
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
             self.find_black()
@@ -396,6 +400,7 @@ class LineFollower():
 
                 if len(xs) == 0:
                     print("No bottom pixels found.")
+                    motors.run(-17, -17)
                     continue
 
                 bottom_point = (int(np.mean(xs)), int(np.mean(ys)))
@@ -411,12 +416,39 @@ class LineFollower():
                 print(f"[Gap Align] Angle (Poly): {angle:.2f}")
 
                 # --- Alignment logic ---
-                if abs(angle - 90) < 4:
-                    break
-                elif angle > 90:
-                    motors.run(14, -18)
+                if abs(top_point[0] - camera.LINE_WIDTH // 2) < 20:
+                    if abs(angle - 90) < 4:
+                        break
+                    elif angle > 90:
+                        motors.run(14, -18)
+                    elif angle <= 90:
+                        motors.run(-18, 14)
+                    else:
+                        print("backwards")
+                        motors.run(-15, -15)
+                elif (top_point[0] - camera.LINE_WIDTH // 2) < 0:
+                    print("aligning more to the left")
+                    if angle - 90 < 0 and angle - 90 > -4:
+                        break
+                    elif angle >= 90:
+                        motors.run(14, -18)
+                    elif angle < 90:
+                        motors.run(-18, 14)
+                    else:
+                        print("backwards")
+                        motors.run(-15, -15)
                 else:
-                    motors.run(-18, 14)
+                    print("aligning more to the right")
+                    if angle - 90 > 0 and angle - 90 < 4:
+                        break
+                    elif angle > 90:
+                        motors.run(14, -18)
+                    elif angle <= 90:
+                        motors.run(-18, 14)
+                    else:
+                        print("backwards")
+                        motors.run(-15, -15)
+                    
 
                 # --- DEBUG DRAW ---
                 if self.display_image is not None and camera.X11:

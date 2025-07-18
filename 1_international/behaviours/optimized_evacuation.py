@@ -50,8 +50,8 @@ class EvacuationState:
         # Gap handling
         self.SILVER_MIN       = 185
         self.BLACK_MAX        = 40
-        self.GAP_BLACK_COUNT  = 0
-        self.GAP_SILVER_COUNT = 0
+        self.GAP_BLACK_COUNT  = 1
+        self.GAP_SILVER_COUNT = 1
 
 class Search():
     def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera):
@@ -59,11 +59,11 @@ class Search():
         self.DISPLAY: bool = evac_state.DISPLAY
         
         self.DEBUG_LIVE: bool       = False
-        self.DEBUG_DEAD: bool       = True
-        self.DEBUG_TRIANGLES: bool  = False
+        self.DEBUG_DEAD: bool       = False
+        self.DEBUG_TRIANGLES: bool  = True
         
         self.TIMING_LIVE: bool      = False
-        self.TIMING_DEAD: bool      = True
+        self.TIMING_DEAD: bool      = False
         self.TIMING_TRIANGLES: bool = False
         
         # General settings
@@ -112,7 +112,7 @@ class Search():
         self.TRIANGLE_DILATE_KERNAL = np.ones((5, 5), np.uint8)
         
         self.TRIANGLE_MIN_Y = 100 - self.TRIANGLE_TOP_CROP
-        self.TRIANGLE_MIN_AREA = 600
+        self.TRIANGLE_MIN_AREA = 1000
         self.TRIANGLE_MIN_TRIANGULARITY = 0.7
         
         
@@ -355,43 +355,44 @@ class Search():
         return int(x + w/2), contour_area
     
     def _rectangularity_score(self, contour: np.ndarray) -> float:
-        # 1) area-fit
-        rect = cv2.minAreaRect(contour)
-        box  = cv2.boxPoints(rect)
-        
-        boxArea      = cv2.contourArea(box)
-        contourArea  = cv2.contourArea(contour)
-        
-        if boxArea == 0: return 0.0
-        areaScore = contourArea / boxArea                        # ≤ 1
+            # 1) area-fit
+            rect = cv2.minAreaRect(contour)
+            box  = cv2.boxPoints(rect)
+            
+            boxArea      = cv2.contourArea(box)
+            contourArea  = cv2.contourArea(contour)
+            
+            if boxArea == 0: return 0.0
+            areaScore = contourArea / boxArea                        # ≤ 1
 
-        # 2) vertex-count fit
-        peri   = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
-        vertexScore = 1 - abs(len(approx) - 4) / 4               # 1 if 4 vertices
+            # 2) vertex-count fit
+            peri   = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            vertexScore = 1 - abs(len(approx) - 4) / 4               # 1 if 4 vertices
 
-        # 3) angle fit (only if we really have 4 corners)
-        if len(approx) == 4:
-            pts = approx.reshape(-1, 2)
-            angles = []
-            for i in range(4):
-                p0, p1, p2 = pts[i], pts[(i + 1) % 4], pts[(i + 2) % 4]
-                v1, v2 = p0 - p1, p2 - p1
-                
-                cosang = np.clip(
-                    np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)),
-                    -1.0, 1.0
-                )
-                
-                angle = math.degrees(math.acos(cosang))
-                angles.append(angle)
-            angleScore = sum(1 - abs(90 - a) / 90 for a in angles) / 4  # 1 if 90°
-        else:
-            angleScore = 0.0
+            # 3) angle fit (only if we really have 4 corners)
+            if len(approx) == 4:
+                pts = approx.reshape(-1, 2)
+                angles = []
+                for i in range(4):
+                    p0, p1, p2 = pts[i], pts[(i + 1) % 4], pts[(i + 2) % 4]
+                    v1, v2 = p0 - p1, p2 - p1
+                    
+                    cosang = np.clip(
+                        np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)),
+                        -1.0, 1.0
+                    )
+                    
+                    angle = math.degrees(math.acos(cosang))
+                    angles.append(angle)
+                angleScore = sum(1 - abs(90 - a) / 90 for a in angles) / 4  # 1 if 90°
+            else:
+                angleScore = 0.0
 
-        # combine
-        score = max(0.0, min(1.0, areaScore * vertexScore * angleScore))
-        return score
+            # combine
+            score = max(0.0, min(1.0, areaScore * vertexScore * angleScore))
+            return score
+
     
 class Movement():
     def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera, touch_sensors: TouchSensors, colour_sensors: ColourSensors, motors: Motors):
@@ -569,7 +570,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         
         # Read sensor stack
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
-        silver_value = silver_sensor.read()
+        silver_value = colour_sensors.read()[2]
         touch_values = touch_sensors.read()
         gyro_value = gyroscope.read()
         
@@ -644,7 +645,7 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
         distance = laser_sensors.read([1])[0]
         if distance is None: continue
         
-        silver_value = silver_sensor.read()
+        silver_value = colour_sensors.read()[2]
         touch_values = touch_sensors.read()
         gyro_value = gyroscope.read()
         
@@ -661,16 +662,17 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
         out_of_bounds_down = pitch < -10 if pitch is not None else False
         
         if gap_found: black_count = silver_count = 0
-        if timeout or gap_found or out_of_bounds_up:
+        if timeout or out_of_bounds_up:
             motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)
             motors.run( evac_state.SPEED_BASE, -evac_state.SPEED_BASE, randint(3, 6) / 10)
             return False
+        
         if out_of_bounds_down:
             motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 0.8)
             motors.run( evac_state.SPEED_BASE, -evac_state.SPEED_BASE, randint(3, 6) / 10)
             return False
         
-        if touch_activated and search_type in ["live", "dead"]:
+        if (touch_activated or gap_found) and search_type in ["live", "dead"]:
             motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)
             motors.run( evac_state.SPEED_BASE, -evac_state.SPEED_BASE, randint(3, 6) / 10)
             return False
@@ -935,10 +937,12 @@ def leave():
     
     while listener.mode.value != 0:
         movement.wall_follow()
-        silver_value = silver_sensor.read()
+        silver_value = colour_sensors.read()[2]
         # black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
         colour_value = colour_sensors.read()[2]
         black_count, silver_count = validate_gap(colour_value, black_count, silver_count)
+        
+        print(f"Counts: {black_count} {silver_count}")
 
         if black_count >= 5:
             debug(["EXITING", "FOUND EXIT!"], [24, 30])
@@ -964,7 +968,7 @@ def leave():
             break
         
         
-        elif silver_count >= 15:
+        elif silver_count >= 5:
             debug(["EXITING", "FOUND SILVER"], [24, 30])
             
             motors.run(0, 0, 0.3)
@@ -1026,8 +1030,8 @@ def main() -> None:
     for _ in range(0, 2): evac_camera.capture()
 
     motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1.5)
-    motors.run(0, 0, 1) 
-
+    motors.run(0, 0, 1)
+    
     while evac_state.victim_count != 3 and listener.mode.value != 0:
         oled_display.clear()
         oled_display.text(f"locate: {evac_state.victim_count}", 0, 0)
@@ -1043,7 +1047,7 @@ def main() -> None:
         if search_type in ["red", "green"]:
             # motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST* 0.8, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
             # motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST* 0.8, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
-            
+            motors.run(30, -30, 0.3)
             motors.run(0, 0, 0.1)
             
             # motors.run(-evac_state.SPEED_FAST     , -evac_state.SPEED_FAST * 0.5, 0.8)
@@ -1062,14 +1066,16 @@ def main() -> None:
             oled_display.text(f"dump", 0, 20)
             dump(search_type)
             
-            motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.2)
-            motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
+            if evac_state.victim_count != 3:
+                motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.2)
+                motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
             
         else:
             oled_display.text(f"grab", 0, 20)
             grab_success, prev_insert = grab(prev_insert)
 
             if not grab_success:
+                motors.run(-evac_state.SPEED_FAST,  evac_state.SPEED_FAST, 0.3)
                 motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.2)
                 motors.run(0, 0, 0.5)
                 continue
@@ -1090,7 +1096,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     listener.mode.value = 2
-    # main()
+    main()
     
-    leave()
+    # leave()
     motors.run(0, 0)

@@ -50,15 +50,12 @@ class RobotState():
             "silver": 0,
             "touch": 0
         }
-         
-        self.trigger = {
-            "uphill": False,
-            "downhill": False,
-            "tilt_left": False,
-            "tilt_right": False,
-            "seasaw": False,
-            "evacuation_zone": False
-        }
+        
+        self.trigger["uphill"] = False
+        self.trigger["downhill"] = False
+        self.trigger["tilt_left"] = False
+        self.trigger["tilt_right"] = False
+        self.trigger["seasaw"] = False
         
         self.last_downhill = self.last_uphill = 10000
         self.last_seen_silver = self.silver_count = self.main_loop_count = 0
