@@ -69,7 +69,11 @@ class LaserSensors():
 
         for sensor in sensors:
             try:
-                values.append(sensor.distance)
+                distance = sensor.distance
+                
+                if distance is None: distance = 255
+                values.append(distance)
+                
                 
             except Exception as e:
                 print(f"Error reading sensor: {e}")

@@ -75,6 +75,11 @@ def main() -> None:
         GPIO.cleanup()
         print("LED's Off")
         
+        if record: 
+            print("Creating Video...")
+            oled_display.text("VIDEO", 0, 15)
+            save_vfr_video(get_saved_frames())
+            
         stop_display()
         print("Display Stopped")
         camera.close()
@@ -89,9 +94,5 @@ def main() -> None:
         
         time.sleep(0.1)
         
-        if record: 
-            print("Creating Video...")
-            oled_display.text("VIDEO", 0, 15)
-            save_vfr_video(get_saved_frames())
 
 if __name__ == "__main__": main()

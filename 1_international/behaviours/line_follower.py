@@ -110,17 +110,27 @@ class LineFollower():
             v2 = self.speed - self.turn
 
             if self.robot_state.last_downhill < 200:
-                speed = 18
-                v1 = speed + self.turn
-                v2 = speed - self.turn
+                speed = 12
+                if self.robot_state.time_since_downhill - time.perf_counter() > 0.5: 
+                    v1 = speed + 5*self.turn
+                    v2 = speed - 5*self.turn
+                else:
+                    print("robot started downhill")
+                    v1 = speed + self.turn
+                    v2 = speed - self.turn
                 v1 = min(v1, max(-v2//5, speed))
                 v2 = min(v2, max(-(speed + self.turn)//5, speed))
 
             elif self.robot_state.trigger["uphill"]:
+                v1 = self.speed + self.turn
+                v2 = self.speed - self.turn
                 v1 += 5
                 v2 += 5
-                if v1 < 0: v1 = max(-30, v1)
-                if v2 < 0: v2 = max(-30, v2)
+                if v1 < 0: v1 = max(-15, v1)
+                if v2 < 0: v2 = max(-15, v2)
+                
+            if self.robot_state.last_downhill < 200 and self.robot_state.trigger["tilt_left"] or self.robot_state.trigger["tilt_right"]:
+                self.robot_state.last_downhill = 10000
 
             if self.robot_state.trigger["tilt_left"] and v2 < 0: v2 = v2 // 2
 
@@ -453,7 +463,8 @@ class LineFollower():
             left_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] <= int(camera.LINE_WIDTH/16)]
             right_edge_points = [(p[0][0], p[0][1]) for p in contour if p[0][0] >= camera.LINE_WIDTH - int(camera.LINE_WIDTH/16)]
 
-            if ref_point[1] < (int(camera.LINE_HEIGHT/4) + self.robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - int(3*camera.LINE_HEIGHT/20)) + int(camera.LINE_HEIGHT/10) * (self.robot_state.last_downhill < 100)):
+            # if ref_point[1] < (int(camera.LINE_HEIGHT/4) + self.robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - int(3*camera.LINE_HEIGHT/20)) + int(camera.LINE_HEIGHT/10) * (self.robot_state.last_downhill < 100)):
+            if ref_point[1] < (int(camera.LINE_HEIGHT/4) + self.robot_state.trigger["uphill"] * (camera.LINE_HEIGHT // 2 - int(3*camera.LINE_HEIGHT/20))):
                 return self._finalize_angle(ref_point, validate)
 
             if self.green_signal != "APPROACH" and (left_edge_points or right_edge_points):
@@ -507,8 +518,8 @@ class LineFollower():
         min_y = int(camera.LINE_HEIGHT/5) if self.green_signal == "APPROACH" else min(pt[0][1] for pt in contour)
         if self.robot_state.trigger["uphill"]:
             min_y = camera.LINE_HEIGHT // 2
-        elif self.robot_state.trigger["downhill"]:
-            min_y = int(camera.LINE_HEIGHT/4)
+        # elif self.robot_state.trigger["downhill"]:
+        #     min_y = int(camera.LINE_HEIGHT/4)
         max_y = min(camera.LINE_HEIGHT, min_y + int(camera.LINE_HEIGHT/20))
 
         roi_mask = np.zeros_like(self.gray_image, dtype=np.uint8)

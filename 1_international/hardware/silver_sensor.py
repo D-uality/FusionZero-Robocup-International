@@ -11,7 +11,7 @@ class SilverSensor():
             self.sensor_pin = 5
             self.__CALIBRATION_FILE = r"/home/frederick/FusionZero-Robocup-International/1_international/hardware/calibration_values/frederick_silver_values.txt"
         else:
-            self.sensor_pin = 6
+            self.sensor_pin = 7
             self.__CALIBRATION_FILE = r"/home/aidan/FusionZero-Robocup-International/1_international/hardware/calibration_values/aidan_silver_values.txt"
         
         if os.path.exists(self.__CALIBRATION_FILE):

@@ -936,9 +936,11 @@ def leave():
     while listener.mode.value != 0:
         movement.wall_follow()
         silver_value = silver_sensor.read()
-        black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
+        # black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
+        colour_value = colour_sensors.read()[2]
+        black_count, silver_count = validate_gap(colour_value, black_count, silver_count)
 
-        if black_count >= 2:
+        if black_count >= 5:
             debug(["EXITING", "FOUND EXIT!"], [24, 30])
             motors.run(evac_state.SPEED_BASE, evac_state.SPEED_BASE, 0.5)
         

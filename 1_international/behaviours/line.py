@@ -42,7 +42,7 @@ def main(start_time, robot_state, line_follow) -> None:
         robot_state.count["silver"] = 0
         motors.run(0, 0)
         evacuation_zone.main()
-        motors.run(30, 30, 0.3)
+        motors.run(-30, -30, 0.3)
         robot_state.trigger["evacuation_zone"] = True
         line_follow.align_to_contour_angle()
         print("finished align")
@@ -88,7 +88,7 @@ def find_silver(robot_state, line_follow, silver_detector, silver_value) -> None
     robot_state.last_seen_silver = time.perf_counter()
 
     if line_follow.black_mask is not None:
-        top_mask = line_follow.black_mask[:int(camera.LINE_HEIGHT / 10), :]
+        top_mask = line_follow.black_mask[:int(camera.LINE_HEIGHT / 8), :]
         top_line = np.any(top_mask)
     else:
         top_line = True
@@ -126,8 +126,12 @@ def update_tilt_triggers(robot_state) -> list[str]:
          
     if robot_state.count["downhill"] > 5:
         robot_state.trigger["downhill"] = True
+        if robot_state.prev_downhill == False:
+            robot_state.time_since_downhill = time.perf_counter()
     else:
         robot_state.trigger["downhill"] = False
+        
+    robot_state.prev_downhill = robot_state.trigger["downhill"]
          
     if robot_state.count["tilt_left"] > 0:
         robot_state.trigger["tilt_left"] = True
@@ -284,10 +288,19 @@ def avoid_obstacle(line_follow, robot_state) -> None:
         print("Backing Up")
         motors.run(-30, -30, 0.5)
     
-    if robot_state.count["uphill"] > 0: loops = 1
+    while True:
+        gyro_value = gyroscope.read()
+        if gyro_value is not None:
+            break
+    
+    pitch, _, _ = gyro_value
+    
+    print(pitch)
+        
+    if pitch > 15: loops = 1
     else: loops = 3
 
-    if robot_state.count["downhill"] > 0:
+    if pitch < -15:
         motors.run(-v1, -v2, 2.3)
         motors.run(-30, -30, 0.5)
         motors.run(0, 0, 2)

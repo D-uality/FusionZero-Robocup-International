@@ -12,7 +12,7 @@ class ColourSensors():
             self.__CHANNELS = [7, 6, 5, 4, 2]
             self.__CALIBRATION_FILE = r"/home/frederick/FusionZero-Robocup-International/1_international/hardware/calibration_values/frederick_calibration_values.txt"
         else:
-            self.__CHANNELS = [2, 3, 4, 6, 7]
+            self.__CHANNELS = [6, 6, 6, 6, 6]
             self.__CALIBRATION_FILE = r"/home/aidan/FusionZero-Robocup-International/1_international/hardware/calibration_values/aidan_calibration_values.txt"
             
         if os.path.exists(self.__CALIBRATION_FILE):

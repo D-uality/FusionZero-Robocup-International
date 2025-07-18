@@ -27,8 +27,10 @@ class RobotState():
             "evacuation_zone": False
         }
         
-        self.last_downhill = self.last_uphill = 1000
+        self.last_downhill = self.last_uphill = 10000
         self.last_seen_silver = self.silver_count = self.main_loop_count = 0
+        self.time_since_downhill = 0
+        self.prev_downhill = False
         
     def reset(self):
         # Constants
@@ -58,5 +60,8 @@ class RobotState():
             "evacuation_zone": False
         }
         
-        self.last_downhill = self.last_uphill = 1000
+        self.last_downhill = self.last_uphill = 10000
         self.last_seen_silver = self.silver_count = self.main_loop_count = 0
+        self.time_since_downhill = 0
+        self.prev_downhill = False
+        
