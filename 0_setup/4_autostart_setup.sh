@@ -20,7 +20,8 @@ After=network.target
 Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$HOME_DIR/FusionZero-Robocup-International/1_international
-ExecStart=/usr/bin/python $HOME_DIR/FusionZero-Robocup-International/1_international/main.py
+ExecStart=/usr/bin/python $HOME_DIR/FusionZero-Robocup-International/1_international_tech/main.py
+/home/aidan/FusionZero-Robocup-International/
 
 [Install]
 WantedBy=multi-user.target
