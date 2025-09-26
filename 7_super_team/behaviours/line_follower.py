@@ -2,6 +2,7 @@ from core.shared_imports import time, cv2, np
 from core.utilities import show
 from core.listener import listener
 from hardware.robot import *
+from behaviours.communication import comms
         
 class LineFollower():
     def __init__(self, robot_state):
@@ -18,12 +19,14 @@ class LineFollower():
         self.turn_color = (255,255, 0)
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
+        
         # Variables
         self.prev_side = None
         self.last_angle = self.angle = 90
         self.turn = self.v1 = self.v2 = self.integral = 0
         self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = self.black_contour = self.black_mask = None 
         self.last_seen_green = 100
+        self.do_green = False
     
     # ========================================================================
     # MAIN LOOP
@@ -32,13 +35,19 @@ class LineFollower():
     def follow(self, starting=False) -> None:
         self.image = camera.perspective_transform(camera.capture_array())
         self.display_image = self.image.copy()
+        self.hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+        if comms.received_message == "green, yes":
+            self.do_green = True
 
         self.find_black()
         if self.black_contour is not None:
             self.find_green()
             self.green_check()
             self.calculate_angle(self.black_contour)
-            if not starting: self.__turn()
+            if not starting and (self.green_signal is None or comms.received_message != "undefined, no"): 
+                self.__turn()
+            else:
+                motors.run(0, 0, 0.1)
 
         elif not starting: 
             oled_display.text("GAP", 38, 12, size=30, clear=True)
@@ -295,7 +304,6 @@ class LineFollower():
 
     def find_green(self):
         self.green_contours = []
-        self.hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
         green_mask = cv2.inRange(self.hsv_image, (40, 50, 50), (90, 255, 255))
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         green_mask = cv2.erode(green_mask, kernel, iterations=1)
@@ -349,25 +357,28 @@ class LineFollower():
         motors.run(-25, -25)
 
         for i in range(3): self.__wait_for_black_contour()
-        motors.run(-25, -25, 0.1)
-        # motors.run(0, 0, 0.3)
+        # motors.run(-25, -25, 0.1)
+        motors.run(0, 0, 0.1)
 
         self.align_to_contour_angle()
-        # motors.run(0, 0, 0.2)
+        motors.run(0, 0, 0.2)
 
-        f = 0.8 + 0.5 * (self.robot_state.last_uphill < 100)
+        f = 0.7 + 0.5 * (self.robot_state.last_uphill < 100)
         if not self.__move_and_check_black(f):
             print("No black found, retrying...")
 
             # motors.run(-35, -35, f+0.1)
-            # motors.run(0, 0, 0.2)
+            motors.run(0, 0, 0.2)
 
             # self.align_to_contour_angle()
             # motors.run(0, 0, 0.2)
 
             if not self.__move_and_check_black(0.4):
+                motors.run(0, 0, 0.2)
                 if not self.__move_and_check_black(0.4):
+                    motors.run(0, 0, 0.2)
                     if not self.__move_and_check_black(0.4):
+                        motors.run(0, 0, 0.2)
                         print("Still no black. Exiting gap handler.")
                         motors.run(-40, -40, f+1.3)
 
@@ -499,7 +510,7 @@ class LineFollower():
 
     def __move_and_check_black(self, duration: float) -> bool:
         motors.run(40, 40, duration)
-        motors.run(0, 0, 0.05)
+        # motors.run(0, 0, 0.05)
 
         self.image = camera.perspective_transform(camera.capture_array())
         self.display_image = self.image.copy()
@@ -520,7 +531,7 @@ class LineFollower():
 
         ref_point = self.calculate_top_contour(contour) if contour is not None else None
 
-        if contour is not None and self.green_signal in ["LEFT", "RIGHT"]:
+        if contour is not None and self.green_signal in ["LEFT", "RIGHT"] and self.do_green:
             self.prev_side = self.green_signal
             point = min(contour, key=lambda p: p[0][0]) if self.green_signal == "LEFT" else max(contour, key=lambda p: p[0][0])
             ref_point = tuple(point[0])
@@ -718,6 +729,11 @@ class LineFollower():
                         cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), int(camera.LINE_HEIGHT/100))
                     else:
                         cv2.drawContours(self.display_image, [c], -1, self.turn_color, int(camera.LINE_HEIGHT/100))
+        
+        if self.black_contour is not None:
+            return True
+        else:
+            return False
 
     # ========================================================================
     # RED

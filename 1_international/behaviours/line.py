@@ -100,7 +100,7 @@ def find_silver(robot_state, line_follow, silver_detector, silver_value) -> None
     if line_follow.image is not None and robot_state.last_uphill > 100 and robot_state.last_downhill > 100 and robot_state.trigger["tilt_left"] == False and robot_state.trigger["tilt_right"] == False and not top_line and time.perf_counter() - robot_state.last_seen_silver < 2 and not line_follow.green_signal:
         result = silver_detector.predict(line_follow.image)
         robot_state.debug_text.append(f"SILVER: {result['class_name']}, {result['confidence']:.3f}")
-        robot_state.count["silver"] = robot_state.count["silver"] + 1 if result['prediction'] == 1 and result['confidence'] > 0.95 else 0
+        robot_state.count["silver"] = robot_state.count["silver"] + 1 if result['prediction'] == 1 and result['confidence'] > 0.99 else 0
         
 # ========================================================================
 # TILT

@@ -7,7 +7,7 @@ class LineFollower():
     def __init__(self, robot_state):
         # Constants
         self.robot_state = robot_state
-        self.speed = 30 # 30
+        self.speed = 25 # 30
         self.turn_multi = 1.8 # 1.8
         self.integral_multi = 0.002
         self.min_black_area = 5000
@@ -100,7 +100,7 @@ class LineFollower():
             motors.run(-30, -30, b)
             motors.run(30, 30, f)
             motors.run(v1, v2, t)
-            # motors.run(0, 0, 0.5)
+            motors.run(0, 0, 0.5)
             self.run_till_camera(v1, v2, 15, ["DOUBLE GREEN"])
 
         # Other Turns
@@ -142,9 +142,11 @@ class LineFollower():
 
             if self.stuck_check():                  oled_display.text("STUCK", 20, 12, size=30, clear=True),
             elif self.green_signal == "APPROACH":   oled_display.text("GREEN", 15, 0, size=30, clear=True)
+            elif self.green_signal == "DOUBLE":
+                oled_display.text("GREEN", 15, 0, size=30, clear=True)
+                oled_display.text(self.green_signal, 8, 30, size=30, clear=False)
             elif self.green_signal == "LEFT":       oled_display.text(self.green_signal, 25 ,30, size=30, clear=False)
             elif self.green_signal == "RIGHT":      oled_display.text(self.green_signal, 15, 30, size=30, clear=False)
-            elif self.green_signal == "DOUBLE":     oled_display.text(self.green_signal, 8, 30, size=30, clear=False)
             else:                                   oled_display.text("LINE", 25, 12, size=30, clear=True)
                     
             motors.run(self.v1, self.v2)
@@ -345,31 +347,20 @@ class LineFollower():
     #     print("Gap handling complete.")
     def gap_handling(self):
         print("Gap Detected!")
-        # motors.run(0, 0, 1)
         motors.run(-25, -25)
 
-        for i in range(3): self.__wait_for_black_contour()
+        for _ in range(3): self.__wait_for_black_contour()
         motors.run(-25, -25, 0.1)
-        # motors.run(0, 0, 0.3)
 
         self.align_to_contour_angle()
-        # motors.run(0, 0, 0.2)
 
-        f = 0.8 + 0.5 * (self.robot_state.last_uphill < 100)
-        if not self.__move_and_check_black(f):
-            print("No black found, retrying...")
+        motors.run(40, 40, 0.4)
 
-            # motors.run(-35, -35, f+0.1)
-            # motors.run(0, 0, 0.2)
-
-            # self.align_to_contour_angle()
-            # motors.run(0, 0, 0.2)
-
+        if not self.__move_and_check_black(0.4):
             if not self.__move_and_check_black(0.4):
                 if not self.__move_and_check_black(0.4):
-                    if not self.__move_and_check_black(0.4):
-                        print("Still no black. Exiting gap handler.")
-                        motors.run(-40, -40, f+1.3)
+                    print("Still no black. Exiting gap handler.")
+                    motors.run(-40, -40, 1.6)
 
         print("Gap handling complete.")
     
@@ -645,13 +636,13 @@ class LineFollower():
         black_mask = cv2.bitwise_or(black_mask, masked_base)
 
         # --- Blue detection in top area ---
-        mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
-        mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
-        mask = cv2.bitwise_or(mask_lower, mask_upper)
+        # mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
+        # mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
+        # mask = cv2.bitwise_or(mask_lower, mask_upper)
 
 
         # Subtract blue from black mask
-        black_mask = cv2.bitwise_or(black_mask, mask)
+        # black_mask = cv2.bitwise_or(black_mask, mask)
         # --- End blue detection section ---
 
         

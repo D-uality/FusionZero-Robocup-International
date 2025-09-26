@@ -8,6 +8,7 @@ import behaviours.optimized_evacuation as optimized_evacuation_zone
 from hardware.robot import *
 from behaviours.robot_state import RobotState
 from behaviours.line_follower import LineFollower
+from behaviours.communication import comms
 
 record = True
 robot_state = RobotState()
@@ -68,6 +69,8 @@ def main() -> None:
     finally:
         oled_display.clear()
         oled_display.text("EXITING", 0, 0)
+        
+        comms.close()
         
         motors.run(0, 0)
         print("Motors Stopped")

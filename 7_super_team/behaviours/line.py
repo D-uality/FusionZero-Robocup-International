@@ -1,9 +1,12 @@
 from core.shared_imports import Path, time, randint, operator, np
 from core.utilities import user_at_host, debug, debug_lines, start_display, show
+
 from core.listener import listener
 from hardware.robot import *
+
 import behaviours.optimized_evacuation as evacuation_zone
 from behaviours.silver_detection import SilverLineDetector
+from behaviours.communication import comms
 
 current_dir = Path(__file__).resolve().parent
 modules_dir = current_dir / 'modules'
@@ -19,15 +22,22 @@ start_display()
 def main(start_time, robot_state, line_follow) -> None:
     robot_state.debug_text.clear()
     overall_start = time.perf_counter()
+    
     led.on()
+    
+    if robot_state.main_loop_count % 500 == 0:
+        comms.send()
+        comms.receive()
 
     touch_values = touch_sensors.read()
     gyro_values = gyroscope.read()
     silver_value = silver_sensor.read()
+    
     touch_check(robot_state, touch_values)
     ramp_check(robot_state, gyro_values)
     update_tilt_triggers(robot_state)
     find_silver(robot_state, line_follow, silver_detector, silver_value)
+    
     line_follow.find_red()
 
     if time.perf_counter() - start_time < 3:
@@ -46,7 +56,7 @@ def main(start_time, robot_state, line_follow) -> None:
         if  listener.mode.value != 0: 
             robot_state.trigger["evacuation_zone"] = True
         
-        motors.run(-30, -30, 0.3)
+        motors.run(20, 20)
         line_follow.align_to_contour_angle()
         print("finished align")
         motors.run(0, 0, 1)
@@ -54,18 +64,27 @@ def main(start_time, robot_state, line_follow) -> None:
         start_time = time.perf_counter()
         led.on()
         
-        
     elif robot_state.count["red"] >= 5:
         oled_display.text("RED", 35, 12, size=30, clear=True)
         print("Red Found!")
         motors.run(0, 0, 10)
         robot_state.count["red"] = 0
 
-    elif robot_state.count["touch"] > 10:
-        oled_display.text("OBSTACLE", 15, 18, size=20, clear=True)
-        print("Obstacle Detected")
+    elif robot_state.count["touch"] > 0:
+        oled_display.text("TOUCH", 15, 18, size=20, clear=True)
         robot_state.count["touch"] = 0
-        avoid_obstacle(line_follow, robot_state)
+        
+        while True:
+            if "yes" in comms.received_message: break
+            motors.run(0, 0, 0.1)
+            
+        evacuation_zone.dump("live")
+        
+        while True:
+            comms.send_message = "live, yes"
+            
+            comms.send()
+            oled_display.text("FINISHED", 0, 0, size=25, clear=True)
 
     else:
         line_follow.follow()
