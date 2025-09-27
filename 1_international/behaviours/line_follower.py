@@ -78,7 +78,7 @@ class LineFollower():
         
         # DOUBLE Green
         elif self.green_signal == "DOUBLE":
-            v1, v2, t = 35, -35, 3.8
+            v1, v2, t = 40, -30, 2.7
             f = b = 0
 
             if self.robot_state.trigger["tilt_left"]:
@@ -101,7 +101,7 @@ class LineFollower():
             motors.run(30, 30, f)
             motors.run(v1, v2, t)
             motors.run(0, 0, 0.5)
-            self.run_till_camera(v1, v2, 15, ["DOUBLE GREEN"])
+            self.run_till_camera(v1-10, v2-10, 10, ["DOUBLE GREEN"])
 
         # Other Turns
         else:
@@ -193,38 +193,44 @@ class LineFollower():
         self.green_signal = None
 
         if self.green_contours is not None:
-            valid_rects = []
+            valid_rects, y_avgs = [], []
             for contour in self.green_contours:
-                valid_rect = self.validate_green_contour(contour)
+                valid_rect, y_avg = self.validate_green_contour(contour)
                 if valid_rect is not None:
                     valid_rects.append(valid_rect)
-            
+                    y_avgs.append(y_avg)
+
             if len(valid_rects) > 1:
                 self.green_signal = "DOUBLE"
             elif len(valid_rects) == 1:
                 valid_rect = valid_rects[0]
-                
-                # Take 2 Leftmost points
-                left_points = sorted(valid_rect, key=lambda p: p[0])[:2]
-                # Average left points
-                left_x = int(sum(p[0] for p in left_points) / len(left_points))
-                left_y = int(sum(p[1] for p in left_points) / len(left_points))
-
-                # Check black on left
-                check_point = (left_x - int(camera.LINE_WIDTH / 16), left_y)
-                if self.black_check(check_point):
-                    self.green_signal = "RIGHT"
+                y_avg = y_avgs[0]
+                if y_avg < int(camera.LINE_HEIGHT / 3):
+                    self.green_signal = "APPROACH"
+                elif y_avg < int(camera.LINE_HEIGHT / 2) and self.robot_state.trigger["uphill"] is True:
+                    self.green_signal = "APPROACH"
                 else:
-                    # Take 2 Rightmost points
-                    right_points = sorted(valid_rect, key=lambda p: p[0])[-2:]
-                    # Average right points
-                    right_x = int(sum(p[0] for p in right_points) / len(right_points))
-                    right_y = int(sum(p[1] for p in right_points) / len(right_points))
+                    # Take 2 Leftmost points
+                    left_points = sorted(valid_rect, key=lambda p: p[0])[:2]
+                    # Average left points
+                    left_x = int(sum(p[0] for p in left_points) / len(left_points))
+                    left_y = int(sum(p[1] for p in left_points) / len(left_points))
 
-                    # Check black on right
-                    check_point = (right_x + int(camera.LINE_WIDTH / 16), right_y)
+                    # Check black on left
+                    check_point = (left_x - int(camera.LINE_WIDTH / 16), left_y)
                     if self.black_check(check_point):
-                        self.green_signal = "LEFT"
+                        self.green_signal = "RIGHT"
+                    else:
+                        # Take 2 Rightmost points
+                        right_points = sorted(valid_rect, key=lambda p: p[0])[-2:]
+                        # Average right points
+                        right_x = int(sum(p[0] for p in right_points) / len(right_points))
+                        right_y = int(sum(p[1] for p in right_points) / len(right_points))
+
+                        # Check black on right
+                        check_point = (right_x + int(camera.LINE_WIDTH / 16), right_y)
+                        if self.black_check(check_point):
+                            self.green_signal = "LEFT"
 
         self.green_hold()
         self.prev_green_signal = self.green_signal
@@ -243,19 +249,19 @@ class LineFollower():
         x_avg = int((top_left[0] + top_right[0]) / 2)
         y_avg = int((top_left[1] + top_right[1]) / 2)
         # if y_avg < int(camera.LINE_HEIGHT / 3) and self.robot_state.trigger["downhill"] is False:
-        if y_avg < int(camera.LINE_HEIGHT / 3):
-            self.green_signal = "APPROACH"
-            return None
-        elif y_avg < int(camera.LINE_HEIGHT / 2) and self.robot_state.trigger["uphill"] is True:
-            self.green_signal = "APPROACH"
-            return None
+        # if y_avg < int(camera.LINE_HEIGHT / 3):
+        #     self.green_signal = "APPROACH"
+        #     return None
+        # elif y_avg < int(camera.LINE_HEIGHT / 2) and self.robot_state.trigger["uphill"] is True:
+        #     self.green_signal = "APPROACH"
+        #     return None
 
         # Check if point is within image bounds
         if 0 <= x_avg < camera.LINE_WIDTH and 0 <= y_avg - int(camera.LINE_HEIGHT / 20) < camera.LINE_HEIGHT and self.black_mask is not None:
             if self.black_check((x_avg, y_avg - int(camera.LINE_HEIGHT / 20))):
-                return box
+                return box, y_avg
 
-        return None
+        return None, None
 
     def black_check(self, check_point):
         check_size = int(camera.LINE_WIDTH / 32)
@@ -302,7 +308,7 @@ class LineFollower():
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         green_mask = cv2.erode(green_mask, kernel, iterations=1)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10))
-        green_mask = cv2.dilate(green_mask, kernel, iterations=2)
+        green_mask = cv2.dilate(green_mask, kernel, iterations=1)
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
         green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
