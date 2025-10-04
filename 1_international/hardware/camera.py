@@ -23,32 +23,48 @@ class Camera():
         else:
             self.top_left     = (int(self.LINE_WIDTH / 4),     int(self.LINE_HEIGHT / 5))
             self.top_right    = (int(self.LINE_WIDTH * 3 / 4), int(self.LINE_HEIGHT / 5))
-            self.bottom_left  = (0,                            self.LINE_HEIGHT - 70) #self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10)
-            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 70) #self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10)
-            
-        top_left =     (50,                    50)
-        top_right =    (140,  50)
-        bottom_left =  (50,                    90)
-        bottom_right = (140,  90)
+            self.bottom_left  = (0,                            self.LINE_HEIGHT - 70)   # self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10)
+            self.bottom_right = (self.LINE_WIDTH,              self.LINE_HEIGHT - 70)   # self.LINE_HEIGHT - int(3*self.LINE_HEIGHT / 10)
+
+        top_left =     (40,   70)
+        top_right =    (120,  70)
+        bottom_left =  (45,   100)
+        bottom_right = (125,  100)
         self.light_point_left = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32) # 50, 50, 150, 100
         
-        top_left =     (200,                    50)
-        top_right =    (290,  50)
-        bottom_left =  (200,                    70)
-        bottom_right = (290,  70)
+        top_left =     (195,  45)
+        top_right =    (290,  45)
+        bottom_left =  (195,  85)
+        bottom_right = (280,  85)
         self.light_point_right = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32) # 50 200 70 290
-         
-        # top_left =     (int(3 * self.LINE_WIDTH / 10),                    0)
-        # top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  0)
-        # bottom_left =  (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8) - 1)
-        # bottom_right = (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8) - 1)
-        # self.light_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
-        top_left =     (int(3 * self.LINE_WIDTH / 10),                    int(self.LINE_HEIGHT / 2.8))
-        top_right =    (self.LINE_WIDTH - int(3 * self.LINE_WIDTH / 10),  int(self.LINE_HEIGHT / 2.8))
-        bottom_left =  (int(self.LINE_WIDTH / 8),                    self.LINE_HEIGHT - int(self.LINE_HEIGHT / 10))
-        bottom_right = (self.LINE_WIDTH - int(self.LINE_WIDTH / 8),    self.LINE_HEIGHT - int(self.LINE_HEIGHT / 10))
-        self.lightest_points = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+        top_left =     (50,                     110)
+        top_right =    (self.LINE_WIDTH - 40,   100)
+        bottom_left =  (65,                     130)
+        bottom_right = (self.LINE_WIDTH - 45,   120)
+        self.light_point_mid_top = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+
+        top_left =     (70,                     140)
+        top_right =    (self.LINE_WIDTH - 30,   125)
+        bottom_left =  (80,                     160)
+        bottom_right = (self.LINE_WIDTH - 40,   145)
+        self.light_point_mid = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+
+        top_left =     (70,                    self.LINE_HEIGHT - 20)
+        top_right =    (self.LINE_WIDTH - 45,  self.LINE_HEIGHT - 20)
+        bottom_left =  (80,                    self.LINE_HEIGHT)
+        bottom_right = (self.LINE_WIDTH - 55,  self.LINE_HEIGHT)
+        self.light_point_mid_bottom = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+
+        top_left =     (0,  self.LINE_HEIGHT - 70)
+        bottom_left =  (0,  self.LINE_HEIGHT)
+        bottom_right = (70, self.LINE_HEIGHT)
+        self.dark_left = np.array([top_left, bottom_left, bottom_right], dtype=np.float32)
+         
+        top_right =    (self.LINE_WIDTH,        self.LINE_HEIGHT - 70)
+        bottom_left =  (self.LINE_WIDTH,        self.LINE_HEIGHT)
+        bottom_right = (self.LINE_WIDTH - 70,   self.LINE_HEIGHT)
+        self.dark_right = np.array([top_right, bottom_left, bottom_right], dtype=np.float32)
         self.camera = Picamera2()
 
         camera_config = self.camera.create_preview_configuration(
@@ -73,9 +89,13 @@ class Camera():
         transformed_image = cv2.warpPerspective(image, matrix, (self.LINE_WIDTH, self.LINE_HEIGHT))
 
         if self.X11 and self.debug:
-            cv2.polylines(transformed_image, [np.int32(self.lightest_points)], isClosed=True, color=(0, 255, 0), thickness=2)
-            cv2.polylines(transformed_image, [np.int32(self.light_point_left)], isClosed=True, color=(0, 255, 0), thickness=2)
-            cv2.polylines(transformed_image, [np.int32(self.light_point_right)], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_left)],         isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_right)],        isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_mid_top)],      isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_mid)],          isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.light_point_mid_bottom)],   isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.dark_left)],                isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(transformed_image, [np.int32(self.dark_right)],               isClosed=True, color=(0, 255, 0), thickness=2)
 
         return transformed_image
     

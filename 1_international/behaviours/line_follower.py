@@ -8,21 +8,23 @@ class LineFollower():
         # Constants
         self.robot_state = robot_state
         self.speed = 25 # 30
-        self.turn_multi = 1.8 # 1.8
+        self.turn_multi = 2.5 # 1.8
         self.integral_multi = 0.002
-        self.min_black_area = 5000
+        self.min_black_area = 2000
         self.min_green_area = 8000
-        self.base_black = 80
-        self.light_black = 130
-        self.lightest_black = 140
-        self.turn_color = (255,255, 0)
+        self.dark_black = 50
+        self.base_black = 100
+        self.light_black = 120
+        self.green_black = 180
+        self.turn_color = (255, 255, 0)
+        self.contour_color = (255, 255, 0)
         self.lower_blue = np.array([100, 100, 100])
         self.upper_blue = np.array([130, 255, 255])
+
         # Variables
-        self.prev_side = None
         self.last_angle = self.angle = 90
         self.turn = self.v1 = self.v2 = self.integral = 0
-        self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = self.black_contour = self.black_mask = None 
+        self.prev_side = self.image = self.hsv_image = self.prev_gray = self.gray_image = self.display_image = self.blue_contours = self.green_contours = self.green_signal = self.prev_green_signal = self.black_contour = self.black_mask = self.green_mask = None
         self.last_seen_green = 100
     
     # ========================================================================
@@ -43,6 +45,8 @@ class LineFollower():
         elif not starting: 
             oled_display.text("GAP", 38, 12, size=30, clear=True)
             self.gap_handling()
+
+        if starting: self.robot_state.debug_text.clear()
 
         if self.display_image is not None and camera.X11: 
             show(self.display_image, display=camera.X11, name="line", debug_lines=self.robot_state.debug_text)
@@ -78,7 +82,7 @@ class LineFollower():
         
         # DOUBLE Green
         elif self.green_signal == "DOUBLE":
-            v1, v2, t = 40, -30, 2.7
+            v1, v2, t = 35, -35, 2.8
             f = b = 0
 
             if self.robot_state.trigger["tilt_left"]:
@@ -100,8 +104,8 @@ class LineFollower():
             motors.run(-30, -30, b)
             motors.run(30, 30, f)
             motors.run(v1, v2, t)
-            motors.run(0, 0, 0.5)
-            self.run_till_camera(v1-10, v2-10, 10, ["DOUBLE GREEN"])
+            # motors.run(0, 0, 0.2)
+            self.run_till_camera(v1-10, v2-10, 5, ["DOUBLE GREEN"])
 
         # Other Turns
         else:
@@ -192,7 +196,7 @@ class LineFollower():
     def green_check(self):
         self.green_signal = None
 
-        if self.green_contours is not None:
+        if self.green_contours != []:
             valid_rects, y_avgs = [], []
             for contour in self.green_contours:
                 valid_rect, y_avg = self.validate_green_contour(contour)
@@ -264,7 +268,7 @@ class LineFollower():
         return None, None
 
     def black_check(self, check_point):
-        check_size = int(camera.LINE_WIDTH / 32)
+        check_size = int(camera.LINE_WIDTH / 48)
 
         if 0 <= check_point[0] < camera.LINE_WIDTH and 0 <= check_point[1] < camera.LINE_HEIGHT and self.black_mask is not None:
             # Create a region around the point
@@ -279,7 +283,7 @@ class LineFollower():
                 cv2.circle(self.display_image, check_point, 2*check_size, (0, 255, 255), 2)
 
             # Check if any pixel in the region is black
-            if not np.any(region == 255) or self.green_contours is None:
+            if not np.any(region == 255) or self.green_contours == []:
                 return False
 
             for y in range(y_start, y_end):
@@ -302,55 +306,24 @@ class LineFollower():
             self.green_signal = self.prev_green_signal
 
     def find_green(self):
-        self.green_contours = []
         self.hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
-        green_mask = cv2.inRange(self.hsv_image, (40, 50, 50), (90, 255, 255))
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        green_mask = cv2.inRange(self.hsv_image, (40, 50, 60), (90, 255, 255))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10))
+        self.green_mask = cv2.erode(green_mask.copy(), kernel, iterations=3)
         green_mask = cv2.erode(green_mask, kernel, iterations=1)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10))
         green_mask = cv2.dilate(green_mask, kernel, iterations=1)
         contours, _ = cv2.findContours(green_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
-        green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
-        for cnt in contours:
-            print(cv2.contourArea(cnt))
-            
-        self.green_contours = green_contours
-                
-        if self.green_contours and self.display_image is not None and camera.X11:
+        self.green_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.min_green_area]
+             
+        if self.green_contours != [] and self.display_image is not None and camera.X11:
             cv2.drawContours(self.display_image, self.green_contours, -1, (255, 0, 255), int(camera.LINE_HEIGHT/100))
 
     # ========================================================================
     # GAP
     # ========================================================================
 
-    # def gap_handling(self):
-    #     print("Gap Detected!")
-    #     motors.run(0, 0, 1)
-    #     motors.run(-25, -25)
-
-    #     for i in range(3): self.__wait_for_black_contour()
-    #     motors.run(-25, -25, 0.1)
-    #     motors.run(0, 0, 0.3)
-
-    #     self.align_to_contour_angle()
-    #     motors.run(0, 0, 0.2)
-
-    #     f = 1 + 0.5 * (self.robot_state.last_uphill < 100)
-    #     if not self.__move_and_check_black(f):
-    #         print("No black found, retrying...")
-
-    #         motors.run(-35, -35, f+0.1)
-    #         motors.run(0, 0, 0.2)
-
-    #         self.align_to_contour_angle()
-    #         motors.run(0, 0, 0.2)
-
-    #         if not self.__move_and_check_black(f+1.2):
-    #             print("Still no black. Exiting gap handler.")
-    #             motors.run(-35, -35, f+1.5)
-
-    #     print("Gap handling complete.")
     def gap_handling(self):
         print("Gap Detected!")
         motors.run(-25, -25)
@@ -389,7 +362,7 @@ class LineFollower():
             angle = None
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
-            self.find_black()
+            self.find_black(extra_erode=True)
 
             if self.black_contour is not None and self.black_mask is not None:
                 mask = self.black_mask.copy()
@@ -407,7 +380,7 @@ class LineFollower():
                 contour = max(contours, key=cv2.contourArea)
 
                 # --- Approximate contour to a polygon ---
-                epsilon = 0.01 * cv2.arcLength(contour, True)
+                epsilon = 0.05 * cv2.arcLength(contour, True)
                 approx = cv2.approxPolyDP(contour, epsilon, True)
                 approx_points = approx[:, 0, :]  # shape (N, 2)
 
@@ -449,7 +422,7 @@ class LineFollower():
 
                 # --- Alignment logic ---
                 if abs(top_point[0] - camera.LINE_WIDTH // 2) < 20:
-                    if abs(angle - 90) < 4:
+                    if abs(angle - 90) < 1:
                         break
                     elif angle > 90:
                         motors.run(14, -18)
@@ -549,6 +522,9 @@ class LineFollower():
                 elif y_avg_right is not None:
                     ref_point = (camera.LINE_WIDTH - 1, y_avg_right)
                     self.prev_side = "Right"
+            elif self.green_signal != "APPROACH" and ref_point[1] > camera.LINE_HEIGHT // 2 and camera.LINE_WIDTH // 4 < ref_point[0] < 3 * camera.LINE_WIDTH // 4:
+                self.angle = 90
+                return self.angle
 
         return_val = self._finalize_angle(ref_point, validate) if ref_point is not None else 90
         return return_val
@@ -564,7 +540,7 @@ class LineFollower():
         if not validate:
             self.angle = angle
             self.last_angle = angle
-            if ref_point is not None: cv2.circle(self.display_image, ref_point, int(camera.LINE_HEIGHT / 15), self.turn_color, 2)
+            if ref_point is not None: cv2.circle(self.display_image, ref_point, int(camera.LINE_HEIGHT / 20), self.turn_color, 2)
         else:
             return angle
 
@@ -614,32 +590,56 @@ class LineFollower():
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
         # Threshold masks for different brightness levels
-        base_mask     = cv2.inRange(self.gray_image, 0,     self.base_black)
-        light_mask    = cv2.inRange(self.gray_image, 0,    self.light_black)
-        lightest_mask = cv2.inRange(self.gray_image, 0, self.lightest_black)
+        base_mask = cv2.inRange(self.gray_image, 0, self.base_black)
+        if self.green_contours == []: light_mask = cv2.inRange(self.gray_image, 0, self.light_black)
+        else: light_mask = cv2.inRange(self.gray_image, 0, self.green_black)
+        dark_mask = cv2.inRange(self.gray_image, 0, self.dark_black)
 
         # Create region masks
-        region_mask_lightest = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_light_left = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_light_right = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_base     = np.ones_like(self.gray_image, dtype=np.uint8) * 255
+        region_mask_light_left          = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light_right         = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light_mid_top       = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light_mid           = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_light_mid_bottom    = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_dark_left           = np.zeros_like(self.gray_image, dtype=np.uint8)           
+        region_mask_dark_right          = np.zeros_like(self.gray_image, dtype=np.uint8)
+        region_mask_base                = np.ones_like(self.gray_image, dtype=np.uint8) * 255
 
-        cv2.fillPoly(region_mask_lightest, [np.int32(camera.lightest_points)], 255)
-        cv2.fillPoly(region_mask_light_left, [np.int32(camera.light_point_left)], 255)
-        cv2.fillPoly(region_mask_light_right, [np.int32(camera.light_point_right)], 255)
+        cv2.fillPoly(region_mask_light_left,         [np.int32(camera.light_point_left)],       255)
+        cv2.fillPoly(region_mask_light_right,        [np.int32(camera.light_point_right)],      255)
+        cv2.fillPoly(region_mask_light_mid_top,      [np.int32(camera.light_point_mid_top)],    255)
+        cv2.fillPoly(region_mask_light_mid,          [np.int32(camera.light_point_mid)],        255)
+        cv2.fillPoly(region_mask_light_mid_bottom,   [np.int32(camera.light_point_mid_bottom)], 255)
+        cv2.fillPoly(region_mask_dark_left,          [np.int32(camera.dark_left)],              255)
+        cv2.fillPoly(region_mask_dark_right,         [np.int32(camera.dark_right)],             255)
 
-        region_mask_base = cv2.subtract(region_mask_base, region_mask_lightest)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_light_left)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_light_right)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid_top)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid_bottom)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_dark_left)
+        region_mask_base = cv2.subtract(region_mask_base, region_mask_dark_right)
 
-        masked_lightest = cv2.bitwise_and(lightest_mask, region_mask_lightest)
-        masked_light_left = cv2.bitwise_and(light_mask, region_mask_light_left)
-        masked_light_right = cv2.bitwise_and(light_mask, region_mask_light_right)
-        masked_base = cv2.bitwise_and(base_mask, region_mask_base)
+        masked_light_left =         cv2.bitwise_and(light_mask, region_mask_light_left)
+        masked_light_right =        cv2.bitwise_and(light_mask, region_mask_light_right)
+        masked_light_mid_top =      cv2.bitwise_and(light_mask, region_mask_light_mid_top)
+        masked_light_mid =          cv2.bitwise_and(light_mask, region_mask_light_mid)
+        masked_light_mid_bottom =   cv2.bitwise_and(light_mask, region_mask_light_mid_bottom)
+        masked_dark_left =          cv2.bitwise_and(dark_mask, region_mask_dark_left)
+        masked_dark_right =         cv2.bitwise_and(dark_mask, region_mask_dark_right)
+        masked_base =               cv2.bitwise_and(base_mask, region_mask_base)
 
-        black_mask = cv2.bitwise_or(masked_lightest, masked_light_left)
-        black_mask = cv2.bitwise_or(black_mask, masked_light_right)
-        black_mask = cv2.bitwise_or(black_mask, masked_base)
+        black_mask = cv2.bitwise_or(masked_light_mid_top,   masked_light_mid)
+        black_mask = cv2.bitwise_or(black_mask,             masked_light_mid_bottom)
+        black_mask = cv2.bitwise_or(black_mask,             masked_light_left)
+        black_mask = cv2.bitwise_or(black_mask,             masked_light_right)
+        black_mask = cv2.bitwise_or(black_mask,             masked_dark_left)
+        black_mask = cv2.bitwise_or(black_mask,             masked_dark_right)
+        black_mask = cv2.bitwise_or(black_mask,             masked_base)
+
+        # Remove Green
+        # if self.green_mask is not None: black_mask = cv2.bitwise_and(black_mask, cv2.bitwise_not(self.green_mask))
 
         # --- Blue detection in top area ---
         # mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
@@ -714,7 +714,7 @@ class LineFollower():
                     if c is not self.black_contour:
                         cv2.drawContours(self.display_image, [c], -1, (255, 0, 0), int(camera.LINE_HEIGHT/100))
                     else:
-                        cv2.drawContours(self.display_image, [c], -1, self.turn_color, int(camera.LINE_HEIGHT/100))
+                        cv2.drawContours(self.display_image, [c], -1, self.contour_color, int(camera.LINE_HEIGHT/100))
 
     # ========================================================================
     # RED

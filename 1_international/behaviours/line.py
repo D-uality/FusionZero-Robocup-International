@@ -1,5 +1,5 @@
 from core.shared_imports import Path, time, randint, operator, np
-from core.utilities import user_at_host, debug, debug_lines, start_display, show
+from core.utilities import user_at_host, debug, debug_lines, start_display, show, health_tick
 from core.listener import listener
 from hardware.robot import *
 import behaviours.optimized_evacuation as evacuation_zone
@@ -77,6 +77,7 @@ def main(start_time, robot_state, line_follow) -> None:
     total_elapsed = time.perf_counter() - overall_start
     fps = int(1.0 / total_elapsed) if total_elapsed > 0 else 0
     robot_state.debug_text.append(f"FPS: {fps}")
+    health_tick(robot_state.debug_text)
     
     robot_state.debug_text.insert(0, f"{active_triggers}")
     if robot_state.debug: debug_lines(robot_state.debug_text)

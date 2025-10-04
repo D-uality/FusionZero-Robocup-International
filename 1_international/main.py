@@ -45,22 +45,22 @@ def main() -> None:
                 
                 gyro_values = gyroscope.read()
                 gyro_values = gyro_values if gyro_values is not None else ""
-                debug( [
+                debug([
                     "READING", 
                     " ".join(list(map(str, touch_sensors.read()))),
                     " ".join(list(map(str, colour_sensors.read()))),
                     f"{silver_sensor.read()}",
                     " ".join(list(map(str, laser_sensors.read()))), 
                     " ".join(list(map(str, gyro_values)))
-                    ], [25, 20, 20, 20, 20, 20]
-                )
+                ], [25, 20, 20, 20, 20, 20])
             
             elif listener.mode.value == 4:
                 colour_sensors.calibrate()
             elif listener.mode.value == 5:
                 silver_sensor.calibrate()
 
-            elif listener.mode.value == 9: listener.exit_event.set()
+            elif listener.mode.value == 9:
+                listener.exit_event.set()
 
     except KeyboardInterrupt:
         print("Exiting gracefully!")
@@ -75,11 +75,13 @@ def main() -> None:
         GPIO.cleanup()
         print("LED's Off")
         
-        if record: 
-            print("Creating Video...")
-            oled_display.text("VIDEO", 0, 15)
-            save_vfr_video(get_saved_frames())
-            
+        if record:
+            oled_display.text("SAVED", 0, 15)
+            try:
+                print(f"Frames & timestamps saved under: {get_session_dir()}")
+            except Exception:
+                print("Frames saved to session folder.")
+
         stop_display()
         print("Display Stopped")
         camera.close()
@@ -87,7 +89,6 @@ def main() -> None:
         evac_camera.release()
         print("Evac Camera Stopped")
 
-        
         claw.lift(claw.pca.servo[claw.lifter_pin].angle)
         claw.close(claw.pca.servo[claw.closer_pin].angle)
         print("Claw Stopped")
@@ -95,4 +96,5 @@ def main() -> None:
         time.sleep(0.1)
         
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
