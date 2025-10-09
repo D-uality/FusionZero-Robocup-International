@@ -48,11 +48,11 @@ def main() -> None:
                 debug([
                     "READING", 
                     " ".join(list(map(str, touch_sensors.read()))),
-                    " ".join(list(map(str, colour_sensors.read()))),
+                    " ".join(list(map(str, colour_sensors.read_raw()))),
                     f"{silver_sensor.read()}",
                     " ".join(list(map(str, laser_sensors.read()))), 
                     " ".join(list(map(str, gyro_values)))
-                ], [25, 20, 20, 20, 20, 20])
+                ], [12, 9, 30, 6, 20, 11])
             
             elif listener.mode.value == 4:
                 colour_sensors.calibrate()

@@ -50,11 +50,11 @@ class Camera():
         bottom_right = (self.LINE_WIDTH - 40,   145)
         self.light_point_mid = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
-        top_left =     (70,                    self.LINE_HEIGHT - 20)
-        top_right =    (self.LINE_WIDTH - 45,  self.LINE_HEIGHT - 20)
-        bottom_left =  (80,                    self.LINE_HEIGHT)
-        bottom_right = (self.LINE_WIDTH - 55,  self.LINE_HEIGHT)
-        self.light_point_mid_bottom = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
+        # top_left =     (70,                    self.LINE_HEIGHT - 20)
+        # top_right =    (self.LINE_WIDTH - 45,  self.LINE_HEIGHT - 20)
+        # bottom_left =  (80,                    self.LINE_HEIGHT)
+        # bottom_right = (self.LINE_WIDTH - 55,  self.LINE_HEIGHT)
+        # self.light_point_mid_bottom = np.array([top_right, top_left, bottom_left, bottom_right], dtype=np.float32)
 
         top_left =     (0,  self.LINE_HEIGHT - 70)
         bottom_left =  (0,  self.LINE_HEIGHT)

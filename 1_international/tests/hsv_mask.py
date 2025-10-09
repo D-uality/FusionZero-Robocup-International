@@ -32,9 +32,11 @@ def hsv_mask(frame):
     return mask, result
 
 try:
+    led.on()
     while True:
         # Capture image
-        image = evac_camera.capture()
+        # image = evac_camera.capture()
+        image = camera.capture_array()
 
         # Apply HSV mask
         masked_image, mask_result = hsv_mask(image)
@@ -87,4 +89,6 @@ except KeyboardInterrupt:
 
 # Release the camera and close all OpenCV windows
 cv2.destroyAllWindows()
-evac_camera.__release()
+led.off()
+# evac_camera.__release()
+camera.close()

@@ -32,6 +32,7 @@ import traceback
 import threading
 import digitalio
 import adafruit_vl53l1x
+import adafruit_vl53l0x
 import adafruit_ssd1306
 from adafruit_servokit import ServoKit
 import adafruit_ads7830.ads7830 as ADC

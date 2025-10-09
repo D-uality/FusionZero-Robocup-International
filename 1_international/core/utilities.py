@@ -129,7 +129,7 @@ def health_tick(debug_list: list[str], every_seconds: float = 0.5) -> None:
 # =========================
 
 # Fixed widths for debug lines: [TRIGGERS, GREEN, TURN, INT, FPS, CPU, MEM, TEMP]
-DEBUG_FIXED_WIDTHS = [11, 19, 11, 15, 11, 11, 18, 12]
+DEBUG_FIXED_WIDTHS = [12, 23, 13, 15, 13, 14, 20, 14]
 
 # Print Functions
 def debug(data: list[str], coloumn_widths: list[int], separator: str = "|") -> None:
@@ -164,6 +164,9 @@ def debug_lines(entries: list[str], padding: int = 2, separator: str = "|") -> N
 
 _display_process = None
 _display_queue = None
+SAVE_EVERY_N = 5   # save 1 frame out of every 30 (tweak as you like)
+_save_i = 0
+
 
 # Keep a small in-RAM index of what we saved: list of (filepath, timestamp)
 _saved_frames = []  # simple list; tiny memory use
@@ -225,41 +228,35 @@ def put_text_on_image(image, debug_lines: list[str]):
         )
 
 def show(frame: np.ndarray, name: str = "Display", display: bool = True, debug_lines: list[str] = None):
-    """
-    - Renders optional debug overlay
-    - Shows frame (async display process)
-    - Saves EVERY frame directly to SD as .npy
-    - Appends a tiny (path, timestamp) record to _saved_frames and timestamps.csv
-    """
-    global _display_queue, _meta_file
+    global _display_queue, _meta_file, _save_i
+
+    _init_session()  # make sure SESSION_DIR exists
 
     if debug_lines is not None:
         put_text_on_image(frame, debug_lines)
 
     frame = np.uint8(frame)
 
-    # async UI display
+    # async UI display (as you already had)
     if _display_queue is not None and display:
         while not _display_queue.empty():
-            try:
-                _display_queue.get_nowait()
-            except:
-                break
+            try: _display_queue.get_nowait()
+            except: break
         _display_queue.put((frame, name))
 
-    # save to SD (lossless, low CPU)
-    ts = time.perf_counter()
-    fname = f"f_{int(ts*1e6):016d}.npy"
-    fpath = os.path.join(SESSION_DIR, fname)
-    np.save(fpath, frame)  # synchronous write (simple & reliable)
+    # --- Save every Nth frame (sync write to SD) ---
+    _save_i = (_save_i + 1) % SAVE_EVERY_N
+    if _save_i == 0:
+        ts = time.perf_counter()
+        fname = f"f_{int(ts*1e6):016d}.npy"
+        fpath = os.path.join(SESSION_DIR, fname)
+        np.save(fpath, frame)  # still sync, but 30× less often
 
-    # tiny RAM index + timestamps.csv entry
-    _saved_frames.append((fpath, ts))
-    if _meta_file is not None:
-        try:
-            _meta_file.write(f"{ts:.6f},{fname}\n")
-        except Exception:
-            pass
+        if _meta_file is not None:
+            try:
+                _meta_file.write(f"{ts:.6f},{fname}\n")
+            except Exception:
+                pass
 
 def stop_display():
     global _display_process, _display_queue

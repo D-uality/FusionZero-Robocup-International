@@ -18,21 +18,22 @@ start_display()
 class EvacuationState:
     def __init__(self):
         self.DISPLAY    = True
-        self.DEBUG_MAIN = True
+        self.DEBUG_MAIN = False
         
         self.victim_count = 0
+        self.dead_found = False
         
         # Speeds        
         if user_at_host == "frederick@raspberrypi":
-            self.SPEED_BASE  = 35
-            self.SPEED_FAST  = 45
-            self.SPEED_ROUTE = 25
-            self.SPEED_GRAB  = 30
+            self.SPEED_BASE  = 25
+            self.SPEED_FAST  = 35
+            self.SPEED_ROUTE = 15
+            self.SPEED_GRAB  = 20
         else:
             self.SPEED_BASE  = 25
-            self.SPEED_FAST  = 40
-            self.SPEED_ROUTE = 18
-            self.SPEED_GRAB  = 30
+            self.SPEED_FAST  = 35
+            self.SPEED_ROUTE = 15
+            self.SPEED_GRAB  = 20
             
         # Locate settings
         self.DEBUG_LOCATE = False
@@ -41,15 +42,15 @@ class EvacuationState:
         self.DEBUG_ANALYSE = False
         
         # Route settings
-        self.DEBUG_ROUTE = True
+        self.DEBUG_ROUTE = False
         self.ROUTE_APPROACH_VICTIM_DISTANCE = 7
         self.ROUTE_APPROACH_TRIANGLE_DISTANCE = 7
         self.last_victim_time = 0
         self.MIN_VICTIM_TRIANGLE_SWITCH_TIME = 1
         
         # Gap handling
-        self.SILVER_MIN       = 185
-        self.BLACK_MAX        = 40
+        self.SILVER_MIN       = 150
+        self.BLACK_MAX        = 30
         self.GAP_BLACK_COUNT  = 1
         self.GAP_SILVER_COUNT = 1
 
@@ -58,7 +59,7 @@ class Search():
         # Debug
         self.DISPLAY: bool = evac_state.DISPLAY
         
-        self.DEBUG_LIVE: bool       = True
+        self.DEBUG_LIVE: bool       = False
         self.DEBUG_DEAD: bool       = False
         self.DEBUG_TRIANGLES: bool  = False
         
@@ -71,19 +72,19 @@ class Search():
         self.IMG_CENTRE_X = evac_camera.width / 2
         
         # Live settings
-        self.LIVE_THRESHOLD = 245
+        self.LIVE_THRESHOLD = 240
         self.LIVE_ERODE_KERNAL = np.ones((1, 1), np.uint8)
         self.LIVE_DILATE_KERNAL = np.ones((25, 25), np.uint8)
         
-        self.LIVE_UNDILATE_MIN_AREA = 100
+        self.LIVE_UNDILATE_MIN_AREA = 2
         self.LIVE_UNDILATE_MIN_COUNT = 4
         self.LIVE_UNDILATE_MIN_COUNT_MIN_AREA = 3
         
         self.LIVE_MIN_AREA = 150
         self.LIVE_MAX_AREA = 1000000
         
-        self.LIVE_MIN_Y = 25
-        self.LIVE_MAX_Y = 60
+        self.LIVE_MIN_Y = 10
+        self.LIVE_MAX_Y = 80
         
         # Dead settings
         self.DEAD_GREEN_KERNAL = np.ones((7,  7), np.uint8)
@@ -107,7 +108,7 @@ class Search():
         # Triangle settings
         self.TRIANGLE_TOP_CROP = 15
         
-        self.TRIANGLE_GREEN_HSV = ((50, 120, 15), (85, 255, 255))
+        self.TRIANGLE_GREEN_HSV = ((50, 120, 10), (85, 255, 255))
         self.TRIANGLE_ERODE_KERNAL = np.ones((5, 5), np.uint8)
         self.TRIANGLE_DILATE_KERNAL = np.ones((5, 5), np.uint8)
         
@@ -402,10 +403,10 @@ class Search():
 
     
 class Movement():
-    def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera, touch_sensors: TouchSensors, colour_sensors: ColourSensors, motors: Motors):
+    def __init__(self, evac_state: EvacuationState, evac_camera: EvacuationCamera, touch_sensors: TouchSensors, silver_sensor: SilverSensor, motors: Motors):
         # Hardware
         self.touch_sensors = touch_sensors
-        self.colour_sensors = colour_sensors
+        self.silver_sensor = silver_sensor
         self.motors = motors
         
         # Speed settings
@@ -448,9 +449,9 @@ class Movement():
         motors.run(v1, v2)
         
     def wall_follow(self) -> None:
-        KP = 1.2
-        GAP_DISTANCE = 14                             # Threshold to classify for gap
-        OFFSET = 3                                      # Wall following distance
+        KP = 1.5
+        GAP_DISTANCE = 15                               # Threshold to classify for gap
+        OFFSET = 5                                      # Wall following distance
         MAX_TURN = evac_state.SPEED_BASE * 0.5          # Max turning speed
         
         touch_values = touch_sensors.read()
@@ -462,7 +463,7 @@ class Movement():
         error = distance - OFFSET
         if error > 18: self.integral += error
         if self.integral > 10000: self.integral = 10000
-        print(self.integral)
+        # print(self.integral)
         raw_turn = KP * error
         
         # Touch
@@ -480,6 +481,7 @@ class Movement():
                 touch_count = 0
     
                 while listener.mode.value != 0:
+                    time.sleep(0.001)
                     touch_values = touch_sensors.read()
                     
                     if sum(touch_values) == 0:
@@ -534,11 +536,11 @@ def analyse(image: np.ndarray, display_image: np.ndarray, search_type: str, last
     
     claw.read()
     live_count  = claw.spaces.count("live")
-    dead_count  = claw.spaces.count("dead")
+    dead_count  = 1 if evac_state.dead_found is True else 0
     empty_count = 2 - live_count - dead_count
         
     if evac_state.victim_count + live_count < 2 and empty_count != 0: live_enable  = True
-    if dead_count < 1 and empty_count != 0:                           dead_enable  = True
+    if evac_state.victim_count == 2:                                  dead_enable  = True
     if live_count > 0:                                                green_enable = True
     if dead_count == 1 and evac_state.victim_count == 2:              red_enable   = True
     
@@ -567,17 +569,19 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
     spinning_start_time = time.perf_counter()
     forwards_start_time = time.perf_counter()
     
-    spinning_time = randint(40, 80) / 10 # 30, 50 on old (fast)
+    spinning_time = randint(60, 100) / 10 # 30, 50 on old (fast)
     forwards_time = randint(30, 50) / 10 # 30, 50 on old (fast)
     
     spinning_direction = 1
     
     while listener.mode.value != 0:
-        print(mode)
+        time.sleep(0.001)
+        # print(mode)
         
         # Read sensor stack
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
-        silver_value = colour_sensors.read()[2]
+        silver_value = silver_sensor.read()
+        # print(f"Silver value: {silver_value}")
         touch_values = touch_sensors.read()
         gyro_value = gyroscope.read()
         
@@ -589,10 +593,15 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
         # clear conditions
         touch_activated = sum(touch_values) != 2
         forwards_expire = time.perf_counter() - forwards_start_time > forwards_time
-        gap_found       = black_count > evac_state.GAP_BLACK_COUNT or silver_count > evac_state.GAP_SILVER_COUNT
+        gap_found       = black_count >= evac_state.GAP_BLACK_COUNT or silver_count >= evac_state.GAP_SILVER_COUNT
+        if black_count >= evac_state.GAP_BLACK_COUNT: print(f"Black gap found: {silver_value}")
+        if silver_count >= evac_state.GAP_SILVER_COUNT: print(f"Silver gap found: {silver_value}")
         out_of_bounds   = pitch > 10 if pitch is not None else False
-        
-        print(touch_activated, forwards_expire, gap_found, out_of_bounds)
+        on_wall_downwards = pitch < -10 if pitch is not None else False
+        if out_of_bounds: print(f"Out of bounds upwards {pitch}")
+        if on_wall_downwards: print(f"On wall downwards {pitch}")
+
+        # print(touch_activated, forwards_expire, gap_found, out_of_bounds)
         
         if evac_state.DEBUG_LOCATE: print(f"\tConditions | Touch: {touch_activated} Expire: {forwards_expire} Gap: {gap_found}")
     
@@ -604,14 +613,14 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
             elif forwards_expire: pass
             elif gap_found:       motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.2)
             elif out_of_bounds:   motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.8)
-            
-            spinning_direction = 1 if randint(0, 100) < 99 else -1
+            elif on_wall_downwards: motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1)
+            spinning_direction = 1 if randint(0, 1000) < 995 else -1
             
             motors.run(0, 0, 0.1)
             motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction, randint(1, 3) / 10)
 
             spinning_start_time = time.perf_counter()
-            spinning_time = randint(20, 40) /  10 # 10, 30, old
+            spinning_time = randint(15, 35) /  10 # 10, 30, old
         
         elif time.perf_counter() - spinning_start_time > spinning_time and mode == "spinning":
             mode = "forwards"
@@ -624,7 +633,7 @@ def locate(black_count: int, silver_count: int) -> tuple[int, int, int, str]:
             time_remaining = forwards_time - time.perf_counter() + forwards_start_time
             
         elif mode == "spinning":
-            motors.run(evac_state.SPEED_BASE * spinning_direction, -evac_state.SPEED_BASE * spinning_direction)
+            motors.run(evac_state.SPEED_BASE * spinning_direction, - evac_state.SPEED_BASE * spinning_direction)
             time_remaining = spinning_time - time.perf_counter() + spinning_start_time
         
         # Exit condition
@@ -648,11 +657,13 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
     retry_count = 0
     
     while listener.mode.value != 0:
+        time.sleep(0.001)
         if evac_state.DEBUG_LOCATE: print("\tReading sensor stack")
         distance = laser_sensors.read([1])[0]
+        print(f"distance: {distance}")
         if distance is None: continue
         
-        silver_value = colour_sensors.read()[2]
+        silver_value = silver_sensor.read()
         touch_values = touch_sensors.read()
         gyro_value = gyroscope.read()
         
@@ -664,7 +675,7 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
         # Fail conditions: environemental
         touch_activated = sum(touch_values) != 2
         timeout            = time.perf_counter() - start_time > max_route_time
-        gap_found          = black_count > evac_state.GAP_BLACK_COUNT or silver_count > evac_state.GAP_SILVER_COUNT
+        gap_found          = black_count >= evac_state.GAP_BLACK_COUNT or silver_count >= evac_state.GAP_SILVER_COUNT
         out_of_bounds_up   = pitch >  10 if pitch is not None else False
         out_of_bounds_down = pitch < -10 if pitch is not None else False
         
@@ -703,26 +714,29 @@ def route(black_count: int, silver_count: int, last_x: int, search_type: str, re
                 if retry_count == MAX_RETRYS: return False
                 else: continue
         
-        movement.route(0.4, x, search_type)
+        if search_type in ["live", "dead"]: movement.route(0.2, x, search_type)
+        if search_type in ["green", "red"]: movement.route(0.5, x, search_type)
         
         last_x = x
-        print(f"time: {time.perf_counter() - evac_state.last_victim_time}, search type: {search_type}")
+        # print(f"time: {time.perf_counter() - evac_state.last_victim_time}, search type: {search_type}")
         
         # Exit conditions
         if search_type in ["red", "green"] and time.perf_counter() - evac_state.last_victim_time > evac_state.MIN_VICTIM_TRIANGLE_SWITCH_TIME:
-            print(f"{area}")
+            # print(f"{area}")
             if sum(touch_values) != 2 and area < 60000:
-                motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
+                motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.8)
                 
-                direction = 1 if x < evac_camera.width // 2 else -1
+                # direction = 1 if x < evac_camera.width // 2 else -1
+                direction = 1
                 motors.run( evac_state.SPEED_FAST * direction, -evac_state.SPEED_FAST * direction, 0.3)
             
-                motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 0.4)
+                motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 0.2)
                 
             elif (sum(touch_values) != 2 or distance < evac_state.ROUTE_APPROACH_TRIANGLE_DISTANCE):
                 touch_count = 0
     
                 while listener.mode.value != 0:
+                    time.sleep(0.001)
                     touch_values = touch_sensors.read()
                     
                     if sum(touch_values) == 0:
@@ -768,9 +782,10 @@ def grab(prev_insert: Optional[int]) -> tuple[bool, int]:
     debug( ["GRAB", "SETUP"], [30, 20] )
     # Setup
     motors.run(0, 0, 0.1)
-    motors.run(         -evac_state.SPEED_GRAB,         -evac_state.SPEED_GRAB, 0.3)
-    if insert == 1:  motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.2)
-    if insert == -1: motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.35)
+    motors.run(         -evac_state.SPEED_GRAB,         -evac_state.SPEED_GRAB, 0.5)
+    motors.run(0, 0, 0.1)
+    if insert == 1:  motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.5)
+    if insert == -1: motors.run(-evac_state.SPEED_GRAB * insert, evac_state.SPEED_GRAB * insert, 0.5)
     motors.run(0, 0, 0.1)
     
     debug( ["GRAB", "CUP"], [30, 20] )
@@ -779,15 +794,18 @@ def grab(prev_insert: Optional[int]) -> tuple[bool, int]:
     claw.lift(0, 0.005)
     time.sleep(0.7)
     
-    debug( ["GRAB", "LIFT"], [30, 20] )
-    
     # Lift
     claw.close(90)
+    time.sleep(0.1)
     claw.lift(180, 0.005)
-    time.sleep(0.3)
+    debug( ["GRAB", "LIFT"], [30, 20] )
+    time.sleep(1)
     
     debug( ["GRAB", "VALIDATE"], [30, 20] )
-    claw.read()
+    print("Verifying Grab")
+    for i in range(10): 
+        claw.read()
+        time.sleep(0.01)
     debug( ["GRAB", f"{claw.spaces}"], [30, 20] )
 
     if claw.spaces[0 if insert == -1 else 1] != "": return True, None
@@ -796,7 +814,7 @@ def grab(prev_insert: Optional[int]) -> tuple[bool, int]:
 def dump(search_type: str) -> None:
     TIME_STEP = 0.2
     
-    motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
+    motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.5)
     motors.run(0, 0, 0.5)
     claw.read()
     
@@ -806,28 +824,30 @@ def dump(search_type: str) -> None:
     else:                        dump_type = "dead"
         
     angles = []
-    if claw.spaces[0] == dump_type: angles.append(180)
-    if claw.spaces[1] == dump_type: angles.append(0)
-    
+    if claw.spaces[0] == dump_type or dump_type == "dead": angles.append(180)
+    if claw.spaces[1] == dump_type or dump_type == "dead": angles.append(0)
+
     # Dump
     claw.lift(90)
     
     for angle in angles:
-        claw.close(angle)
-        
         for _ in range(0, 2):
             claw.lift(80)
             time.sleep(TIME_STEP)
             claw.lift(90)
             time.sleep(TIME_STEP)
 
-        time.sleep(0.3)
-        
-        evac_state.victim_count += 1
-        
+        claw.close(angle)
+
+        time.sleep(1)
+
+        if dump_type == "live": evac_state.victim_count += 1
+        else: evac_state.victim_count = 3
+        print(f"victim count: {evac_state.victim_count}, dump type: {dump_type}")
+
     claw.close(90)
+
     claw.lift(180)
-    time.sleep(1)
     
     claw.read()
 
@@ -849,6 +869,7 @@ def align_line(align_type: str, align_count: int) -> None:
         
         # Move backwards till 1 finds silver
         while (not left_silver and not right_silver) and listener.mode.value != 0:
+            time.sleep(0.001)
             colour_values = colour_sensors.read()
 
             if colour_values[0] > evac_state.SILVER_MIN or colour_values[1] > evac_state.SILVER_MIN:
@@ -888,6 +909,7 @@ def align_line(align_type: str, align_count: int) -> None:
         left_black, right_black = None, None
         
         while (left_black is None and right_black is None) and listener.mode.value != 0:
+            time.sleep(0.001)
             colour_values = colour_sensors.read()
 
             if colour_values[0] < 40 or colour_values[1] < 40:
@@ -921,6 +943,7 @@ def leave():
     touch_count = 0
     
     while listener.mode.value != 0:
+        time.sleep(0.001)
         touch_values = touch_sensors.read()
         
         if sum(touch_values) == 0:
@@ -945,14 +968,15 @@ def leave():
 
     motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 0, "==", 0, "FORWARDS LEFT")
     motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST, touch_sensors.read, 1, "==", 0, "FORWARDS RIGHT")
-    motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
-    motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
+    motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.5)
+    motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.5)
     
     while listener.mode.value != 0:
+        time.sleep(0.001)
         movement.wall_follow()
-        silver_value = colour_sensors.read()[2]
+        silver_value = silver_sensor.read()
         # black_count, silver_count = validate_gap(silver_value, black_count, silver_count)
-        colour_value = colour_sensors.read()[2]
+        colour_value = silver_sensor.read()
         black_count, silver_count = validate_gap(colour_value, black_count, silver_count)
         
         print(f"Counts: {black_count} {silver_count}")
@@ -992,15 +1016,19 @@ def leave():
             motors.run(0, 0, 0.3)
 
             while listener.mode.value != 0:
+                time.sleep(0.001)
                 print("running till wall")
                 touch_count = 0
     
                 while listener.mode.value != 0:
+                    time.sleep(0.001)
                     touch_values = touch_sensors.read()
                     side_distance = laser_sensors.read([0])[0]
                     
                     if side_distance < 20: 
-                        motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 0.3)
+                        motors.run(evac_state.SPEED_FAST, evac_state.SPEED_FAST, 0.5)
+                        motors.run(-evac_state.SPEED_FAST, evac_state.SPEED_FAST, 1.6)
+                        motors.run( evac_state.SPEED_BASE,  evac_state.SPEED_BASE, 2.5)
                         break
                     
                     if sum(touch_values) == 0:
@@ -1019,10 +1047,9 @@ def leave():
                         touch_count = 0
                         
                     if touch_count > 5:
+                        motors.run( evac_state.SPEED_BASE,  evac_state.SPEED_BASE, 1)
                         break
 
-                motors.run(0, 0)
-                motors.run( evac_state.SPEED_BASE,  evac_state.SPEED_BASE, 1)
                 motors.run(-evac_state.SPEED_BASE, -evac_state.SPEED_BASE, 0.5)
                 motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1)
                 
@@ -1036,7 +1063,7 @@ def leave():
 
 evac_state = EvacuationState()
 op_search = Search(evac_state, evac_camera)
-movement = Movement(evac_state, evac_camera, touch_sensors, colour_sensors, motors)
+movement = Movement(evac_state, evac_camera, touch_sensors, silver_sensor, motors)
 
 def main() -> None:
     black_count = silver_count = 0    
@@ -1052,6 +1079,7 @@ def main() -> None:
     motors.run(0, 0, 1)
     
     while evac_state.victim_count != 3 and listener.mode.value != 0:
+        time.sleep(0.001)
         oled_display.clear()
         oled_display.text(f"locate: {evac_state.victim_count}", 0, 0)
         
@@ -1066,7 +1094,7 @@ def main() -> None:
         if search_type in ["red", "green"]:
             # motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST* 0.8, touch_sensors.read, 0, "==", 0, "TRIANGLE TOUCH")
             # motors.run_until(evac_state.SPEED_FAST, evac_state.SPEED_FAST* 0.8, touch_sensors.read, 1, "==", 0, "TRIANGLE TOUCH")
-            motors.run(evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
+            # motors.run(evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
             motors.run(0, 0, 0.1)
             
             # motors.run(-evac_state.SPEED_FAST     , -evac_state.SPEED_FAST * 0.5, 0.8)
@@ -1093,12 +1121,16 @@ def main() -> None:
             oled_display.text(f"grab", 0, 20)
             grab_success, prev_insert = grab(prev_insert)
 
-            if not grab_success:
+            if not grab_success and search_type in ["live"]:
+                print("failed to grab live")
                 motors.run(-evac_state.SPEED_FAST,  evac_state.SPEED_FAST, 0.5)
                 motors.run(-evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 1.2)
                 motors.run( evac_state.SPEED_FAST, -evac_state.SPEED_FAST, 0.3)
                 motors.run(0, 0, 0.5)
                 continue
+            elif not grab_success and search_type in ["dead"]:
+                print("grabbed dead, uncertain if failed")
+                evac_state.dead_found = True
     
     if listener.mode.value != 0:
         oled_display.text(f"leaving", 0, 20, clear=True)
@@ -1116,7 +1148,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     listener.mode.value = 2
-    main()
+    # main()
     
-    # leave()
+    leave()
     motors.run(0, 0)

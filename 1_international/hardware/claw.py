@@ -4,7 +4,7 @@ from core.utilities import debug, user_at_host
 class Claw():
     def __init__(self):
         TRIALS = 50
-        self.debug = True
+        self.debug = False
         
         self.__i2c = board.I2C()
         self.__ADC = ADC.ADS7830(self.__i2c)
@@ -42,9 +42,9 @@ class Claw():
             """
         
         else:
-            self.EMPTY_TOLERANCE = 12
-            self.OPPOSITE_LIVE_TOLERANCE = 20
-            self.LIVE_TOLERANCE = 245
+            self.EMPTY_TOLERANCE = 100
+            self.OPPOSITE_LIVE_TOLERANCE = 100
+            self.LIVE_TOLERANCE = 240
             
             self.left_cup = AnalogIn(self.__ADC, 0)
             self.right_cup = AnalogIn(self.__ADC, 1)
@@ -111,7 +111,7 @@ class Claw():
                 values = [int(self.analogs[i].value / 256) for i in range(0, len(self.analogs))]
                 for i, value in enumerate(values): averages[i] += value
                 
-                time.sleep(0.005)
+                time.sleep(0.001)
             
             for i, average, in enumerate(averages):
                 average = average / TRIALS
@@ -119,12 +119,17 @@ class Claw():
                 # If opposite side has live
                 tolerance =  self.OPPOSITE_LIVE_TOLERANCE if self.spaces[1 if i == 0 else 0] == "live" else self.EMPTY_TOLERANCE
                 
-                if average < self.__empty_average[i] + tolerance:
+                if average < self.LIVE_TOLERANCE:
                     self.spaces[i] = ""
-                elif average > self.LIVE_TOLERANCE:
-                    self.spaces[i] = "live"
                 else:
-                    self.spaces[i] = "dead"
+                    self.spaces[i] = "live"
+                # if average < self.__empty_average[i] + tolerance:
+                #     # print(f"self.__empty_average[i]: {self.__empty_average[i]}, tolerance: {tolerance}, sum: {self.__empty_average[i] + tolerance}")
+                #     self.spaces[i] = ""
+                # elif average > self.LIVE_TOLERANCE:
+                #     self.spaces[i] = "live"
+                # else:
+                #     self.spaces[i] = "dead"
                     
             return [averages[i] / TRIALS for i in range(0, len(averages))]
         

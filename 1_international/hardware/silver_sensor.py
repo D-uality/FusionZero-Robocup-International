@@ -11,7 +11,7 @@ class SilverSensor():
             self.sensor_pin = 5
             self.__CALIBRATION_FILE = r"/home/frederick/FusionZero-Robocup-International/1_international/hardware/calibration_values/frederick_silver_values.txt"
         else:
-            self.sensor_pin = 7
+            self.sensor_pin = 2
             self.__CALIBRATION_FILE = r"/home/aidan/FusionZero-Robocup-International/1_international/hardware/calibration_values/aidan_silver_values.txt"
         
         if os.path.exists(self.__CALIBRATION_FILE):
@@ -46,6 +46,7 @@ class SilverSensor():
             if time.perf_counter() - start_time > 10: break
             
             analog_value = self.read_raw()
+            time.sleep(0.05)
 
             # Update min, max for each sensor
             self.__min_value = min(self.__min_value, analog_value)

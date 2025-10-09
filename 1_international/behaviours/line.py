@@ -32,6 +32,7 @@ def main(start_time, robot_state, line_follow) -> None:
 
     if time.perf_counter() - start_time < 3:
         while (time.perf_counter() - start_time < 3) and listener.mode.value != 0:
+            time.sleep(0.001)
             motors.run(0, 0)
             line_follow.follow(starting=True)
 
@@ -46,10 +47,13 @@ def main(start_time, robot_state, line_follow) -> None:
         if  listener.mode.value != 0: 
             robot_state.trigger["evacuation_zone"] = True
         
-        motors.run(-30, -30, 0.3)
+        # motors.run(0, 50, 0.7)
+        motors.run(30, 30, 0.2)
+        # motors.run(0, 0, 2)
+
         line_follow.align_to_contour_angle()
         print("finished align")
-        motors.run(0, 0, 1)
+        # motors.run(0, 0, 1)
         
         start_time = time.perf_counter()
         led.on()
@@ -82,6 +86,7 @@ def main(start_time, robot_state, line_follow) -> None:
     robot_state.debug_text.insert(0, f"{active_triggers}")
     if robot_state.debug: debug_lines(robot_state.debug_text)
     robot_state.prev_downhill = robot_state.trigger["downhill"]
+    time.sleep(0.001)
     robot_state.main_loop_count += 1
 
 # ========================================================================
@@ -89,19 +94,18 @@ def main(start_time, robot_state, line_follow) -> None:
 # ========================================================================
 
 def find_silver(robot_state, line_follow, silver_detector, silver_value) -> None:
-    # if silver_value > 120:
-    robot_state.last_seen_silver = time.perf_counter()
-
     if line_follow.black_mask is not None:
         top_mask = line_follow.black_mask[:int(camera.LINE_HEIGHT / 10), :]
         top_line = np.any(top_mask)
     else:
         top_line = True
 
-    if line_follow.image is not None and robot_state.last_uphill > 100 and robot_state.last_downhill > 100 and robot_state.trigger["tilt_left"] == False and robot_state.trigger["tilt_right"] == False and not top_line and time.perf_counter() - robot_state.last_seen_silver < 2 and not line_follow.green_signal:
+    if line_follow.image is not None and robot_state.last_uphill > 100 and robot_state.last_downhill > 100 and robot_state.trigger["tilt_left"] == False and robot_state.trigger["tilt_right"] == False and not top_line and not line_follow.green_signal:
         result = silver_detector.predict(line_follow.image)
         robot_state.debug_text.append(f"SILVER: {result['class_name']}, {result['confidence']:.3f}")
-        robot_state.count["silver"] = robot_state.count["silver"] + 1 if result['prediction'] == 1 and result['confidence'] > 0.99 else 0
+        robot_state.count["silver"] = robot_state.count["silver"] + 1 if result['prediction'] == 1 and result['confidence'] > 0.95 else 0
+    else:
+        robot_state.count["silver"] = 0
         
 # ========================================================================
 # TILT
@@ -170,6 +174,7 @@ def avoid_obstacle(line_follow, robot_state) -> None:
     touch_count = 0
     
     while listener.mode.value != 0:
+        time.sleep(0.001)
         touch_values = touch_sensors.read()
         
         if sum(touch_values) == 0:
@@ -253,14 +258,13 @@ def avoid_obstacle(line_follow, robot_state) -> None:
     v1 =  30 if direction == "cw" else -30
     v2 = -30 if direction == "cw" else 30
     laser_pin = 2 if direction == "cw" else 0
-    colour_pin = 2
 
     initial_sequence = True
 
-    circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
+    circle_obstacle(30, 30, laser_pin, "<=", 10, "FORWARDS TILL OBSTACLE", initial_sequence, direction)
 
     while listener.mode.value != 0:
-        if circle_obstacle(30, 30, laser_pin, colour_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", False, direction): pass
+        if circle_obstacle(30, 30, laser_pin, ">=", 18, "FORWARDS TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         if robot_state.count["uphill"] > 1:
             motors.run(30, 30, 0.1)
@@ -268,16 +272,16 @@ def avoid_obstacle(line_follow, robot_state) -> None:
             motors.run(-30, -30, 0.3)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, "<=", 10, "TURNING TILL OBSTACLE", False, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, "<=", 10, "TURNING TILL OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(v1, v2, laser_pin, colour_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", False, direction): pass
+        if circle_obstacle(v1, v2, laser_pin, ">=", 20, "TURNING TILL NOT OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(v1, v2, 0.4)
         motors.run(0, 0, 0.15)
 
-        if circle_obstacle(30, 30, laser_pin, colour_pin, "<=", 13, "FORWARDS TILL OBSTACLE", False, direction): pass
+        if circle_obstacle(30, 30, laser_pin, "<=", 13, "FORWARDS TILL OBSTACLE", False, direction): pass
         elif not initial_sequence: break
         motors.run(0, 0, 0.15)
 
@@ -287,12 +291,13 @@ def avoid_obstacle(line_follow, robot_state) -> None:
     # oled_display.text("Black Found", 0, 0, size=10)
     debug(["OBSTACLE", "FOUND BLACK"], [24, 50])
 
-    if robot_state.count["downhill"] < 5: motors.run(30, 30, 0.2)
+    if robot_state.count["downhill"] < 5: motors.run(30, 30, 0.7)
     else: 
         print("Backing Up")
         motors.run(-30, -30, 0.5)
     
     while True:
+        time.sleep(0.001)
         gyro_value = gyroscope.read()
         if gyro_value is not None:
             break
@@ -311,18 +316,18 @@ def avoid_obstacle(line_follow, robot_state) -> None:
 
     for i in range(loops):
         if direction == "cw":
-            line_follow.run_till_camera(-v1, -v2-5, 20, ["OBSTACLE"])
+            line_follow.run_till_camera(-v1, -v2-5, 10, ["OBSTACLE"])
         else:
-            line_follow.run_till_camera(-v1-5, -v2, 20, ["OBSTACLE"])
+            line_follow.run_till_camera(-v1-5, -v2, 10, ["OBSTACLE"])
     
-def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = False, direction: str = "") -> bool:
+def circle_obstacle(v1: float, v2: float, laser_pin: int, comparison: str, target_distance: float, text: str = "", initial_sequence: bool = False, direction: str = "") -> bool:
     if   comparison == "<=": comparison_function = operator.le
     elif comparison == ">=": comparison_function = operator.ge
 
     while listener.mode.value != 0:
+        time.sleep(0.001)
         show(camera.perspective_transform(camera.capture_array()), display=camera.X11, name="line", debug_lines=["OBSTACLE"])
         laser_value = laser_sensors.read([laser_pin])[0]
-        colour_values = colour_sensors.read()
         touch_values = touch_sensors.read()
 
         debug(["OBSTACLE", text, f"{laser_value}"], [24, 50, 10])
@@ -333,7 +338,7 @@ def circle_obstacle(v1: float, v2: float, laser_pin: int, colour_pin: int, compa
         if laser_value is not None:
             if comparison_function(laser_value, target_distance) and laser_value != 0: return True
 
-        if colour_values[colour_pin] <= 30 and initial_sequence == False:
+        if silver_sensor.read() <= 30 and initial_sequence == False:
             return False
         
         if sum(touch_values) < 2:

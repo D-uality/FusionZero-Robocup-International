@@ -105,7 +105,8 @@ class LineFollower():
             motors.run(30, 30, f)
             motors.run(v1, v2, t)
             # motors.run(0, 0, 0.2)
-            self.run_till_camera(v1-10, v2-10, 5, ["DOUBLE GREEN"])
+            self.run_till_camera(v1-10, v2+10, 3, ["DOUBLE GREEN"])
+            motors.run(30, 30, 0.2)
 
         # Other Turns
         else:
@@ -113,7 +114,7 @@ class LineFollower():
             v2 = self.speed - self.turn
 
             if self.robot_state.last_downhill < 200:
-                speed = 15
+                speed = 20
                 # print(f"downhill: {self.robot_state.time_since_downhill - time.perf_counter()}")
                 # if time.perf_counter() - self.robot_state.time_since_downhill > 0.5: 
                 #     v1 = speed + 5*self.turn
@@ -164,6 +165,7 @@ class LineFollower():
         self.angle = 90
         
         while listener.mode.value != 0:
+            time.sleep(0.001)
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
 
@@ -345,6 +347,7 @@ class LineFollower():
     
     def __wait_for_black_contour(self):
         while listener.mode.value != 0:
+            time.sleep(0.001)
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
             self.find_black()
@@ -357,8 +360,9 @@ class LineFollower():
             if self.display_image is not None and camera.X11:
                 show(self.display_image, display=camera.X11, name="line", debug_lines=["GAP"])
 
-    def align_to_contour_angle(self):
+    def align_to_contour_angle(self, threshold=4):
         while listener.mode.value != 0:
+            time.sleep(0.001)
             angle = None
             self.image = camera.perspective_transform(camera.capture_array())
             self.display_image = self.image.copy()
@@ -422,7 +426,7 @@ class LineFollower():
 
                 # --- Alignment logic ---
                 if abs(top_point[0] - camera.LINE_WIDTH // 2) < 20:
-                    if abs(angle - 90) < 1:
+                    if abs(angle - 90) < threshold:
                         break
                     elif angle > 90:
                         motors.run(14, -18)
@@ -433,7 +437,7 @@ class LineFollower():
                         motors.run(-15, -15)
                 elif (top_point[0] - camera.LINE_WIDTH // 2) < 0:
                     print("aligning more to the left")
-                    if angle - 90 < 0 and angle - 90 > -4:
+                    if angle - 90 < 0 and angle - 90 > -threshold:
                         break
                     elif angle >= 90:
                         motors.run(14, -18)
@@ -444,7 +448,7 @@ class LineFollower():
                         motors.run(-15, -15)
                 else:
                     print("aligning more to the right")
-                    if angle - 90 > 0 and angle - 90 < 4:
+                    if angle - 90 > 0 and angle - 90 < threshold:
                         break
                     elif angle > 90:
                         motors.run(14, -18)
@@ -600,7 +604,7 @@ class LineFollower():
         region_mask_light_right         = np.zeros_like(self.gray_image, dtype=np.uint8)
         region_mask_light_mid_top       = np.zeros_like(self.gray_image, dtype=np.uint8)
         region_mask_light_mid           = np.zeros_like(self.gray_image, dtype=np.uint8)
-        region_mask_light_mid_bottom    = np.zeros_like(self.gray_image, dtype=np.uint8)
+        # region_mask_light_mid_bottom    = np.zeros_like(self.gray_image, dtype=np.uint8)
         region_mask_dark_left           = np.zeros_like(self.gray_image, dtype=np.uint8)           
         region_mask_dark_right          = np.zeros_like(self.gray_image, dtype=np.uint8)
         region_mask_base                = np.ones_like(self.gray_image, dtype=np.uint8) * 255
@@ -609,7 +613,7 @@ class LineFollower():
         cv2.fillPoly(region_mask_light_right,        [np.int32(camera.light_point_right)],      255)
         cv2.fillPoly(region_mask_light_mid_top,      [np.int32(camera.light_point_mid_top)],    255)
         cv2.fillPoly(region_mask_light_mid,          [np.int32(camera.light_point_mid)],        255)
-        cv2.fillPoly(region_mask_light_mid_bottom,   [np.int32(camera.light_point_mid_bottom)], 255)
+        # cv2.fillPoly(region_mask_light_mid_bottom,   [np.int32(camera.light_point_mid_bottom)], 255)
         cv2.fillPoly(region_mask_dark_left,          [np.int32(camera.dark_left)],              255)
         cv2.fillPoly(region_mask_dark_right,         [np.int32(camera.dark_right)],             255)
 
@@ -617,7 +621,7 @@ class LineFollower():
         region_mask_base = cv2.subtract(region_mask_base, region_mask_light_right)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid_top)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid)
-        region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid_bottom)
+        # region_mask_base = cv2.subtract(region_mask_base, region_mask_light_mid_bottom)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_dark_left)
         region_mask_base = cv2.subtract(region_mask_base, region_mask_dark_right)
 
@@ -625,13 +629,13 @@ class LineFollower():
         masked_light_right =        cv2.bitwise_and(light_mask, region_mask_light_right)
         masked_light_mid_top =      cv2.bitwise_and(light_mask, region_mask_light_mid_top)
         masked_light_mid =          cv2.bitwise_and(light_mask, region_mask_light_mid)
-        masked_light_mid_bottom =   cv2.bitwise_and(light_mask, region_mask_light_mid_bottom)
+        # masked_light_mid_bottom =   cv2.bitwise_and(light_mask, region_mask_light_mid_bottom)
         masked_dark_left =          cv2.bitwise_and(dark_mask, region_mask_dark_left)
         masked_dark_right =         cv2.bitwise_and(dark_mask, region_mask_dark_right)
         masked_base =               cv2.bitwise_and(base_mask, region_mask_base)
 
         black_mask = cv2.bitwise_or(masked_light_mid_top,   masked_light_mid)
-        black_mask = cv2.bitwise_or(black_mask,             masked_light_mid_bottom)
+        # black_mask = cv2.bitwise_or(black_mask,             masked_light_mid_bottom)
         black_mask = cv2.bitwise_or(black_mask,             masked_light_left)
         black_mask = cv2.bitwise_or(black_mask,             masked_light_right)
         black_mask = cv2.bitwise_or(black_mask,             masked_dark_left)
@@ -722,8 +726,10 @@ class LineFollower():
 
     def find_red(self):
         if self.hsv_image is not None:
-            mask_lower = cv2.inRange(self.hsv_image, (0, 230, 46), (10, 255, 255))
-            mask_upper = cv2.inRange(self.hsv_image, (170, 230, 0), (179, 255, 255))
+            # mask_lower = cv2.inRange(self.hsv_image, (0, 100, 46), (10, 255, 255))
+            # mask_upper = cv2.inRange(self.hsv_image, (170, 100, 0), (179, 255, 255))
+            mask_lower = cv2.inRange(self.hsv_image, (0, 100, 0), (5, 255, 255))
+            mask_upper = cv2.inRange(self.hsv_image, (160, 100, 0), (179, 255, 255))
             mask = cv2.bitwise_or(mask_lower, mask_upper)
 
             if cv2.countNonZero(mask) > int(0.005 * camera.LINE_WIDTH * camera.LINE_HEIGHT):
