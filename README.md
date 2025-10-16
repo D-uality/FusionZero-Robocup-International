@@ -9,8 +9,9 @@ This repository tracks progress through:
 - Robocup Japan Open 2025
 - Robocup Singapore Open 2025
 - Robocup International, Salvador, Brazil 2025
+- Robocup Australia International 2025
 
-We currently participating in Robocup International 2025, Salvador Brazil (July 17).
+We recently placed 1st in Robocup Australia 2025, against previous champion, Catbot Jet. This repository will no longer be updated. A new one will be made for the 2026 international season. 
 
 # Bill of Parts
 ## Computing
